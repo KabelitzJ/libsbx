@@ -12,6 +12,7 @@
 
 #include <libsbx/terrain/heightmap.hpp>
 
+#include <libsbx/physics/character_controller.hpp>
 #include <libsbx/physics/gjk.hpp>
 #include <libsbx/physics/raycast.hpp>
 #include <libsbx/physics/shape_cast.hpp>
@@ -90,4 +91,41 @@ TEST(physics_queries_test, raycast_hits_triangle_mesh) {
   EXPECT_NEAR(hit->normal.y(), 1.0f, tolerance); // faces the ray's origin
 
   EXPECT_FALSE(raycast_triangle_mesh(mesh, pose, math::ray{{2.5f, 10.0f, 0.0f}, {0.0f, -1.0f, 0.0f}}, 100.0f).has_value());
+}
+
+TEST(physics_queries_test, controller_slides_along_walls_but_not_up_steep_slopes) {
+  const auto cos_45 = std::cos(0.7853982f);
+  const auto cos_30 = std::cos(0.5235988f);
+  const auto cos_60 = std::cos(1.0471976f);
+
+  const auto wall = math::vector3{-1.0f, 0.0f, 0.0f};
+
+  const auto into_wall = slide_along(math::vector3{1.0f, 0.0f, 0.0f}, wall, cos_45);
+  EXPECT_NEAR(into_wall.length(), 0.0f, tolerance);
+
+  const auto along_wall = slide_along(math::vector3{1.0f, 0.0f, 1.0f}, wall, cos_45);
+  EXPECT_NEAR(along_wall.x(), 0.0f, tolerance);
+  EXPECT_NEAR(along_wall.z(), 1.0f, tolerance);
+
+  // A 45 degree slope facing -X: too steep under a 30 degree limit, so sliding loses its upward part.
+  const auto slope = math::vector3::normalized(math::vector3{-1.0f, 1.0f, 0.0f});
+
+  const auto steep = slide_along(math::vector3{1.0f, 0.0f, 0.0f}, slope, cos_30);
+  EXPECT_NEAR(steep.x(), 0.5f, tolerance);
+  EXPECT_NEAR(steep.y(), 0.0f, tolerance);
+
+  const auto walkable = slide_along(math::vector3{1.0f, 0.0f, 0.0f}, slope, cos_60);
+  EXPECT_NEAR(walkable.x(), 0.5f, tolerance);
+  EXPECT_NEAR(walkable.y(), 0.5f, tolerance);
+}
+
+TEST(physics_queries_test, cast_catches_thin_wall_at_bullet_speed) {
+  // A 0.1 m sphere at 200 m/s covers 3.33 m in one 60 Hz step; the wall is 5 cm thick, 1 m ahead.
+  const auto step = 200.0f / 60.0f;
+
+  const auto hit = cast_convex(sphere{0.05f}, at({0.0f, 0.0f, 0.0f}), math::vector3{1.0f, 0.0f, 0.0f}, step, box{{0.025f, 1.0f, 1.0f}}, at({1.0f, 0.0f, 0.0f}));
+
+  ASSERT_TRUE(hit.has_value());
+  EXPECT_NEAR(hit->distance, 0.925f, tolerance); // wall face at 0.975, minus the radius
+  EXPECT_LT(hit->distance, step);
 }

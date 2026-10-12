@@ -15,6 +15,12 @@ namespace Sbx.Core
         return deltaTime;
       }
     }
-  } // class Camera
+    /** Seconds per FixedUpdate step (Project Settings > Physics > Fixed Timestep). */
+    public static float FixedDeltaTime
+    {
+      get { unsafe { return InternalCalls.Time_FixedDeltaTime(); } }
+    }
+
+  } // class Time
 
 } // namespace Sbx.Core

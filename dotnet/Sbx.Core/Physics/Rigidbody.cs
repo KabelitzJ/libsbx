@@ -4,6 +4,14 @@ using Sbx.Core.Math;
 namespace Sbx.Core.Physics
 {
 
+  public enum CollisionDetectionMode : uint
+  {
+    /** Overlaps are found after moving; fast bodies can pass through thin geometry. */
+    Discrete = 0,
+    /** Fast dynamic bodies are swept against static geometry each step and stopped at the first hit. */
+    Continuous = 1,
+  }
+
   public class Rigidbody : Component
   {
 
@@ -48,6 +56,13 @@ namespace Sbx.Core.Physics
       {
         unsafe { InternalCalls.Rigidbody_SetMass(UUID, value); }
       }
+    }
+
+    /** Use Continuous for bullets and other fast, small bodies that must not tunnel through walls. */
+    public CollisionDetectionMode CollisionDetection
+    {
+      get { unsafe { return (CollisionDetectionMode)InternalCalls.Rigidbody_GetCollisionDetection(UUID); } }
+      set { unsafe { InternalCalls.Rigidbody_SetCollisionDetection(UUID, (uint)value); } }
     }
 
     public float GravityScale

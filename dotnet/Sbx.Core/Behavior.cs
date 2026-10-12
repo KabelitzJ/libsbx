@@ -104,6 +104,12 @@ namespace Sbx.Core
     {
     }
 
+    /** Called on a CharacterController's node for each surface its Move/SimpleMove ran into. */
+    public virtual void OnControllerColliderHit(ControllerColliderHit hit)
+    {
+
+    }
+
     public virtual void OnClick()
     {
       
@@ -132,6 +138,11 @@ namespace Sbx.Core
     private void DispatchTriggerExit(ulong otherUuid, float normalX, float normalY, float normalZ, float pointX, float pointY, float pointZ)
     {
       OnTriggerExit(new Collision(Node.Get(otherUuid)!, new Vector3(normalX, normalY, normalZ), new Vector3(pointX, pointY, pointZ)));
+    }
+
+    private void DispatchControllerColliderHit(ulong otherUuid, float pointX, float pointY, float pointZ, float normalX, float normalY, float normalZ, float directionX, float directionY, float directionZ, float moveLength)
+    {
+      OnControllerColliderHit(new ControllerColliderHit(Node.Get(otherUuid)!, new Vector3(pointX, pointY, pointZ), new Vector3(normalX, normalY, normalZ), new Vector3(directionX, directionY, directionZ), moveLength));
     }
 
   } // class Behavior

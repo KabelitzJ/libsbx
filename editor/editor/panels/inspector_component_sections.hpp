@@ -18,6 +18,7 @@ auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::scene& target,
 auto draw_animator_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
 auto draw_directional_light_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
 auto draw_point_light_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
+auto draw_character_controller_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
 auto draw_audio_source_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
 auto draw_audio_listener_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
 auto draw_spot_light_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;

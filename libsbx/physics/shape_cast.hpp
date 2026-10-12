@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <optional>
 
 #include <libsbx/math/constants.hpp>
@@ -97,8 +98,8 @@ auto for_each_heightfield_triangle(const terrain::heightmap& map, const math::vo
         continue;
       }
 
-      visit(triangle{p00, p01, p11});
-      visit(triangle{p00, p11, p10});
+      std::invoke(visit, triangle{p00, p01, p11});
+      std::invoke(visit, triangle{p00, p11, p10});
     }
   }
 }
@@ -140,7 +141,7 @@ auto for_each_mesh_triangle(const mesh_collision_data& mesh, const transform& me
     const auto i1 = mesh.indices[triangle_index * 3u + 1u];
     const auto i2 = mesh.indices[triangle_index * 3u + 2u];
 
-    visit(triangle{mesh.vertices[i0], mesh.vertices[i1], mesh.vertices[i2]}, mesh_pose);
+    std::invoke(visit, triangle{mesh.vertices[i0], mesh.vertices[i1], mesh.vertices[i2]}, mesh_pose);
   });
 }
 

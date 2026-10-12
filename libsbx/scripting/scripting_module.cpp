@@ -88,6 +88,8 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Rigidbody_SetMass", reinterpret_cast<void*>(&interop::rigidbody_set_mass));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Rigidbody_GetGravityScale", reinterpret_cast<void*>(&interop::rigidbody_get_gravity_scale));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Rigidbody_SetGravityScale", reinterpret_cast<void*>(&interop::rigidbody_set_gravity_scale));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Rigidbody_GetCollisionDetection", reinterpret_cast<void*>(&interop::rigidbody_get_collision_detection));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Rigidbody_SetCollisionDetection", reinterpret_cast<void*>(&interop::rigidbody_set_collision_detection));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Rigidbody_AddForce", reinterpret_cast<void*>(&interop::rigidbody_add_force));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Rigidbody_AddTorque", reinterpret_cast<void*>(&interop::rigidbody_add_torque));
 
@@ -171,11 +173,20 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_SetPostProcess", reinterpret_cast<void*>(&interop::camera_set_post_process));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Time_DeltaTime", reinterpret_cast<void*>(&interop::time_delta_time));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Time_FixedDeltaTime", reinterpret_cast<void*>(&interop::time_fixed_delta_time));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Physics_Raycast", reinterpret_cast<void*>(&interop::physics_raycast));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Physics_OverlapSphere", reinterpret_cast<void*>(&interop::physics_overlap_sphere));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Physics_ShapeCast", reinterpret_cast<void*>(&interop::physics_shape_cast));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Physics_OverlapShape", reinterpret_cast<void*>(&interop::physics_overlap_shape));
+
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "CharacterController_GetSettings", reinterpret_cast<void*>(&interop::character_controller_get_settings));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "CharacterController_SetSettings", reinterpret_cast<void*>(&interop::character_controller_set_settings));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "CharacterController_GetIsGrounded", reinterpret_cast<void*>(&interop::character_controller_get_is_grounded));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "CharacterController_GetFlags", reinterpret_cast<void*>(&interop::character_controller_get_flags));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "CharacterController_GetVelocity", reinterpret_cast<void*>(&interop::character_controller_get_velocity));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "CharacterController_Move", reinterpret_cast<void*>(&interop::character_controller_move));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "CharacterController_SimpleMove", reinterpret_cast<void*>(&interop::character_controller_simple_move));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "DebugDraw_Line", reinterpret_cast<void*>(&interop::debug_draw_line));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "DebugDraw_WireSphere", reinterpret_cast<void*>(&interop::debug_draw_wire_sphere));
@@ -355,6 +366,7 @@ scripting_module::scripting_module() {
 
   physics_module.on_contact_began().connect([this](const physics::collision_event& event) { _dispatch_collision_event(event, true); });
   physics_module.on_contact_ended().connect([this](const physics::collision_event& event) { _dispatch_collision_event(event, false); });
+  physics_module.on_controller_hit().connect([this](const physics::controller_hit& hit) { _dispatch_controller_hit(hit); });
 
   auto& canvas_module = core::engine::get_module<canvas::canvas_module>();
 
@@ -665,6 +677,26 @@ auto scripting_module::_dispatch_collision_event(const physics::collision_event&
   _invoke_collision_handler(node_b, node_a, event, began);
 }
 
+auto scripting_module::_dispatch_controller_hit(const physics::controller_hit& hit) -> void {
+  auto controller = hit.controller;
+
+  if (!controller.is_valid()) {
+    return;
+  }
+
+  auto scripts = controller.try_get_component<scripting::scripts>();
+
+  if (!scripts) {
+    return;
+  }
+
+  const auto other_uuid = hit.other.is_valid() ? hit.other.get_component<scenes::id>().value() : std::uint64_t{0u};
+
+  for (auto& instance : scripts->instances) {
+    instance.invoke("DispatchControllerColliderHit", other_uuid, hit.point.x(), hit.point.y(), hit.point.z(), hit.normal.x(), hit.normal.y(), hit.normal.z(), hit.move_direction.x(), hit.move_direction.y(), hit.move_direction.z(), hit.move_length);
+  }
+}
+
 auto scripting_module::_dispatch_button_click(const scenes::node& node) -> void {
   if (!node.is_valid()) {
     return;
@@ -759,6 +791,7 @@ auto scripting_module::_register_managed_components() -> void {
   interop::register_managed_component<scenes::camera>("Sbx.Core.Components.CameraSettings", _core_assembly);
   interop::register_managed_component<physics::rigidbody>("Sbx.Core.Physics.Rigidbody", _core_assembly);
   interop::register_managed_component<physics::nav_agent>("Sbx.Core.Physics.NavAgent", _core_assembly);
+  interop::register_managed_component<physics::character_controller>("Sbx.Core.Physics.CharacterController", _core_assembly);
   interop::register_managed_component<scenes::mesh_renderer>("Sbx.Core.Components.MeshRenderer", _core_assembly);
   interop::register_managed_component<scenes::instanced_mesh_renderer>("Sbx.Core.Components.InstancedMeshRenderer", _core_assembly);
   interop::register_managed_component<canvas::canvas>("Sbx.Core.UI.Canvas", _core_assembly);

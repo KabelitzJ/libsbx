@@ -745,6 +745,33 @@ auto interop::rigidbody_set_mass(std::uint64_t uuid, std::float_t mass) -> void 
   node.get_component<physics::rigidbody>().inverse_mass = (mass > 0.0f) ? (1.0f / mass) : 0.0f;
 }
 
+auto interop::rigidbody_get_collision_detection(std::uint64_t uuid) -> std::uint32_t {
+  auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid() || !node.has_component<physics::rigidbody>()) {
+    utility::logger<"scripting">::error("Rigidbody.CollisionDetection: node {} has no rigidbody", uuid);
+    return 0u;
+  }
+
+  return static_cast<std::uint32_t>(node.get_component<physics::rigidbody>().collision_detection);
+}
+
+auto interop::rigidbody_set_collision_detection(std::uint64_t uuid, std::uint32_t mode) -> void {
+  auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid() || !node.has_component<physics::rigidbody>()) {
+    utility::logger<"scripting">::error("Rigidbody.CollisionDetection: node {} has no rigidbody", uuid);
+    return;
+  }
+
+  if (mode > static_cast<std::uint32_t>(physics::collision_detection_mode::continuous)) {
+    utility::logger<"scripting">::error("Rigidbody.CollisionDetection: invalid mode {}", mode);
+    return;
+  }
+
+  node.get_component<physics::rigidbody>().collision_detection = static_cast<physics::collision_detection_mode>(mode);
+}
+
 auto interop::rigidbody_get_gravity_scale(std::uint64_t uuid, std::float_t* scale) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 

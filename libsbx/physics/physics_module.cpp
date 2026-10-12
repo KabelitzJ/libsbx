@@ -3,11 +3,14 @@
 #include <libsbx/physics/physics_module.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <span>
 #include <tuple>
 #include <unordered_set>
 #include <utility>
 
+#include <libsbx/math/angle.hpp>
 #include <libsbx/math/matrix4x4.hpp>
 #include <libsbx/math/matrix_cast.hpp>
 #include <libsbx/math/quaternion.hpp>
@@ -183,6 +186,15 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
       : _mesh_cache.get_or_build(assets_module, collider.mesh->id()).local_bounds;
 
     route(node, body_type::static_body, world_bounds_aabb(pose, local_bounds));
+  }
+
+  // Character controllers move themselves, so they're kinematic leaves: dynamic bodies collide with them, and they're never pushed back.
+  for (auto&& [entity, controller] : scene.query<character_controller>(ecs::exclude<rigidbody, scenes::inactive>).each()) {
+    auto node = scene.node_of(entity);
+
+    if (auto resolved = resolve_convex(scene, node, _hull_cache, assets_module, _pose_cache)) {
+      route(node, body_type::kinematic, world_shape_aabb(*resolved));
+    }
   }
 
   // Heightfields get their own list: their huge AABB would match nearly every body as a candidate pair, so _narrowphase and the queries test them directly.
@@ -389,7 +401,13 @@ auto physics_module::_narrowphase(scenes::scene& scene) -> void {
     auto& body_b = effective_rigidbody(node_b, fallback_b);
 
     if (is_at_rest(body_a) && is_at_rest(body_b)) {
-      continue;
+      // A controller is outside the solver, so against resting colliders it only needs trigger pairs (OnTriggerEnter), not contacts.
+      const auto has_controller = node_a.has_component<character_controller>() || node_b.has_component<character_controller>();
+      const auto has_trigger = node_has_trigger_collider(node_a) || node_has_trigger_collider(node_b);
+
+      if (!has_controller || !has_trigger) {
+        continue;
+      }
     }
 
     auto manifold = generate_pair_contact(scene, node_a, node_b, _mesh_cache, _hull_cache, assets_module, _pose_cache);
@@ -484,7 +502,15 @@ auto physics_module::fixed_update() -> void {
   solve_velocity_constraints(constraints, project.velocity_iterations());
   store_impulses(constraints);
 
+  const auto continuous_clamps = _sweep_continuous_bodies(scene, dt);
+
   integrate_velocities(scene, dt);
+
+  for (const auto& clamp : continuous_clamps) {
+    if (auto node = clamp.node; node.is_valid()) {
+      node.get_component<scenes::local_transform>().position = clamp.start_position + clamp.direction * clamp.travel;
+    }
+  }
   apply_positional_correction(solid_manifolds, _position_correction_percent, _position_correction_slop);
   update_sleep_timers(scene, dt, _linear_sleep_threshold, _angular_sleep_threshold, _time_to_sleep);
 
@@ -582,7 +608,7 @@ auto physics_module::overlap_shape(scenes::scene& scene, const convex_shape& sha
   }
 }
 
-auto physics_module::shape_cast(scenes::scene& scene, const convex_shape& shape, const transform& pose, const math::vector3& direction, std::float_t max_distance, const scenes::layer_mask& mask, const scenes::node& ignore, bool include_triggers) -> std::optional<sweep_hit> {
+auto physics_module::shape_cast(scenes::scene& scene, const convex_shape& shape, const transform& pose, const math::vector3& direction, std::float_t max_distance, const scenes::layer_mask& mask, const scenes::node& ignore, bool include_triggers, bool include_dynamic) -> std::optional<sweep_hit> {
   if (direction.length_squared() <= math::epsilonf || max_distance <= 0.0f) {
     return std::nullopt;
   }
@@ -626,7 +652,10 @@ auto physics_module::shape_cast(scenes::scene& scene, const convex_shape& shape,
   };
 
   _static_tree.query(bounds, visit);
-  _dynamic_tree.query(bounds, visit);
+
+  if (include_dynamic) {
+    _dynamic_tree.query(bounds, visit);
+  }
 
   for (const auto& node : _heightfield_nodes) {
     if (!passes_filter(node)) {
@@ -694,6 +723,311 @@ auto physics_module::raycast(scenes::scene& scene, const math::ray& ray, std::fl
   _dynamic_tree.query(ray, visit);
 
   return nearest;
+}
+
+// The layers @p layer collides with, from the project's collision matrix.
+[[nodiscard]] auto collision_mask_of(std::uint8_t layer) -> scenes::layer_mask {
+  const auto& project = core::engine::project();
+
+  auto bits = std::uint32_t{0u};
+
+  for (auto other = std::uint8_t{0u}; other < core::layer_count; ++other) {
+    if (project.layers_collide(layer, other)) {
+      bits |= std::uint32_t{1u} << other;
+    }
+  }
+
+  return scenes::layer_mask{bits};
+}
+
+auto physics_module::_sweep_continuous_bodies(scenes::scene& scene, std::float_t dt) -> std::vector<continuous_clamp> {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+  auto clamps = std::vector<continuous_clamp>{};
+
+  for (auto&& [entity, body, local] : scene.query<rigidbody, scenes::local_transform>(ecs::exclude<scenes::inactive>).each()) {
+    if (body.collision_detection != collision_detection_mode::continuous || body.type != body_type::dynamic_body || body.is_sleeping) {
+      continue;
+    }
+
+    const auto displacement = body.linear_velocity * dt;
+    const auto distance = displacement.length();
+
+    if (distance <= math::epsilonf) {
+      continue;
+    }
+
+    auto node = scene.node_of(entity);
+
+    // Shape poses come from this step's pose cache, so they're still the pre-integration ones.
+    const auto shapes = resolve_body_shapes(scene, node, _hull_cache, assets_module, _pose_cache);
+
+    if (shapes.empty()) {
+      continue;
+    }
+
+    // Only a body moving more than half its thinnest extent in one step can skip past a surface.
+    auto thinnest = std::numeric_limits<std::float_t>::max();
+
+    for (const auto& shape : shapes) {
+      const auto bounds = world_aabb(shape.shape, shape.pose);
+      const auto size = bounds.max() - bounds.min();
+
+      thinnest = std::min({thinnest, size.x(), size.y(), size.z()});
+    }
+
+    if (distance <= thinnest * 0.5f) {
+      continue;
+    }
+
+    const auto direction = displacement / distance;
+    const auto mask = collision_mask_of(node.get_component<scenes::layer>().index);
+
+    auto nearest = std::optional<std::float_t>{};
+
+    for (const auto& shape : shapes) {
+      const auto hit = shape_cast(scene, shape.shape, shape.pose, direction, distance, mask, node, false, false);
+
+      // Already touching: the regular contact handles it.
+      if (hit && !hit->initially_overlapping && (!nearest || hit->distance < *nearest)) {
+        nearest = hit->distance;
+      }
+    }
+
+    if (!nearest) {
+      continue;
+    }
+
+    // Stops just inside the slop, so next step's narrowphase makes a contact and the solver resolves the impact (bounce, friction, events).
+    clamps.push_back(continuous_clamp{node, local.position, direction, std::min(*nearest + _position_correction_slop, distance)});
+  }
+
+  return clamps;
+}
+
+auto physics_module::move_character(scenes::scene& scene, scenes::node node, const math::vector3& displacement) -> std::uint8_t {
+  SBX_PROFILE_SCOPE("physics_module::move_character");
+
+  auto controller_component = node.try_get_component<character_controller>();
+
+  if (!controller_component) {
+    return 0u;
+  }
+
+  auto& controller = *controller_component;
+
+  // A local cache: moves run from scripts, off the fixed cadence.
+  auto cache = pose_cache{};
+
+  const auto start = compose_world_pose(scene, node, cache).position;
+  const auto shape = convex_shape{controller_capsule(controller)};
+  const auto mask = collision_mask_of(node.get_component<scenes::layer>().index);
+  const auto skin = std::max(controller.skin_width, 0.001f);
+  const auto min_move = std::max(controller.min_move_distance, 1e-5f);
+  const auto step_offset = std::max(controller.step_offset, 0.0f);
+  const auto cos_slope = std::cos(math::to_radians(math::degree{std::clamp(controller.slope_limit, 0.0f, 90.0f)}).value());
+  const auto was_grounded = controller.is_grounded;
+
+  struct move_state {
+    std::uint8_t flags{0u};
+    bool grounded{false};
+    math::vector3 ground_normal{math::vector3::up};
+    std::vector<controller_hit> hits{};
+  }; // struct move_state
+
+  auto state = move_state{};
+
+  const auto pose_at = [](const math::vector3& center) {
+    return transform{center, math::quaternion::identity, math::vector3::one};
+  };
+
+  // The cast runs skin further than asked, so a hit within reach still leaves skin_width of room.
+  const auto cast = [&](const math::vector3& from, const math::vector3& direction, std::float_t distance) {
+    return shape_cast(scene, shape, pose_at(from), direction, distance + skin, mask, node, false);
+  };
+
+  // Pushes out of whatever the capsule starts inside, deepest overlap first.
+  const auto depenetrate = [&](math::vector3 center) -> math::vector3 {
+    auto overlaps = std::vector<sphere_query_hit>{};
+
+    for (auto pass = 0u; pass < 4u; ++pass) {
+      overlap_shape(scene, shape, pose_at(center), overlaps, mask, node, false);
+
+      const auto deepest = std::ranges::max_element(overlaps, {}, &sphere_query_hit::penetration_depth);
+
+      if (deepest == overlaps.end() || deepest->penetration_depth <= 1e-4f) {
+        break;
+      }
+
+      center = center + deepest->normal * (deepest->penetration_depth + skin * 0.5f);
+    }
+
+    return center;
+  };
+
+  const auto record = [&](const sweep_hit& hit, const math::vector3& direction, std::float_t length) {
+    if (is_walkable(hit.normal, cos_slope)) {
+      state.flags |= collision_below;
+      state.grounded = true;
+      state.ground_normal = hit.normal;
+    } else if (math::vector3::dot(hit.normal, math::vector3::up) < -0.1f) {
+      state.flags |= collision_above;
+    } else {
+      state.flags |= collision_sides;
+    }
+
+    state.hits.push_back(controller_hit{node, hit.node, hit.point, hit.normal, direction, length});
+  };
+
+  // Collide and slide: moves as far as possible, then continues along each surface it hits.
+  const auto slide = [&](math::vector3 center, math::vector3 motion) -> math::vector3 {
+    for (auto iteration = 0u; iteration < 4u; ++iteration) {
+      const auto length = motion.length();
+
+      if (length < min_move) {
+        break;
+      }
+
+      const auto direction = motion / length;
+      const auto hit = cast(center, direction, length);
+
+      if (!hit) {
+        return center + motion;
+      }
+
+      if (hit->initially_overlapping) {
+        center = depenetrate(center);
+        continue;
+      }
+
+      const auto travel = std::max(hit->distance - skin, 0.0f);
+
+      center = center + direction * travel;
+      record(*hit, direction, length);
+      motion = slide_along(direction * (length - travel), hit->normal, cos_slope);
+    }
+
+    return center;
+  };
+
+  // The horizontal distance covered from @p from, to compare plain and stepped moves.
+  const auto horizontal_progress = [](const math::vector3& from, const math::vector3& to) {
+    const auto delta = to - from;
+    return (delta - math::vector3::up * math::vector3::dot(delta, math::vector3::up)).length_squared();
+  };
+
+  auto center = depenetrate(start + controller.center);
+
+  const auto vertical = math::vector3::up * math::vector3::dot(displacement, math::vector3::up);
+  const auto horizontal = displacement - vertical;
+
+  if (horizontal.length() >= min_move) {
+    const auto before = state;
+    const auto plain = slide(center, horizontal);
+    auto chosen = plain;
+
+    // Retries the move from step_offset higher and settles back down, so steps a plain slide stops at are climbed.
+    if (was_grounded && step_offset > 0.0f) {
+      const auto plain_state = state;
+      state = before;
+
+      const auto up_hit = cast(center, math::vector3::up, step_offset);
+      const auto raise = up_hit ? std::max(up_hit->distance - skin, 0.0f) : step_offset;
+      const auto raised = slide(center + math::vector3::up * raise, horizontal);
+      const auto down_hit = cast(raised, -math::vector3::up, raise + skin);
+
+      const auto landed = down_hit && !down_hit->initially_overlapping && is_walkable(down_hit->normal, cos_slope);
+
+      if (landed && horizontal_progress(center, raised) > horizontal_progress(center, plain) + 1e-6f) {
+        chosen = raised - math::vector3::up * std::max(down_hit->distance - skin, 0.0f);
+        state.grounded = true;
+        state.flags |= collision_below;
+        state.ground_normal = down_hit->normal;
+      } else {
+        state = plain_state;
+      }
+    }
+
+    center = chosen;
+  }
+
+  if (vertical.length() >= min_move) {
+    center = slide(center, vertical);
+  }
+
+  // Keeps contact walking down stairs and slopes instead of briefly going airborne.
+  if (!state.grounded && was_grounded && math::vector3::dot(displacement, math::vector3::up) <= 0.0f && step_offset > 0.0f) {
+    if (const auto down = cast(center, -math::vector3::up, step_offset); down && !down->initially_overlapping && is_walkable(down->normal, cos_slope)) {
+      center = center - math::vector3::up * std::max(down->distance - skin, 0.0f);
+      state.grounded = true;
+      state.flags |= collision_below;
+      state.ground_normal = down->normal;
+    }
+  }
+
+  // Standing still on the ground still counts as grounded.
+  if (!state.grounded) {
+    if (const auto probe = cast(center, -math::vector3::up, skin); probe && is_walkable(probe->normal, cos_slope)) {
+      state.grounded = true;
+      state.ground_normal = probe->normal;
+    }
+  }
+
+  const auto moved = (center - controller.center) - start;
+
+  auto& local = node.get_component<scenes::local_transform>();
+
+  if (const auto parent = scene.node_of(node.get_component<scenes::relationship>().parent); parent == scene.root()) {
+    local.position = local.position + moved;
+  } else {
+    const auto parent_pose = compose_world_pose(scene, parent, cache);
+    const auto local_moved = math::quaternion::conjugate(parent_pose.rotation) * moved;
+
+    local.position = local.position + math::vector3{local_moved.x() / parent_pose.scale.x(), local_moved.y() / parent_pose.scale.y(), local_moved.z() / parent_pose.scale.z()};
+  }
+
+  const auto dt = core::engine::fixed_delta_time().value();
+
+  controller.velocity = dt > 0.0f ? moved / dt : math::vector3::zero;
+  controller.is_grounded = state.grounded;
+  controller.collision_flags = state.flags;
+  controller.ground_normal = state.ground_normal;
+
+  for (const auto& hit : state.hits) {
+    // A sleeping body the controller walks into must wake, or the contact that pushes it away never runs.
+    if (auto other = hit.other; other.is_valid()) {
+      if (auto body = other.try_get_component<rigidbody>(); body && body->type == body_type::dynamic_body && body->is_sleeping) {
+        body->is_sleeping = false;
+        body->sleep_timer = 0.0f;
+      }
+    }
+
+    _on_controller_hit(hit);
+  }
+
+  return state.flags;
+}
+
+auto physics_module::simple_move_character(scenes::scene& scene, scenes::node node, const math::vector3& speed) -> bool {
+  auto controller = node.try_get_component<character_controller>();
+
+  if (!controller) {
+    return false;
+  }
+
+  const auto dt = core::engine::fixed_delta_time().value();
+
+  controller->fall_speed = controller->is_grounded ? 0.0f : controller->fall_speed + core::engine::project().gravity().y() * dt;
+
+  const auto horizontal = speed - math::vector3::up * math::vector3::dot(speed, math::vector3::up);
+
+  move_character(scene, node, horizontal * dt + math::vector3::up * (controller->fall_speed * dt));
+
+  if (controller->is_grounded) {
+    controller->fall_speed = 0.0f;
+  }
+
+  return controller->is_grounded;
 }
 
 auto physics_module::late_update() -> void {
@@ -787,6 +1121,14 @@ auto physics_module::_submit_debug_draw(scenes::scene& scene) -> void {
       }
 
       draw_mesh_collider(node, collider, implicit_static_color);
+    }
+
+    const auto controller_color = debug_color_for(body_type::kinematic, false);
+
+    for (auto&& [entity, controller] : scene.query<character_controller>(ecs::exclude<rigidbody>).each()) {
+      if (auto resolved = resolve_convex(scene, scene.node_of(entity), _hull_cache, assets_module, cache)) {
+        draw_convex_shape(debug_draw, resolved->shape, world_pose_matrix(resolved->pose.position, resolved->pose.rotation), resolved->pose.scale, controller_color);
+      }
     }
   }
 

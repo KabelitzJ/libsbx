@@ -17,6 +17,7 @@
 
 #include <libsbx/math/constants.hpp>
 
+#include <libsbx/physics/character_controller.hpp>
 #include <libsbx/physics/collider.hpp>
 #include <libsbx/physics/epa.hpp>
 #include <libsbx/physics/gjk.hpp>
@@ -143,6 +144,14 @@ auto resolve_convex(scenes::scene& scene, const scenes::node& node, convex_hull_
     const auto world_pose = compose_world_pose(scene, node, cache);
 
     return body_shape{convex_shape{convex_hull{hull_data.points, hull_data.faces}}, compose_pose(world_pose, collider.offset, collider.rotation), collider.friction, collider.restitution};
+  }
+
+  if (node.has_component<character_controller>()) {
+    const auto& controller = node.get_component<character_controller>();
+    const auto world_pose = compose_world_pose(scene, node, cache);
+
+    // Always upright and unscaled, whatever the node's rotation and scale.
+    return body_shape{convex_shape{controller_capsule(controller)}, transform{world_pose.position + controller.center, math::quaternion::identity, math::vector3::one}, 0.0f, 0.0f};
   }
 
   return std::nullopt;

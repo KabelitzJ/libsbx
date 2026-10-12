@@ -22,6 +22,7 @@
 #include <libsbx/physics/collider.hpp>
 #include <libsbx/physics/rigidbody.hpp>
 #include <libsbx/physics/nav/nav_agent.hpp>
+#include <libsbx/physics/character_controller.hpp>
 
 #include <libsbx/canvas/components.hpp>
 
@@ -110,6 +111,9 @@ auto component_entries() -> const std::vector<component_entry>& {
 
     make_entry<sbx::physics::rigidbody>(ICON_MDI_SOCCER, "Rigidbody", "3D", 0,
       [](editor_state& s, sbx::scenes::scene& t, sbx::scenes::node& n, sbx::assets::assets_module&) { draw_rigidbody_section(s, t, n); }),
+
+    make_entry<sbx::physics::character_controller>(ICON_MDI_HUMAN_HANDSDOWN, "Character Controller", "3D", 0,
+      [](editor_state& s, sbx::scenes::scene& t, sbx::scenes::node& n, sbx::assets::assets_module&) { draw_character_controller_section(s, t, n); }),
 
     make_entry<sbx::physics::nav_agent>(ICON_MDI_WALK, "Nav Agent", "3D", 0,
       [](editor_state& s, sbx::scenes::scene& t, sbx::scenes::node& n, sbx::assets::assets_module&) { draw_nav_agent_section(s, t, n); }),

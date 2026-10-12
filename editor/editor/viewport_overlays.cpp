@@ -24,6 +24,8 @@
 #include <libsbx/scenes/scene.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
 
+#include <libsbx/physics/character_controller.hpp>
+
 #include <libsbx/render/scene_renderer_module.hpp>
 
 #include <editor/editor_module.hpp>
@@ -212,6 +214,27 @@ auto draw_audio_source_gizmo(editor_state& state) -> void {
 
   debug_draw.add_wire_sphere(center, source.min_distance, sbx::math::color::cyan(), 32u);
   debug_draw.add_wire_sphere(center, source.max_distance, sbx::math::color::blue(), 48u);
+}
+
+auto draw_character_controller_gizmo(editor_state& state) -> void {
+  auto& scene = sbx::core::engine::get_module<sbx::scenes::scenes_module>().active_scene();
+
+  auto node = state.selected_node(scene);
+
+  if (!node.is_valid() || !node.has_component<sbx::physics::character_controller>()) {
+    return;
+  }
+
+  const auto& controller = node.get_component<sbx::physics::character_controller>();
+  const auto shape = sbx::physics::controller_capsule(controller);
+
+  // Upright and unscaled, matching how the physics resolves it.
+  const auto center = sbx::math::vector3{node.world_matrix()[3]} + controller.center;
+  const auto matrix = sbx::math::matrix4x4::translated(sbx::math::matrix4x4::identity, center);
+
+  auto& debug_draw = sbx::core::engine::get_module<sbx::render::scene_renderer_module>().debug_draw();
+
+  debug_draw.add_wire_capsule(matrix, shape.radius, shape.half_height, sbx::math::color::green(), 24u);
 }
 
 } // namespace editor

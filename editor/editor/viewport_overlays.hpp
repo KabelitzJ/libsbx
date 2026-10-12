@@ -32,6 +32,9 @@ auto draw_camera_frustum_gizmo(editor_state& state, const ImVec2& viewport_size)
 /** @brief Wire spheres at the selected spatial audio source's min (full volume) and max distance. */
 auto draw_audio_source_gizmo(editor_state& state) -> void;
 
+/** @brief The selected character controller's capsule. */
+auto draw_character_controller_gizmo(editor_state& state) -> void;
+
 } // namespace editor
 
 #endif // EDITOR_VIEWPORT_OVERLAYS_HPP_

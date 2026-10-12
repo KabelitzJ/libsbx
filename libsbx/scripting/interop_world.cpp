@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <optional>
 #include <ranges>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -17,6 +18,7 @@
 
 #include <libsbx/physics/rigidbody.hpp>
 #include <libsbx/physics/physics_module.hpp>
+#include <libsbx/physics/character_controller.hpp>
 #include <libsbx/physics/nav/nav_agent.hpp>
 #include <libsbx/physics/nav/nav_settings.hpp>
 #include <libsbx/physics/nav/navmesh.hpp>
@@ -87,6 +89,89 @@ auto interop::physics_overlap_sphere(math::vector3* center, std::float_t radius,
   }
 
   return static_cast<std::uint32_t>(hits.size());
+}
+
+static auto controller_of(std::uint64_t uuid, std::string_view call) -> std::optional<scenes::node> {
+  auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid() || !node.has_component<physics::character_controller>()) {
+    utility::logger<"scripting">::error("{}: node {} has no character_controller", call, uuid);
+    return std::nullopt;
+  }
+
+  return node;
+}
+
+auto interop::character_controller_get_settings(std::uint64_t uuid, character_controller_data* out_value) -> void {
+  auto node = controller_of(uuid, "CharacterController settings");
+
+  if (!node || !out_value) {
+    return;
+  }
+
+  const auto& controller = node->get_component<physics::character_controller>();
+
+  *out_value = character_controller_data{controller.height, controller.radius, controller.skin_width, controller.slope_limit, controller.step_offset, controller.min_move_distance, controller.center};
+}
+
+auto interop::character_controller_set_settings(std::uint64_t uuid, const character_controller_data* value) -> void {
+  auto node = controller_of(uuid, "CharacterController settings");
+
+  if (!node || !value) {
+    return;
+  }
+
+  auto& controller = node->get_component<physics::character_controller>();
+
+  controller.height = std::max(value->height, 0.02f);
+  controller.radius = std::max(value->radius, 0.01f);
+  controller.skin_width = std::max(value->skin_width, 0.001f);
+  controller.slope_limit = std::clamp(value->slope_limit, 0.0f, 90.0f);
+  controller.step_offset = std::max(value->step_offset, 0.0f);
+  controller.min_move_distance = std::max(value->min_move_distance, 0.0f);
+  controller.center = value->center;
+}
+
+auto interop::character_controller_get_is_grounded(std::uint64_t uuid) -> managed::bool32 {
+  auto node = controller_of(uuid, "CharacterController.IsGrounded");
+
+  return node && node->get_component<physics::character_controller>().is_grounded;
+}
+
+auto interop::character_controller_get_flags(std::uint64_t uuid) -> std::uint32_t {
+  auto node = controller_of(uuid, "CharacterController.Flags");
+
+  return node ? node->get_component<physics::character_controller>().collision_flags : 0u;
+}
+
+auto interop::character_controller_get_velocity(std::uint64_t uuid, math::vector3* out_velocity) -> void {
+  if (auto node = controller_of(uuid, "CharacterController.Velocity"); node && out_velocity) {
+    *out_velocity = node->get_component<physics::character_controller>().velocity;
+  }
+}
+
+auto interop::character_controller_move(std::uint64_t uuid, math::vector3* displacement) -> std::uint32_t {
+  auto node = controller_of(uuid, "CharacterController.Move");
+
+  if (!node || !displacement) {
+    return 0u;
+  }
+
+  auto& scene = core::engine::get_module<scenes::scenes_module>().active_scene();
+
+  return core::engine::get_module<physics::physics_module>().move_character(scene, *node, *displacement);
+}
+
+auto interop::character_controller_simple_move(std::uint64_t uuid, math::vector3* speed) -> managed::bool32 {
+  auto node = controller_of(uuid, "CharacterController.SimpleMove");
+
+  if (!node || !speed) {
+    return false;
+  }
+
+  auto& scene = core::engine::get_module<scenes::scenes_module>().active_scene();
+
+  return core::engine::get_module<physics::physics_module>().simple_move_character(scene, *node, *speed);
 }
 
 // nullopt for an unknown kind.

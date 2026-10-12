@@ -585,6 +585,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/particles/particles_module.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/particles/spawn.hpp"
 
+      "${CMAKE_SOURCE_DIR}/libsbx/physics/character_controller.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/collider.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/collision_cache_io.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/contact.hpp"

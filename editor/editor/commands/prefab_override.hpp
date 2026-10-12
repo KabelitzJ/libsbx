@@ -15,6 +15,7 @@
 #include <libsbx/physics/rigidbody.hpp>
 #include <libsbx/physics/collider.hpp>
 #include <libsbx/physics/nav/nav_agent.hpp>
+#include <libsbx/physics/character_controller.hpp>
 
 namespace editor {
 
@@ -54,6 +55,7 @@ constexpr auto component_key() -> std::string_view {
   else if constexpr (std::same_as<Component, sbx::scenes::script_component>) { return "script"; }
   else if constexpr (std::same_as<Component, sbx::physics::rigidbody>) { return "rigidbody"; }
   else if constexpr (std::same_as<Component, sbx::physics::nav_agent>) { return "nav_agent"; }
+  else if constexpr (std::same_as<Component, sbx::physics::character_controller>) { return "character_controller"; }
   else if constexpr (std::same_as<Component, sbx::physics::shape_collider>) { return "shape_collider"; }
   else if constexpr (std::same_as<Component, sbx::physics::mesh_collider>) { return "mesh_collider"; }
   else { return std::string_view{}; }

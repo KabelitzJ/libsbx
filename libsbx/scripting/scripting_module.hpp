@@ -199,6 +199,9 @@ private:
 
   auto _invoke_collision_handler(scenes::node& self, const scenes::node& other, const physics::collision_event& event, bool began) -> void;
 
+  /** @brief Delivers OnControllerColliderHit to the scripts on the moving controller's node. */
+  auto _dispatch_controller_hit(const physics::controller_hit& hit) -> void;
+
   auto _dispatch_button_click(const scenes::node& node) -> void;
 
   auto _dispatch_value_changed(const scenes::node& node) -> void;

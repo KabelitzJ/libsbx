@@ -33,6 +33,7 @@
 #include <libsbx/physics/shapes.hpp>
 #include <libsbx/physics/convex_hull_cache.hpp>
 #include <libsbx/physics/nav/nav_agent.hpp>
+#include <libsbx/physics/character_controller.hpp>
 
 namespace sbx::scenes {
 
@@ -891,6 +892,23 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
     component["linear_damping"] = body.linear_damping;
     component["angular_damping"] = body.angular_damping;
     component["gravity_scale"] = body.gravity_scale;
+    component["collision_detection"] = std::string{reflection::to_string(body.collision_detection)};
+
+    components.push_back(component);
+  }
+
+  if (registry.all_of<physics::character_controller>(entity)) {
+    const auto& controller = registry.get<physics::character_controller>(entity);
+
+    auto component = YAML::Node{};
+    component["type"] = "character_controller";
+    component["height"] = controller.height;
+    component["radius"] = controller.radius;
+    component["center"] = controller.center;
+    component["skin_width"] = controller.skin_width;
+    component["slope_limit"] = controller.slope_limit;
+    component["step_offset"] = controller.step_offset;
+    component["min_move_distance"] = controller.min_move_distance;
 
     components.push_back(component);
   }
@@ -1501,6 +1519,17 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
       body.linear_damping = component["linear_damping"].as<std::float_t>();
       body.angular_damping = component["angular_damping"].as<std::float_t>();
       body.gravity_scale = component["gravity_scale"].as<std::float_t>();
+      body.collision_detection = reflection::from_string_or<physics::collision_detection_mode>(component["collision_detection"].as<std::string>(""), physics::collision_detection_mode::discrete);
+    } else if (type == "character_controller") {
+      auto& controller = target_node.get_or_add_component<physics::character_controller>();
+
+      controller.height = component["height"].as<std::float_t>(controller.height);
+      controller.radius = component["radius"].as<std::float_t>(controller.radius);
+      controller.center = component["center"].as<math::vector3>(controller.center);
+      controller.skin_width = component["skin_width"].as<std::float_t>(controller.skin_width);
+      controller.slope_limit = component["slope_limit"].as<std::float_t>(controller.slope_limit);
+      controller.step_offset = component["step_offset"].as<std::float_t>(controller.step_offset);
+      controller.min_move_distance = component["min_move_distance"].as<std::float_t>(controller.min_move_distance);
     } else if (type == "nav_agent") {
       auto& agent = target_node.get_or_add_component<physics::nav_agent>();
 

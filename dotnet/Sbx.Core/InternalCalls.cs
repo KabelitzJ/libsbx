@@ -51,6 +51,8 @@ namespace Sbx.Core
     internal static delegate* unmanaged<ulong, float, void> Rigidbody_SetMass;
     internal static delegate* unmanaged<ulong, float*, void> Rigidbody_GetGravityScale;
     internal static delegate* unmanaged<ulong, float, void> Rigidbody_SetGravityScale;
+    internal static delegate* unmanaged<ulong, uint> Rigidbody_GetCollisionDetection;
+    internal static delegate* unmanaged<ulong, uint, void> Rigidbody_SetCollisionDetection;
     internal static delegate* unmanaged<ulong, Vector3*, void> Rigidbody_AddForce;
     internal static delegate* unmanaged<ulong, Vector3*, void> Rigidbody_AddTorque;
 
@@ -103,13 +105,13 @@ namespace Sbx.Core
     internal static delegate* unmanaged<NativeString, float> Audio_GetMixerGroupVolume;
     internal static delegate* unmanaged<NativeString, void> Audio_ResetMixerGroupVolume;
 
-    internal static delegate* unmanaged<ulong, float*, void> CharacterController_GetHeight;
-    internal static delegate* unmanaged<ulong, float*, void> CharacterController_GetRadius;
-    internal static delegate* unmanaged<ulong, float*, void> CharacterController_GetSlopeLimit;
-    internal static delegate* unmanaged<ulong, float*, void> CharacterController_GetStepOffset;
+    internal static delegate* unmanaged<ulong, Physics.CharacterControllerSettings*, void> CharacterController_GetSettings;
+    internal static delegate* unmanaged<ulong, Physics.CharacterControllerSettings*, void> CharacterController_SetSettings;
     internal static delegate* unmanaged<ulong, bool> CharacterController_GetIsGrounded;
-    internal static delegate* unmanaged<ulong, byte*, void> CharacterController_GetFlags;
-    internal static delegate* unmanaged<ulong, Vector3*, void> CharacterController_Move;
+    internal static delegate* unmanaged<ulong, uint> CharacterController_GetFlags;
+    internal static delegate* unmanaged<ulong, Vector3*, void> CharacterController_GetVelocity;
+    internal static delegate* unmanaged<ulong, Vector3*, uint> CharacterController_Move;
+    internal static delegate* unmanaged<ulong, Vector3*, bool> CharacterController_SimpleMove;
 
     internal static delegate* unmanaged<KeyCode, Bool32> Input_IsKeyPressed;
 		internal static delegate* unmanaged<KeyCode, Bool32> Input_IsKeyDown;
@@ -147,6 +149,7 @@ namespace Sbx.Core
     internal static delegate* unmanaged<ulong, PostProcessSettings*, void> Camera_SetPostProcess;
 
     internal static delegate* unmanaged<float*, void> Time_DeltaTime;
+    internal static delegate* unmanaged<float> Time_FixedDeltaTime;
 
     internal static delegate* unmanaged<Ray*, float, uint, ulong*, Vector3*, Vector3*, float*, bool> Physics_Raycast;
     internal static delegate* unmanaged<Vector3*, float, uint, ulong*, uint, uint> Physics_OverlapSphere;

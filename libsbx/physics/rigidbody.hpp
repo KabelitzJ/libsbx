@@ -23,6 +23,11 @@ enum class [[=reflection::named]] body_type : std::uint8_t {
   static_body
 }; // enum class body_type
 
+enum class [[=reflection::named]] collision_detection_mode : std::uint8_t {
+  discrete,  // overlaps are found after moving; fast, thin-hitting bodies can tunnel
+  continuous // fast dynamic bodies are swept against static geometry each step and stopped at the first hit
+}; // enum class collision_detection_mode
+
 /** @brief A rigid body: mass, velocities and the solver's accumulators and derived state. It only collides together with a shape_collider or mesh_collider. */
 struct rigidbody {
   body_type type{body_type::dynamic_body};
@@ -37,6 +42,8 @@ struct rigidbody {
   std::float_t linear_damping{0.01f};
   std::float_t angular_damping{0.05f};
   std::float_t gravity_scale{1.0f};
+
+  collision_detection_mode collision_detection{collision_detection_mode::discrete};
 
   math::vector3 force_accumulator{math::vector3::zero};
   math::vector3 torque_accumulator{math::vector3::zero};

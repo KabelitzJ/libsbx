@@ -33,6 +33,7 @@
 #include <libsbx/physics/collider.hpp>
 #include <libsbx/physics/rigidbody.hpp>
 #include <libsbx/physics/nav/nav_agent.hpp>
+#include <libsbx/physics/character_controller.hpp>
 
 #include <libsbx/canvas/components.hpp>
 
@@ -789,6 +790,25 @@ auto draw_rigidbody_section(editor_state& state, sbx::scenes::scene& target, sbx
     ImGui::EndCombo();
   }
 
+  {
+    ImGui::BeginDisabled(body.type != sbx::physics::body_type::dynamic_body);
+
+    const auto before = body;
+    static constexpr auto collision_detection_names = std::array<const char*, 2u>{"Discrete", "Continuous"};
+    auto mode_index = static_cast<int>(body.collision_detection);
+
+    if (ImGui::Combo("Collision Detection", &mode_index, collision_detection_names.data(), static_cast<int>(collision_detection_names.size()))) {
+      body.collision_detection = static_cast<sbx::physics::collision_detection_mode>(mode_index);
+      state.push_command(target, std::make_unique<modify_component_command<sbx::physics::rigidbody>>(node.id(), before, body, "Edit Rigidbody"));
+    }
+
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+      ImGui::SetTooltip("Continuous stops fast dynamic bodies at static geometry they'd otherwise pass through in one step (bullets, thrown objects). Costs a sweep per fast body per step.");
+    }
+
+    ImGui::EndDisabled();
+  }
+
   // inverse_mass is the stored value; this edits its reciprocal.
   auto mass = (body.inverse_mass > 0.0f) ? (1.0f / body.inverse_mass) : 0.0f;
 
@@ -820,6 +840,53 @@ auto draw_rigidbody_section(editor_state& state, sbx::scenes::scene& target, sbx
   }
 
   bracket_edit(state, target, node, body, pending, "Edit Rigidbody");
+}
+
+auto draw_character_controller_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
+  if (!draw_component_header<sbx::physics::character_controller>(state, target, node, ICON_MDI_HUMAN_HANDSDOWN, "Character Controller")) {
+    return;
+  }
+
+  auto& controller = node.get_component<sbx::physics::character_controller>();
+  static auto pending = std::optional<sbx::physics::character_controller>{};
+
+  if (node.has_component<sbx::physics::rigidbody>()) {
+    ImGui::TextColored(ImVec4{1.0f, 0.7f, 0.2f, 1.0f}, ICON_MDI_ALERT_OUTLINE " Also has a Rigidbody -- the controller is ignored.");
+  }
+
+  ImGui::DragFloat("Height##controller_height", &controller.height, 0.01f, 0.02f, 20.0f);
+  bracket_edit(state, target, node, controller, pending, "Edit Character Controller");
+  ImGui::DragFloat("Radius##controller_radius", &controller.radius, 0.01f, 0.01f, 10.0f);
+  bracket_edit(state, target, node, controller, pending, "Edit Character Controller");
+
+  auto center = std::array<std::float_t, 3u>{controller.center.x(), controller.center.y(), controller.center.z()};
+
+  if (draw_vector3_control("Center", center, 0.0f, 0.05f).changed) {
+    controller.center = sbx::math::vector3{center[0], center[1], center[2]};
+  }
+
+  bracket_edit(state, target, node, controller, pending, "Edit Character Controller");
+
+  ImGui::DragFloat("Slope Limit", &controller.slope_limit, 0.5f, 0.0f, 90.0f, "%.1f deg");
+  bracket_edit(state, target, node, controller, pending, "Edit Character Controller");
+  ImGui::DragFloat("Step Offset", &controller.step_offset, 0.01f, 0.0f, 5.0f);
+  bracket_edit(state, target, node, controller, pending, "Edit Character Controller");
+  ImGui::DragFloat("Skin Width", &controller.skin_width, 0.001f, 0.001f, 0.5f, "%.3f");
+  bracket_edit(state, target, node, controller, pending, "Edit Character Controller");
+  ImGui::DragFloat("Min Move Distance", &controller.min_move_distance, 0.0005f, 0.0f, 0.5f, "%.4f");
+  bracket_edit(state, target, node, controller, pending, "Edit Character Controller");
+
+  if (controller.step_offset > controller.height) {
+    ImGui::TextColored(ImVec4{1.0f, 0.7f, 0.2f, 1.0f}, ICON_MDI_ALERT_OUTLINE " Step Offset is taller than the controller.");
+  }
+
+  if (!sbx::core::engine::get_module<sbx::scenes::scenes_module>().is_simulating()) {
+    return;
+  }
+
+  ImGui::SeparatorText("State");
+  ImGui::Text("Grounded: %s", controller.is_grounded ? "yes" : "no");
+  ImGui::Text("Velocity: %.2f, %.2f, %.2f", controller.velocity.x(), controller.velocity.y(), controller.velocity.z());
 }
 
 auto draw_nav_agent_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {

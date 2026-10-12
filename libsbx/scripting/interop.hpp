@@ -128,6 +128,17 @@ struct physics_shape_data {
   math::quaternion rotation;
 }; // struct physics_shape_data
 
+// Mirrors Sbx.Core.Physics.CharacterControllerSettings: the authored character_controller fields.
+struct character_controller_data {
+  std::float_t height;
+  std::float_t radius;
+  std::float_t skin_width;
+  std::float_t slope_limit;
+  std::float_t step_offset;
+  std::float_t min_move_distance;
+  math::vector3 center;
+}; // struct character_controller_data
+
 struct interop {
 
   enum class log_level : std::int32_t {
@@ -209,6 +220,12 @@ struct interop {
   static auto rigidbody_set_angular_velocity(std::uint64_t uuid, math::vector3* velocity) -> void;
 
   static auto rigidbody_get_mass(std::uint64_t uuid, std::float_t* mass) -> void;
+
+  /** @brief The body's collision_detection_mode as its underlying value; 0 (discrete) for a node without a rigidbody. */
+  static auto rigidbody_get_collision_detection(std::uint64_t uuid) -> std::uint32_t;
+
+  /** @brief Values other than discrete/continuous are ignored. */
+  static auto rigidbody_set_collision_detection(std::uint64_t uuid, std::uint32_t mode) -> void;
 
   static auto rigidbody_set_mass(std::uint64_t uuid, std::float_t mass) -> void;
 
@@ -395,6 +412,9 @@ struct interop {
 
   static auto time_delta_time(std::float_t* delta_time) -> void;
 
+  /** @brief Seconds per fixed_update step. */
+  static auto time_fixed_delta_time() -> std::float_t;
+
   /**
    * @brief Raycasts against the active scene's colliders and terrain.
    *
@@ -412,6 +432,23 @@ struct interop {
    * @return The total number of overlapping nodes, which may exceed @p capacity.
    */
   static auto physics_overlap_sphere(math::vector3* center, std::float_t radius, std::uint32_t layer_mask, std::uint64_t* out_node_uuids, std::uint32_t capacity) -> std::uint32_t;
+
+  static auto character_controller_get_settings(std::uint64_t uuid, character_controller_data* out_value) -> void;
+
+  static auto character_controller_set_settings(std::uint64_t uuid, const character_controller_data* value) -> void;
+
+  static auto character_controller_get_is_grounded(std::uint64_t uuid) -> managed::bool32;
+
+  /** @brief The last move's collision_below/above/sides flags. */
+  static auto character_controller_get_flags(std::uint64_t uuid) -> std::uint32_t;
+
+  static auto character_controller_get_velocity(std::uint64_t uuid, math::vector3* out_velocity) -> void;
+
+  /** @brief See physics_module::move_character; returns the move's collision flags. */
+  static auto character_controller_move(std::uint64_t uuid, math::vector3* displacement) -> std::uint32_t;
+
+  /** @brief See physics_module::simple_move_character. */
+  static auto character_controller_simple_move(std::uint64_t uuid, math::vector3* speed) -> managed::bool32;
 
   /** @brief Sweeps @p shape along @p direction (see physics_module::shape_cast); triggers included. */
   static auto physics_shape_cast(const physics_shape_data* shape, math::vector3* direction, std::float_t max_distance, std::uint32_t layer_mask, std::uint64_t* out_node_uuid, math::vector3* out_point, math::vector3* out_normal, std::float_t* out_distance) -> managed::bool32;

@@ -30,6 +30,7 @@
 #include <libsbx/scenes/scenes_module.hpp>
 
 #include <libsbx/physics/shapes.hpp>
+#include <libsbx/physics/character_controller.hpp>
 #include <libsbx/physics/collider.hpp>
 #include <libsbx/physics/rigidbody.hpp>
 #include <libsbx/physics/contact.hpp>
@@ -153,10 +154,11 @@ public:
    * @param direction Need not be normalized.
    * @param ignore A node to skip, typically the caster itself.
    * @param include_triggers Whether trigger colliders count as hits.
+   * @param include_dynamic Whether dynamic and kinematic bodies count as hits; false leaves static colliders, meshes and terrain.
    *
    * @return The nearest hit, or nullopt.
    */
-  [[nodiscard]] auto shape_cast(scenes::scene& scene, const convex_shape& shape, const transform& pose, const math::vector3& direction, std::float_t max_distance, const scenes::layer_mask& mask = scenes::layer_mask::everything(), const scenes::node& ignore = scenes::node{}, bool include_triggers = true) -> std::optional<sweep_hit>;
+  [[nodiscard]] auto shape_cast(scenes::scene& scene, const convex_shape& shape, const transform& pose, const math::vector3& direction, std::float_t max_distance, const scenes::layer_mask& mask = scenes::layer_mask::everything(), const scenes::node& ignore = scenes::node{}, bool include_triggers = true, bool include_dynamic = true) -> std::optional<sweep_hit>;
 
   /**
    * @brief Every collider overlapping @p shape at @p pose, with a push-out normal and depth per hit. A non-convex mesh or terrain yields one hit per overlapping triangle.
@@ -170,6 +172,27 @@ public:
    *
    * @return The signal.
    */
+  /**
+   * @brief Moves a character_controller node by @p displacement right away: pushes out of overlaps, climbs steps, slides along walls and snaps down onto the ground.
+   *
+   * Call once per fixed step (script FixedUpdate): velocity is the move divided by engine::fixed_delta_time().
+   * Updates the controller's runtime fields and fires on_controller_hit() for each surface hit. Collides with the layers the node's layer collides with; triggers are ignored.
+   *
+   * @return The collision_below/above/sides flags of this move; 0 for a node without a controller.
+   */
+  auto move_character(scenes::scene& scene, scenes::node node, const math::vector3& displacement) -> std::uint8_t;
+
+  /**
+   * @brief Like Unity's SimpleMove: moves at @p speed (m/s; its vertical part ignored) for one fixed step, with the project's gravity accumulated while airborne. Call from FixedUpdate.
+   *
+   * @return Whether the controller is grounded afterwards.
+   */
+  auto simple_move_character(scenes::scene& scene, scenes::node node, const math::vector3& speed) -> bool;
+
+  auto on_controller_hit() -> signals::signal<const controller_hit&>& {
+    return _on_controller_hit;
+  }
+
   auto on_contact_began() -> signals::signal<const collision_event&>& {
     return _on_contact_began;
   }
@@ -240,6 +263,17 @@ private:
   // Diffs this step's manifolds against the cache to fire began/ended events; must run before _update_manifold_cache.
   auto _dispatch_contact_events() -> void;
 
+  // Where a continuous body must stop this step instead of its integrated position.
+  struct continuous_clamp {
+    scenes::node node;
+    math::vector3 start_position; // local_transform::position before integration
+    math::vector3 direction;
+    std::float_t travel;
+  }; // struct continuous_clamp
+
+  // Sweeps fast continuous bodies along this step's displacement against static geometry; call after the velocity solve, before integration.
+  [[nodiscard]] auto _sweep_continuous_bodies(scenes::scene& scene, std::float_t dt) -> std::vector<continuous_clamp>;
+
   // Drops every leaf, pair and manifold when simulation starts: Stop reloads the scene in place, so held nodes are stale.
   auto _reset(scenes::scene& scene) -> void;
 
@@ -285,6 +319,7 @@ private:
 
   signals::signal<const collision_event&> _on_contact_began{};
   signals::signal<const collision_event&> _on_contact_ended{};
+  signals::signal<const controller_hit&> _on_controller_hit{};
 
 }; // class physics_module
 

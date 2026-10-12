@@ -561,4 +561,8 @@ auto interop::time_delta_time(std::float_t* delta_time) -> void {
   *delta_time = core::engine::delta_time().value();
 }
 
+auto interop::time_fixed_delta_time() -> std::float_t {
+  return core::engine::fixed_delta_time().value();
+}
+
 } // namespace sbx::scripting

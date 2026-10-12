@@ -64,7 +64,8 @@ auto inspector_panel::_draw_active_checkbox(editor_state& state, sbx::scenes::sc
 auto inspector_panel::_draw_name_field(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
   const auto id = node.id();
 
-  if (id.value() != _name_buffer_id.value()) {
+  // Reloaded unless the field is being typed in, so renames from the Hierarchy, undo or scripts show up.
+  if (id.value() != _name_buffer_id.value() || !_name_field_active) {
     const auto& current_name = node.name();
     std::strncpy(_name_buffer.data(), current_name.c_str(), _name_buffer.size() - 1u);
     _name_buffer[_name_buffer.size() - 1u] = '\0';
@@ -75,12 +76,13 @@ auto inspector_panel::_draw_name_field(editor_state& state, sbx::scenes::scene& 
     // Committed below once editing finishes.
   }
 
+  _name_field_active = ImGui::IsItemActive();
+
   if (ImGui::IsItemActivated() && !_pending_name_before) {
     _pending_name_before = node.name();
   }
 
   if (ImGui::IsItemDeactivatedAfterEdit()) {
-    // scene::find(name) may go stale after a rename; selection and hierarchy key on ids, not names.
     node.name() = sbx::scenes::tag{std::string{_name_buffer.data()}};
 
     if (_pending_name_before) {

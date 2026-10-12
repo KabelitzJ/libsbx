@@ -113,20 +113,14 @@ auto editor_ui_layer::_handle_shortcuts() -> void {
     focus_selection(_state, scene);
   } else if (is_editing && ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_S)) {
     _save();
+  } else if (is_editing && ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Alt | ImGuiKey_S)) {
+    _save_all();
   } else if (is_editing && ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S)) {
-    _open_save_as_dialog();
+    _open_save_as_dialog(sbx::core::engine::get_module<sbx::scenes::scenes_module>().active_scene_handle());
   } else if (is_editing && ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_N)) {
     new_scene();
   } else if (is_editing && ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_O)) {
     _open_open_scene_dialog();
-  }
-}
-
-auto editor_ui_layer::_save() -> void {
-  if (_scene_path.empty()) {
-    _open_save_as_dialog();
-  } else {
-    _save_scene(_scene_path);
   }
 }
 
@@ -138,6 +132,9 @@ auto editor_ui_layer::build() -> void {
   _draw_dockspace();
 
   _asset_watcher.update(_state);
+
+  _handle_scene_file_request();
+  _refresh_dirty_scenes();
   _thumbnails.update();
 
   _viewport_is_hovered = draw_viewport_window(_state, _sampler);
@@ -198,7 +195,11 @@ auto editor_ui_layer::_draw_dockspace() -> void {
     const auto request = *_state.open_scene_request;
     _state.open_scene_request.reset();
 
-    open_scene(request.path);
+    if (request.additive) {
+      open_scene_additive(request.path);
+    } else {
+      open_scene(request.path);
+    }
   }
 
   auto window_flags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_MenuBar;
@@ -270,6 +271,24 @@ auto editor_ui_layer::_draw_dockspace() -> void {
 
       if (ImGui::MenuItem(ICON_MDI_FOLDER_OPEN " Open Scene...", "Ctrl+O")) {
         _open_open_scene_dialog();
+      }
+
+      if (ImGui::MenuItem(ICON_MDI_FOLDER_PLUS " Open Scene Additive...")) {
+        _open_open_scene_dialog(true);
+      }
+
+      ImGui::Separator();
+
+      if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE " Save Scene", "Ctrl+S")) {
+        _save();
+      }
+
+      if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE_EDIT " Save Scene As...", "Ctrl+Shift+S")) {
+        _open_save_as_dialog(scenes_module.active_scene_handle());
+      }
+
+      if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE_ALL " Save All", "Ctrl+Alt+S")) {
+        _save_all();
       }
 
       ImGui::EndDisabled();
@@ -357,7 +376,7 @@ auto editor_ui_layer::_draw_dockspace() -> void {
       }
 
       if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE_EDIT " Save As...", "Ctrl+Shift+S")) {
-        _open_save_as_dialog();
+        _open_save_as_dialog(scenes_module.active_scene_handle());
       }
 
       ImGui::EndDisabled();

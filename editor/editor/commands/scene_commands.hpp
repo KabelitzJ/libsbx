@@ -4,6 +4,7 @@
 #define EDITOR_COMMANDS_SCENE_COMMANDS_HPP_
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 
@@ -203,6 +204,29 @@ private:
   std::size_t _new_index;
 
 }; // class reparent_node_command
+
+/** @brief Moves a top-level node into another loaded scene (scenes_module handle), restoring its previous scene on undo. Reparent it to the top level first. */
+class set_scene_membership_command final : public command {
+
+public:
+
+  set_scene_membership_command(sbx::scenes::scene& scene, sbx::math::uuid node_id, std::uint32_t handle);
+
+  auto execute(sbx::scenes::scene& target) -> void override;
+
+  auto undo(sbx::scenes::scene& target) -> void override;
+
+  [[nodiscard]] auto label() const -> std::string override {
+    return "Move to Scene";
+  }
+
+private:
+
+  sbx::math::uuid _id;
+  std::uint32_t _previous{0u};
+  std::uint32_t _handle;
+
+}; // class set_scene_membership_command
 
 /** @brief Sets the scene's active camera, restoring the previous one on undo. */
 class set_active_camera_command final : public command {

@@ -259,14 +259,69 @@ struct interop {
 
   static auto node_get_is_active(std::uint64_t uuid) -> managed::bool32;
 
-  /** @brief Replaces the active scene with the scene at @p path (project-relative). No-op if @p path isn't a valid scene. */
-  static auto scene_load(managed::string path) -> void;
 
   /** @brief Saves the active scene to @p path (project-relative) and registers it as a scene asset. */
   static auto scene_save(managed::string path) -> void;
 
   /** @brief Replaces the active scene with an empty one containing a default camera. Unsaved changes are discarded. */
   static auto scene_new() -> void;
+
+  /** @brief Queues a load by scene-list name or path (see project::resolve_scene); outside the list, a path is still tried as-is. Returns the operation id and writes the scene's handle. */
+  static auto scene_load_by_name(managed::string name_or_path, std::uint32_t mode, std::uint32_t* out_handle) -> std::uint32_t;
+
+  /** @brief Queues a load by build index in the project's scene list; 0 (no operation) for a bad index. */
+  static auto scene_load_by_index(std::int32_t build_index, std::uint32_t mode, std::uint32_t* out_handle) -> std::uint32_t;
+
+  /** @brief scene_load_by_name, through scenes_module::load_scene_async. */
+  static auto scene_load_async_by_name(managed::string name_or_path, std::uint32_t mode, std::uint32_t* out_handle) -> std::uint32_t;
+
+  /** @brief scene_load_by_index, through scenes_module::load_scene_async. */
+  static auto scene_load_async_by_index(std::int32_t build_index, std::uint32_t mode, std::uint32_t* out_handle) -> std::uint32_t;
+
+  static auto scene_get_operation_progress(std::uint32_t operation) -> std::float_t;
+
+  static auto scene_get_allow_activation(std::uint32_t operation) -> managed::bool32;
+
+  static auto scene_set_allow_activation(std::uint32_t operation, managed::bool32 allow) -> void;
+
+  /** @brief Queues unloading a loaded scene; returns the operation id. */
+  static auto scene_unload(std::uint32_t handle) -> std::uint32_t;
+
+  static auto scene_is_operation_done(std::uint32_t operation) -> managed::bool32;
+
+  /** @brief Loaded scenes, not counting the persistent DontDestroyOnLoad scene (like Unity's sceneCount). */
+  static auto scene_get_count() -> std::int32_t;
+
+  /** @brief The loaded scene at @p index in load order, excluding the persistent one; invalid_scene_handle when out of range. */
+  static auto scene_get_at(std::int32_t index) -> std::uint32_t;
+
+  static auto scene_get_active() -> std::uint32_t;
+
+  static auto scene_set_active(std::uint32_t handle) -> managed::bool32;
+
+  /** @brief A loaded scene by name (case-insensitive), path, or build index; invalid_scene_handle when none is loaded. */
+  static auto scene_find_by_name(managed::string name) -> std::uint32_t;
+
+  static auto scene_find_by_path(managed::string path) -> std::uint32_t;
+
+  static auto scene_find_by_build_index(std::int32_t build_index) -> std::uint32_t;
+
+  static auto scene_get_name(std::uint32_t handle) -> managed::string;
+
+  static auto scene_get_path(std::uint32_t handle) -> managed::string;
+
+  static auto scene_get_build_index(std::uint32_t handle) -> std::int32_t;
+
+  static auto scene_is_loaded(std::uint32_t handle) -> managed::bool32;
+
+  /** @brief The scene's top-level nodes; writes up to @p capacity uuids and returns the total. */
+  static auto scene_get_root_nodes(std::uint32_t handle, std::uint64_t* out_node_uuids, std::uint32_t capacity) -> std::uint32_t;
+
+  static auto scene_move_node(std::uint64_t node_uuid, std::uint32_t handle) -> managed::bool32;
+
+  static auto node_dont_destroy_on_load(std::uint64_t node_uuid) -> void;
+
+  static auto scene_count_in_build_settings() -> std::int32_t;
 
   /** @brief Sets which .particle_effect asset (project-relative @p path) the node's ParticleEffect plays. */
   static auto particle_effect_load(std::uint64_t uuid, managed::string path) -> void;

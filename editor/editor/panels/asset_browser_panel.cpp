@@ -3,10 +3,15 @@
 #include <editor/panels/asset_browser_panel.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <memory>
+#include <regex>
 #include <string>
+#include <string_view>
 
 #include <imgui.h>
 
@@ -17,7 +22,11 @@
 
 #include <libsbx/assets/assets_module.hpp>
 
+#include <libsbx/utility/logger.hpp>
+
 #include <libsbx/scenes/scenes_module.hpp>
+
+#include <libsbx/scripting/scripting_module.hpp>
 
 #include <editor/commands/scene_commands.hpp>
 
@@ -88,6 +97,62 @@ auto asset_browser_panel::_draw_rename_field(editor_state& state, std::float_t w
   }
 }
 
+[[nodiscard]] auto is_csharp_identifier(std::string_view name) -> bool {
+  const auto is_start = [](unsigned char character) { return std::isalpha(character) || character == '_'; };
+  const auto is_part = [](unsigned char character) { return std::isalnum(character) || character == '_'; };
+
+  return !name.empty() && is_start(static_cast<unsigned char>(name.front())) && std::ranges::all_of(name, [&](char character) { return is_part(static_cast<unsigned char>(character)); });
+}
+
+// Keeps a script's class named after its file, like a freshly created Unity script: Add Component lists classes, not files.
+auto rename_script_class(const std::filesystem::path& file, const std::string& old_name, const std::string& new_name) -> void {
+  if (!is_csharp_identifier(old_name) || !is_csharp_identifier(new_name)) {
+    sbx::utility::logger<"editor">::warn("'{}' isn't a valid C# class name, so the class inside '{}' keeps its name", new_name, file.filename().string());
+    return;
+  }
+
+  auto source = std::string{};
+
+  {
+    auto in = std::ifstream{file, std::ios::binary};
+    source.assign(std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{});
+  }
+
+  const auto declaration = std::regex{"\\b(class|struct)\\s+" + old_name + "\\b"};
+
+  // A file whose class was already named differently is left alone.
+  if (!std::regex_search(source, declaration)) {
+    return;
+  }
+
+  {
+    auto out = std::ofstream{file, std::ios::binary};
+    out << std::regex_replace(source, declaration, "$1 " + new_name);
+  }
+
+  // Open scenes attach scripts by class name, so they follow the rename (namespaced names by their last part).
+  auto& scene = sbx::core::engine::get_module<sbx::scenes::scenes_module>().active_scene();
+
+  for (auto&& [entity, component] : scene.query<sbx::scenes::script_component>().each()) {
+    for (auto& entry : component.scripts) {
+      if (entry.class_name == old_name) {
+        entry.class_name = new_name;
+      } else if (entry.class_name.ends_with("." + old_name)) {
+        entry.class_name.replace(entry.class_name.size() - old_name.size(), old_name.size(), new_name);
+      }
+    }
+  }
+
+  auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
+
+  // Recompiling swaps the game assembly, which running scripts in Play can't survive.
+  if (sbx::core::engine::get_module<sbx::scenes::scenes_module>().is_simulating()) {
+    sbx::utility::logger<"editor">::info("Renamed class '{}' to '{}'; scripts recompile after Play (Scripting > Recompile All)", old_name, new_name);
+  } else {
+    scripting_module.recompile_scripts();
+  }
+}
+
 auto asset_browser_panel::_commit_rename(editor_state& state) -> void {
   auto& project = sbx::core::engine::project();
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
@@ -115,6 +180,10 @@ auto asset_browser_panel::_commit_rename(editor_state& state) -> void {
 
   if (!assets_module.move_asset(old_absolute, new_absolute)) {
     return;
+  }
+
+  if (!_renaming_is_directory && new_relative.extension() == ".cs") {
+    rename_script_class(new_absolute, _renaming_path.stem().string(), new_relative.stem().string());
   }
 
   _needs_refresh = true;
@@ -151,6 +220,18 @@ auto asset_browser_panel::_draw_entry_context_menu(editor_state& state, const as
       state.push_command(scene, std::move(command));
       state.select_node(scene.find(created->id()));
     }
+  }
+
+  if (!entry.is_directory && entry.kind == sbx::assets::asset_type::scene) {
+    if (ImGui::MenuItem(ICON_MDI_FOLDER_OPEN " Open Scene")) {
+      state.request_open_scene(entry.path);
+    }
+
+    if (ImGui::MenuItem(ICON_MDI_FOLDER_PLUS " Open Scene Additive")) {
+      state.request_open_scene(entry.path, true);
+    }
+
+    ImGui::Separator();
   }
 
   if (ImGui::BeginMenu(ICON_MDI_FOLDER_PLUS " Create")) {

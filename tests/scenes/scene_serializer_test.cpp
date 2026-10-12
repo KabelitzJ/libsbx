@@ -274,3 +274,34 @@ TEST(scene_serializer_test, the_instance_roots_transform_is_never_recorded_as_an
 
   EXPECT_TRUE(serializer::prefab_overrides_of(target, instance).empty());
 }
+
+TEST(scene_serializer_test, loaded_scenes_share_one_world_but_serialize_separately) {
+  auto source = scenes::scene{"Level"};
+
+  auto floor = source.create_node("Floor");
+  auto lamp = source.create_node("Lamp");
+  lamp.set_parent(floor);
+
+  const auto level = serializer::build(source, source.active_membership());
+
+  // Scene handles are runtime-only, so a per-scene file never records them.
+  EXPECT_FALSE(level["nodes"][0]["scene"]);
+
+  auto world = scenes::scene{};
+
+  serializer::load_into(world, level, 1u, true);
+  serializer::load_into(world, level, 2u, false); // the same scene again, additively
+
+  ASSERT_EQ(world.members_of(1u).size(), 2u);
+  ASSERT_EQ(world.members_of(2u).size(), 2u);
+
+  EXPECT_NE(world.members_of(1u)[0].id(), world.members_of(2u)[0].id()); // the duplicate got fresh ids
+  EXPECT_EQ(world.scene_of(world.members_of(2u)[1]), 2u); // a child belongs to its top-level node's scene
+
+  EXPECT_EQ(serializer::build(world, 2u)["nodes"].size(), 2u);
+
+  world.destroy_scene_nodes(1u);
+
+  EXPECT_TRUE(world.members_of(1u).empty());
+  EXPECT_EQ(world.members_of(2u).size(), 2u);
+}

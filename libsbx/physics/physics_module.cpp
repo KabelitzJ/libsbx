@@ -86,7 +86,14 @@ auto prune_stale_leaves(containers::dynamic_tree<scenes::node>& tree, containers
   return collider;
 }
 
-physics_module::physics_module() { }
+physics_module::physics_module() {
+  // A single-mode load replaces the world, so every leaf, pair and manifold refers to destroyed nodes.
+  core::engine::get_module<scenes::scenes_module>().on_scene_loaded().connect([this](const scenes::scene_loaded_event& event) {
+    if (event.mode == scenes::load_scene_mode::single) {
+      _reset_pending = true;
+    }
+  });
+}
 
 physics_module::~physics_module() { }
 
@@ -471,8 +478,9 @@ auto physics_module::fixed_update() -> void {
 
   auto& scene = scenes_module.active_scene();
 
-  if (!_was_simulating) {
+  if (!_was_simulating || _reset_pending) {
     _reset(scene);
+    _reset_pending = false;
   }
 
   _was_simulating = true;

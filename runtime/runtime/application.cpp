@@ -18,10 +18,8 @@
 #include <libsbx/assets/assets_module.hpp>
 
 #include <libsbx/scenes/scenes_module.hpp>
-#include <libsbx/scenes/scene_serializer.hpp>
 #include <libsbx/scenes/components.hpp>
 
-#include <libsbx/scripting/scripting_module.hpp>
 
 #include <libsbx/render/scene_renderer_module.hpp>
 
@@ -44,15 +42,16 @@ application::application()
   assets_module.import_directory(project.assets_directory());
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-  auto& scene = scenes_module.active_scene();
 
-  if (const auto& startup_scene = project.startup_scene()) {
-    if (auto handle = assets_module.load_scene(*startup_scene); handle.is_valid()) {
-      sbx::scenes::scene_serializer::load(scene, handle->snapshot());
-    }
+  // Like a Unity build: only scenes in the project's scene list can be loaded.
+  scenes_module.set_require_scene_list(true);
 
-    auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
-    scripting_module.instantiate_scene_scripts(scene);
+  // Through the same path as SceneManager.LoadScene, whose scene-loaded signal starts the scene's scripts.
+  if (const auto startup_scene = project.startup_scene()) {
+    scenes_module.load_scene(*startup_scene);
+    scenes_module.apply_pending_operations();
+  } else {
+    sbx::utility::logger<"runtime">::warn("The project's scene list has no enabled scene to start with (Project Settings > Scenes)");
   }
 }
 

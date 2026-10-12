@@ -12,6 +12,8 @@
 #include <utility>
 #include <vector>
 
+#include <fmt/format.h>
+
 #include <imgui.h>
 
 #include <libsbx/core/engine.hpp>
@@ -21,6 +23,9 @@
 #include <libsbx/math/vector3.hpp>
 
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
+#include <libsbx/render/ui/widgets/asset_tile.hpp>
+
+#include <libsbx/scenes/scenes_module.hpp>
 
 #include <editor/widgets/vector_fields.hpp>
 
@@ -62,6 +67,11 @@ auto project_settings_panel::draw(editor_state& state) -> void {
 
     _layers_tab_was_visible = layers_visible;
 
+    if (ImGui::BeginTabItem("Scenes")) {
+      _draw_scenes_tab();
+      ImGui::EndTabItem();
+    }
+
     if (ImGui::BeginTabItem("Audio")) {
       _draw_audio_tab();
       ImGui::EndTabItem();
@@ -89,34 +99,10 @@ auto project_settings_panel::_draw_general_tab() -> void {
     project.save();
   }
 
-  const auto& startup_scene = project.startup_scene();
-  const auto preview = startup_scene ? startup_scene->generic_string() : std::string{"(None)"};
+  const auto startup_scene = project.startup_scene();
 
-  if (ImGui::BeginCombo("Startup Scene", preview.c_str())) {
-    if (ImGui::Selectable("(None)", !startup_scene)) {
-      project.set_startup_scene(std::nullopt);
-      project.save();
-    }
-
-    const auto assets_directory = project.assets_directory();
-
-    for (const auto& entry : std::filesystem::recursive_directory_iterator{assets_directory}) {
-      if (!entry.is_regular_file() || entry.path().extension() != ".scene") {
-        continue;
-      }
-
-      const auto relative = std::filesystem::relative(entry.path(), assets_directory);
-
-      if (ImGui::Selectable(relative.generic_string().c_str(), startup_scene && *startup_scene == relative)) {
-        project.set_startup_scene(relative);
-        project.save();
-      }
-    }
-
-    ImGui::EndCombo();
-  }
-
-  ImGui::TextDisabled("Loaded when the runtime (and the editor) starts.");
+  ImGui::LabelText("Startup Scene", "%s", startup_scene ? startup_scene->generic_string().c_str() : "(None)");
+  ImGui::TextDisabled("The first enabled scene in the Scenes tab; loaded when the runtime (and the editor) starts.");
 }
 
 auto project_settings_panel::_draw_physics_tab() -> void {
@@ -335,6 +321,146 @@ auto project_settings_panel::_draw_audio_tab() -> void {
   }
 
   if (commit) {
+    project.save();
+  }
+}
+
+auto project_settings_panel::_draw_scenes_tab() -> void {
+  static constexpr auto drag_drop_payload_scene_row = "SBX_SCENE_LIST_ROW";
+
+  auto& project = sbx::core::engine::project();
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+
+  auto list = project.scene_list();
+  auto changed = false;
+  auto move = std::optional<std::pair<std::size_t, std::size_t>>{}; // (from, to)
+  auto remove_index = std::optional<std::size_t>{};
+
+  const auto contains = [&](const std::filesystem::path& path) {
+    return std::ranges::any_of(list, [&](const sbx::core::scene_list_entry& entry) { return entry.path.lexically_normal() == path.lexically_normal(); });
+  };
+
+  ImGui::TextDisabled("The game's scenes in build order. The first enabled one opens on start; a built game can only load scenes listed here.");
+
+  if (ImGui::BeginTable("##scene_list", 4, ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg)) {
+    ImGui::TableSetupColumn("Index", ImGuiTableColumnFlags_WidthFixed);
+    ImGui::TableSetupColumn("##enabled", ImGuiTableColumnFlags_WidthFixed);
+    ImGui::TableSetupColumn("Scene", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("##remove", ImGuiTableColumnFlags_WidthFixed);
+    ImGui::TableHeadersRow();
+
+    auto build_index = 0;
+
+    for (auto index = std::size_t{0u}; index < list.size(); ++index) {
+      auto& entry = list[index];
+
+      ImGui::PushID(static_cast<int>(index));
+      ImGui::TableNextRow();
+
+      ImGui::TableNextColumn();
+
+      if (entry.enabled) {
+        ImGui::Text("%d", build_index++);
+      } else {
+        ImGui::TextDisabled("-");
+      }
+
+      ImGui::TableNextColumn();
+      changed |= ImGui::Checkbox("##enabled", &entry.enabled);
+
+      ImGui::TableNextColumn();
+
+      const auto exists = std::filesystem::exists(project.assets_directory() / entry.path);
+      const auto label = exists ? entry.path.generic_string() : fmt::format(ICON_MDI_ALERT_OUTLINE " {} (missing)", entry.path.generic_string());
+
+      ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_AllowOverlap);
+
+      if (ImGui::BeginDragDropSource()) {
+        ImGui::SetDragDropPayload(drag_drop_payload_scene_row, &index, sizeof(index));
+        ImGui::TextUnformatted(entry.path.generic_string().c_str());
+        ImGui::EndDragDropSource();
+      }
+
+      if (ImGui::BeginDragDropTarget()) {
+        if (const auto* payload = ImGui::AcceptDragDropPayload(drag_drop_payload_scene_row)) {
+          move = std::pair{*static_cast<const std::size_t*>(payload->Data), index};
+        }
+
+        ImGui::EndDragDropTarget();
+      }
+
+      ImGui::TableNextColumn();
+
+      if (ImGui::SmallButton(ICON_MDI_DELETE)) {
+        remove_index = index;
+      }
+
+      ImGui::PopID();
+    }
+
+    ImGui::EndTable();
+  }
+
+  if (move && move->first != move->second && move->first < list.size()) {
+    const auto entry = list[move->first];
+    list.erase(list.begin() + static_cast<std::ptrdiff_t>(move->first));
+    list.insert(list.begin() + static_cast<std::ptrdiff_t>(std::min(move->second, list.size())), entry);
+    changed = true;
+  }
+
+  if (remove_index) {
+    list.erase(list.begin() + static_cast<std::ptrdiff_t>(*remove_index));
+    changed = true;
+  }
+
+  const auto active = scenes_module.find_loaded_scene(scenes_module.active_scene_handle());
+  const auto can_add_open = active && !active->path.empty() && !contains(active->path);
+
+  ImGui::BeginDisabled(!can_add_open);
+
+  if (ImGui::Button(ICON_MDI_PLUS " Add Open Scene")) {
+    list.push_back(sbx::core::scene_list_entry{active->path, true});
+    changed = true;
+  }
+
+  ImGui::EndDisabled();
+  ImGui::SameLine();
+
+  if (ImGui::BeginCombo("##add_scene", "Add Scene...")) {
+    const auto assets_directory = project.assets_directory();
+
+    for (const auto& file : std::filesystem::recursive_directory_iterator{assets_directory}) {
+      if (!file.is_regular_file() || file.path().extension() != ".scene") {
+        continue;
+      }
+
+      const auto relative = std::filesystem::relative(file.path(), assets_directory);
+
+      if (!contains(relative) && ImGui::Selectable(relative.generic_string().c_str())) {
+        list.push_back(sbx::core::scene_list_entry{relative, true});
+        changed = true;
+      }
+    }
+
+    ImGui::EndCombo();
+  }
+
+  // Scene tiles dragged from the asset browser.
+  if (ImGui::BeginDragDropTarget()) {
+    if (const auto* payload = ImGui::AcceptDragDropPayload(sbx::render::drag_drop_payload_scene)) {
+      const auto path = std::filesystem::path{static_cast<const sbx::render::asset_drag_payload*>(payload->Data)->path};
+
+      if (!contains(path)) {
+        list.push_back(sbx::core::scene_list_entry{path, true});
+        changed = true;
+      }
+    }
+
+    ImGui::EndDragDropTarget();
+  }
+
+  if (changed) {
+    project.set_scene_list(std::move(list));
     project.save();
   }
 }

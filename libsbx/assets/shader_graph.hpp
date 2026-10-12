@@ -7,8 +7,8 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <initializer_list>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -880,7 +880,11 @@ private:
     return std::nullopt;
   }
 
-  [[nodiscard]] static auto _dominant_pins(shader_node_type type) -> std::initializer_list<std::uint32_t> {
+  // Static storage: a returned std::initializer_list would point at an array destroyed when the function returns.
+  [[nodiscard]] static auto _dominant_pins(shader_node_type type) -> std::span<const std::uint32_t> {
+    static constexpr auto both_inputs = std::array<std::uint32_t, 2u>{0u, 1u};
+    static constexpr auto first_input = std::array<std::uint32_t, 1u>{0u};
+
     switch (type) {
       case shader_node_type::add:
       case shader_node_type::subtract:
@@ -893,7 +897,7 @@ private:
       case shader_node_type::minimum:
       case shader_node_type::maximum:
       case shader_node_type::distance:
-        return {0u, 1u};
+        return both_inputs;
       case shader_node_type::pow:
       case shader_node_type::normalize:
       case shader_node_type::saturate:
@@ -912,7 +916,7 @@ private:
       case shader_node_type::clamp:
       case shader_node_type::length:
       case shader_node_type::remap:
-        return {0u};
+        return first_input;
       default:
         return {};
     }

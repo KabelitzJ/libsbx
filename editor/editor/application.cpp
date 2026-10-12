@@ -20,7 +20,6 @@
 #include <libsbx/assets/assets_module.hpp>
 
 #include <libsbx/scenes/scenes_module.hpp>
-#include <libsbx/scenes/scene_serializer.hpp>
 #include <libsbx/scenes/components.hpp>
 
 #include <libsbx/render/scene_renderer_module.hpp>
@@ -50,15 +49,10 @@ application::application()
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();
 
-  auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
-
   // A new project may have no startup scene; keep scenes_module's empty scene then.
-  if (const auto& startup_scene = project.startup_scene()) {
-    if (auto handle = assets_module.load_scene(*startup_scene); handle.is_valid()) {
-      sbx::scenes::scene_serializer::load(scene, handle->snapshot());
-    }
-
-    editor_module.set_scene_path(*startup_scene);
+  if (const auto startup_scene = project.startup_scene()) {
+    scenes_module.load_scene(*startup_scene);
+    scenes_module.apply_pending_operations();
   }
 
   // A default play camera for scenes without one; the editor itself renders through editor_camera.

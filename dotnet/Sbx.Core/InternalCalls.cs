@@ -64,9 +64,32 @@ namespace Sbx.Core
     internal static delegate* unmanaged<ulong, bool, void> Node_SetActive;
     internal static delegate* unmanaged<ulong, bool> Node_GetIsActive;
 
-    internal static delegate* unmanaged<NativeString, void> Scene_Load;
     internal static delegate* unmanaged<NativeString, void> Scene_Save;
     internal static delegate* unmanaged<void> Scene_New;
+    internal static delegate* unmanaged<NativeString, uint, uint*, uint> Scene_LoadByName;
+    internal static delegate* unmanaged<int, uint, uint*, uint> Scene_LoadByIndex;
+    internal static delegate* unmanaged<int> Scene_CountInBuildSettings;
+    internal static delegate* unmanaged<NativeString, uint, uint*, uint> Scene_LoadAsyncByName;
+    internal static delegate* unmanaged<int, uint, uint*, uint> Scene_LoadAsyncByIndex;
+    internal static delegate* unmanaged<uint, float> Scene_GetOperationProgress;
+    internal static delegate* unmanaged<uint, bool> Scene_GetAllowActivation;
+    internal static delegate* unmanaged<uint, uint, void> Scene_SetAllowActivation;
+    internal static delegate* unmanaged<uint, uint> Scene_Unload;
+    internal static delegate* unmanaged<uint, bool> Scene_IsOperationDone;
+    internal static delegate* unmanaged<int> Scene_GetCount;
+    internal static delegate* unmanaged<int, uint> Scene_GetAt;
+    internal static delegate* unmanaged<uint> Scene_GetActive;
+    internal static delegate* unmanaged<uint, bool> Scene_SetActive;
+    internal static delegate* unmanaged<NativeString, uint> Scene_FindByName;
+    internal static delegate* unmanaged<NativeString, uint> Scene_FindByPath;
+    internal static delegate* unmanaged<int, uint> Scene_FindByBuildIndex;
+    internal static delegate* unmanaged<uint, NativeString> Scene_GetName;
+    internal static delegate* unmanaged<uint, NativeString> Scene_GetPath;
+    internal static delegate* unmanaged<uint, int> Scene_GetBuildIndex;
+    internal static delegate* unmanaged<uint, bool> Scene_IsLoaded;
+    internal static delegate* unmanaged<uint, ulong*, uint, uint> Scene_GetRootNodes;
+    internal static delegate* unmanaged<ulong, uint, bool> Scene_MoveNode;
+    internal static delegate* unmanaged<ulong, void> Node_DontDestroyOnLoad;
 
     internal static delegate* unmanaged<ulong, NativeString, void> ParticleEffect_Load;
     internal static delegate* unmanaged<ulong, void> ParticleEffect_Play;

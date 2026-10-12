@@ -7,6 +7,8 @@
 
 #include <libsbx/utility/noncopyable.hpp>
 
+#include <libsbx/scenes/scenes_module.hpp>
+
 namespace editor {
 
 /** @brief Where the Play/Pause/Stop workflow is. */
@@ -49,6 +51,9 @@ public:
 private:
 
   [[nodiscard]] auto _snapshot_path() const -> std::filesystem::path;
+
+  // The loaded scenes when Play started; scripts may load others during Play.
+  sbx::scenes::scene_set _scene_set_snapshot{};
 
   play_state _state{play_state::edit};
 

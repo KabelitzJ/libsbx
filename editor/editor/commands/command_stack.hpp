@@ -3,6 +3,7 @@
 #ifndef EDITOR_COMMANDS_COMMAND_STACK_HPP_
 #define EDITOR_COMMANDS_COMMAND_STACK_HPP_
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -65,12 +66,18 @@ public:
   /** @brief Drops all history, whenever commands can no longer be replayed (e.g. leaving play mode). */
   auto clear() -> void;
 
+  /** @brief Changes with every push, undo, redo and clear, so caches of "has the scene changed" know when to recheck. */
+  [[nodiscard]] auto revision() const noexcept -> std::uint64_t {
+    return _revision;
+  }
+
 private:
 
   inline static constexpr auto max_history = std::size_t{100u};
 
   std::vector<std::unique_ptr<command>> _undo_stack{};
   std::vector<std::unique_ptr<command>> _redo_stack{};
+  std::uint64_t _revision{0u};
 
 }; // class command_stack
 

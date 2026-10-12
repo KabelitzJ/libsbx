@@ -28,6 +28,7 @@ inline constexpr auto drag_drop_payload_animation_graph = "SBX_ASSET_ANIM_GRAPH"
 inline constexpr auto drag_drop_payload_shader_graph = "SBX_ASSET_SHADER_GRAPH";
 inline constexpr auto drag_drop_payload_font = "SBX_ASSET_FONT";
 inline constexpr auto drag_drop_payload_audio_clip = "SBX_ASSET_AUDIO_CLIP";
+inline constexpr auto drag_drop_payload_scene = "SBX_ASSET_SCENE";
 inline constexpr auto drag_drop_payload_prefab = "SBX_ASSET_PREFAB";
 
 /** @brief The payload type a tile of @p type carries, or nullptr for types no picker or drop target accepts. */

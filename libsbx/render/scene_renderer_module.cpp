@@ -407,6 +407,13 @@ scene_renderer_module::scene_renderer_module() {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   _graph.initialize_gpu_queries(graphics_module.physical_device(), graphics_module.logical_device());
 
+  // GPU particles live in render-side pools, not in the scene, so a replaced world would keep showing the old ones.
+  core::engine::get_module<scenes::scenes_module>().on_scene_loaded().connect([this](const scenes::scene_loaded_event& event) {
+    if (event.mode == scenes::load_scene_mode::single) {
+      reset_particles();
+    }
+  });
+
   auto& presentation_module = core::engine::get_module<render::presentation_module>();
 
   presentation_module.set_scene_renderer(this);

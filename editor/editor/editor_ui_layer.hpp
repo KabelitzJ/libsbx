@@ -57,15 +57,6 @@ public:
     return _viewport_is_hovered;
   }
 
-  /**
-   * @brief Sets the current scene's path after application.cpp's initial load.
-   *
-   * @param path The scene path, relative to the assets directory.
-   */
-  auto set_scene_path(std::filesystem::path path) -> void {
-    _scene_path = std::move(path);
-  }
-
   /** @brief Quits, asking Save / Don't Save / Cancel first if the scene has unsaved changes. Use instead of engine::quit() for window close and File > Quit. */
   auto request_quit() -> void;
 
@@ -79,6 +70,9 @@ public:
    */
   auto open_scene(const std::filesystem::path& path) -> void;
 
+  /** @brief Opens @p path alongside the open scenes, like Unity's Open Scene Additive. No guard: nothing is replaced. */
+  auto open_scene_additive(const std::filesystem::path& path) -> void;
+
   /** @brief Drops the undo history, whenever pushed commands can no longer be replayed (e.g. leaving play mode). */
   auto clear_command_stack() -> void {
     _state.clear_command_stack();
@@ -86,7 +80,7 @@ public:
 
 private:
 
-  enum class pending_scene_action { none, quit, new_scene, open_scene };
+  enum class pending_scene_action { none, quit, new_scene, open_scene, unload_scene };
 
   auto _upload_fonts() -> void;
 
@@ -95,25 +89,46 @@ private:
   /** @brief Editor-wide shortcuts (Ctrl+Z/Y/C/V/D/S/N/O, Delete, Escape, F), skipped while a text field has focus. */
   auto _handle_shortcuts() -> void;
 
-  /** @brief Saves to the current scene path, or Save As if the scene was never saved. */
+  /** @brief Saves the active scene, or Save As if it was never saved. */
   auto _save() -> void;
+
+  /** @brief Saves every scene with unsaved changes; the first one never saved gets Save As. */
+  auto _save_all() -> void;
+
+  /**
+   * @brief Saves one loaded scene to its own file.
+   *
+   * @return False when it was never saved and Save As opened instead.
+   */
+  auto _save_scene_or_prompt(std::uint32_t handle) -> bool;
+
+  /** @brief Recomputes _state.dirty_scenes when the undo history moved or a scene was saved, loaded or unloaded. */
+  auto _refresh_dirty_scenes() -> void;
+
+  /** @brief The scenes an action would discard changes in: every loaded scene, or just @p handle for an unload. */
+  [[nodiscard]] auto _dirty_scenes_for(pending_scene_action action, std::uint32_t handle) -> std::vector<std::uint32_t>;
+
+  auto _unload_scene(std::uint32_t handle) -> void;
+
+  /** @brief Consumes _state's scene save/unload requests (from the Hierarchy's scene headers). */
+  auto _handle_scene_file_request() -> void;
 
   /** @brief The Play/Pause/Stop strip under the menu bar. */
   auto _draw_toolbar() -> void;
 
   auto _create_panels() -> void;
 
-  auto _save_scene(const std::filesystem::path& path) -> void;
+  auto _save_scene(std::uint32_t handle, const std::filesystem::path& path) -> void;
 
   /**
-   * @brief Compares the scene's serialized form with the file at _scene_path.
+   * @brief Compares one loaded scene's serialized form with its file.
    *
-   * @return True if there are unsaved changes.
+   * @return True if there are unsaved changes, or the scene was never saved.
    */
-  [[nodiscard]] auto _is_scene_dirty() -> bool;
+  [[nodiscard]] auto _is_scene_dirty(std::uint32_t handle) -> bool;
 
-  /** @brief Opens the Save As dialog; any pending scene action runs once it resolves. */
-  auto _open_save_as_dialog() -> void;
+  /** @brief Opens the Save As dialog for one loaded scene; any pending scene action runs once it resolves. */
+  auto _open_save_as_dialog(std::uint32_t handle) -> void;
 
   /** @brief Polls the Save As dialog, saving on confirm and running a pending scene action if one was deferred. */
   auto _draw_save_as_dialog() -> void;
@@ -121,12 +136,13 @@ private:
   auto _draw_unsaved_changes_dialog() -> void;
 
   /**
-   * @brief Runs @p action now if the scene is clean, otherwise stashes it behind the unsaved-changes dialog.
+   * @brief Runs @p action now if no scene it affects has unsaved changes, otherwise stashes it behind the unsaved-changes dialog.
    *
    * @param action The guarded action.
    * @param path The scene to open, for open actions.
+   * @param handle The scene to unload, for unload actions.
    */
-  auto _request_discard_confirmation(pending_scene_action action, std::filesystem::path path) -> void;
+  auto _request_discard_confirmation(pending_scene_action action, std::filesystem::path path, std::uint32_t handle = 0u) -> void;
 
   /** @brief Runs and clears the pending scene action: quit, new scene or open _pending_open_path. */
   auto _run_pending_scene_action() -> void;
@@ -135,7 +151,7 @@ private:
 
   auto _open_scene(const std::filesystem::path& path) -> void;
 
-  auto _open_open_scene_dialog() -> void;
+  auto _open_open_scene_dialog(bool additive = false) -> void;
 
   auto _draw_open_scene_dialog() -> void;
 
@@ -162,8 +178,13 @@ private:
   sbx::memory::observer_ptr<project_settings_panel> _project_settings_panel{};
   sbx::memory::observer_ptr<preferences_panel> _preferences_panel{};
 
-  // Relative to the assets directory; empty until the first save or set_scene_path().
-  std::filesystem::path _scene_path{};
+  std::uint32_t _pending_scene_handle{0u}; // the scene a pending unload targets
+  std::vector<std::uint32_t> _guarded_scenes{}; // the scenes the unsaved-changes dialog is about
+  std::uint32_t _save_as_target{0u};
+  bool _open_dialog_additive{false};
+
+  std::uint64_t _dirty_revision{0u};
+  bool _dirty_scenes_stale{true};
 
   sbx::render::file_dialog _save_dialog{};
 

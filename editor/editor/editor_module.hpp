@@ -46,11 +46,6 @@ public:
     return _ui_layer.is_viewport_hovered();
   }
 
-  /** @copydoc editor_ui_layer::set_scene_path */
-  auto set_scene_path(std::filesystem::path path) -> void {
-    _ui_layer.set_scene_path(std::move(path));
-  }
-
   /** @copydoc editor_ui_layer::request_quit */
   auto request_quit() -> void {
     _ui_layer.request_quit();

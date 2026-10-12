@@ -281,6 +281,7 @@ private:
   auto _submit_debug_draw(scenes::scene& scene) -> void;
 
   bool _was_simulating{false};
+  bool _reset_pending{false};
 
   physics::debug_draw_flags _debug_draw_flags{};
 

@@ -3,6 +3,7 @@
 #ifndef LIBSBX_SCENES_SCENE_SERIALIZER_HPP_
 #define LIBSBX_SCENES_SCENE_SERIALIZER_HPP_
 
+#include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -24,17 +25,31 @@ public:
   scene_serializer() = delete;
 
   /** @brief Builds target's full YAML snapshot ({metadata, assets_module, nodes}), without touching disk -- what save()/serialize() write, and what assets_module::create_scene/save_scene need to hand a scene to the asset system. */
-  [[nodiscard]] static auto build(scene& target) -> YAML::Node;
+  /**
+   * @brief Serializes the world, or only one loaded scene's nodes when @p membership is set.
+   *
+   * A whole-world build also records each top-level node's scene, so load() restores every scene's membership (play-mode snapshots).
+   */
+  [[nodiscard]] static auto build(scene& target, std::optional<std::uint32_t> membership = std::nullopt) -> YAML::Node;
 
   static auto save(scene& target, const std::filesystem::path& path) -> void;
 
   /** @brief Renders target to the same YAML save() would write, without touching disk. */
-  [[nodiscard]] static auto serialize(scene& target) -> std::string;
+  /** @brief build() as text; see its @p membership. */
+  [[nodiscard]] static auto serialize(scene& target, std::optional<std::uint32_t> membership = std::nullopt) -> std::string;
 
   static auto load(scene& target, const std::filesystem::path& path) -> void;
 
   /** @brief Applies snapshot directly to target -- same effect as load(target, path) minus the file read, for a snapshot already in memory (e.g. assets::scene_handle::snapshot()). */
   static auto load(scene& target, const YAML::Node& snapshot) -> void;
+
+  /**
+   * @brief Adds a scene snapshot's nodes to the world without clearing it, as members of @p membership (unless the snapshot records its own).
+   *
+   * Node ids that already exist in the world (the same scene loaded twice) get fresh ids. The snapshot's camera and primary light become the
+   * world's when @p take_camera is set, or when the world has none.
+   */
+  static auto load_into(scene& target, const YAML::Node& snapshot, std::uint32_t membership, bool take_camera) -> void;
 
   /** @brief Snapshots subtree_root and its whole descendant subtree — components, structure, ids — self-contained (own asset table), for undo/redo. */
   [[nodiscard]] static auto serialize_subtree(scene& target, node subtree_root) -> YAML::Node;

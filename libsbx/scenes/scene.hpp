@@ -4,8 +4,10 @@
 #define LIBSBX_SCENES_SCENE_HPP_
 
 #include <cstddef>
+#include <cstdint>
 #include <utility>
 #include <unordered_map>
+#include <vector>
 
 #include <libsbx/math/matrix4x4.hpp>
 
@@ -38,6 +40,7 @@ public:
 
   [[nodiscard]] auto find(math::uuid id) -> node;
 
+  /** @brief The first node with this name, in no particular order; a linear scan like Unity's GameObject.Find, so not for every frame. */
   [[nodiscard]] auto find(const utility::hashed_string& name) -> node;
 
   /**
@@ -68,6 +71,28 @@ public:
    * No-op if target is already invalid.
    */
   auto destroy_node(node target) -> void;
+
+  /** @brief The loaded scene new top-level nodes join. */
+  [[nodiscard]] auto active_membership() const noexcept -> std::uint32_t {
+    return _active_membership;
+  }
+
+  auto set_active_membership(std::uint32_t handle) noexcept -> void {
+    _active_membership = handle;
+  }
+
+  /** @brief The loaded scene @p target belongs to: its top-level ancestor's scene_membership, or the active one if untagged. */
+  [[nodiscard]] auto scene_of(node target) -> std::uint32_t;
+
+  /** @brief Every node of one loaded scene, depth-first, top-level nodes in hierarchy order. */
+  [[nodiscard]] auto members_of(std::uint32_t handle) -> std::vector<node>;
+
+  /** @brief Destroys every top-level node of one loaded scene, with its subtree. */
+  auto destroy_scene_nodes(std::uint32_t handle) -> void;
+
+  [[nodiscard]] auto contains(const math::uuid& id) const -> bool {
+    return _entities_by_id.contains(id);
+  }
 
   auto set_active_camera(node camera) -> void;
 
@@ -123,10 +148,10 @@ private:
   std::string _name{"Scene"};
   ecs::registry _registry{};
   std::unordered_map<math::uuid, ecs::entity> _entities_by_id{};
-  std::unordered_multimap<utility::hashed_string, ecs::entity> _entities_by_name{};
   ecs::entity _root{ecs::null_entity};
   ecs::entity _active_camera{ecs::null_entity};
   ecs::entity _primary_light{ecs::null_entity};
+  std::uint32_t _active_membership{1u};
 
 }; // class scene
 

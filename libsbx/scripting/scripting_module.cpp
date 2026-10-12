@@ -101,9 +101,32 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Node_SetActive", reinterpret_cast<void*>(&interop::node_set_active));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Node_GetIsActive", reinterpret_cast<void*>(&interop::node_get_is_active));
 
-  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_Load", reinterpret_cast<void*>(&interop::scene_load));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_Save", reinterpret_cast<void*>(&interop::scene_save));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_New", reinterpret_cast<void*>(&interop::scene_new));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_LoadByName", reinterpret_cast<void*>(&interop::scene_load_by_name));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_LoadByIndex", reinterpret_cast<void*>(&interop::scene_load_by_index));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_CountInBuildSettings", reinterpret_cast<void*>(&interop::scene_count_in_build_settings));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_LoadAsyncByName", reinterpret_cast<void*>(&interop::scene_load_async_by_name));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_LoadAsyncByIndex", reinterpret_cast<void*>(&interop::scene_load_async_by_index));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_GetOperationProgress", reinterpret_cast<void*>(&interop::scene_get_operation_progress));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_GetAllowActivation", reinterpret_cast<void*>(&interop::scene_get_allow_activation));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_SetAllowActivation", reinterpret_cast<void*>(&interop::scene_set_allow_activation));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_Unload", reinterpret_cast<void*>(&interop::scene_unload));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_IsOperationDone", reinterpret_cast<void*>(&interop::scene_is_operation_done));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_GetCount", reinterpret_cast<void*>(&interop::scene_get_count));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_GetAt", reinterpret_cast<void*>(&interop::scene_get_at));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_GetActive", reinterpret_cast<void*>(&interop::scene_get_active));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_SetActive", reinterpret_cast<void*>(&interop::scene_set_active));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_FindByName", reinterpret_cast<void*>(&interop::scene_find_by_name));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_FindByPath", reinterpret_cast<void*>(&interop::scene_find_by_path));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_FindByBuildIndex", reinterpret_cast<void*>(&interop::scene_find_by_build_index));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_GetName", reinterpret_cast<void*>(&interop::scene_get_name));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_GetPath", reinterpret_cast<void*>(&interop::scene_get_path));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_GetBuildIndex", reinterpret_cast<void*>(&interop::scene_get_build_index));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_IsLoaded", reinterpret_cast<void*>(&interop::scene_is_loaded));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_GetRootNodes", reinterpret_cast<void*>(&interop::scene_get_root_nodes));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_MoveNode", reinterpret_cast<void*>(&interop::scene_move_node));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Node_DontDestroyOnLoad", reinterpret_cast<void*>(&interop::node_dont_destroy_on_load));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_Load", reinterpret_cast<void*>(&interop::particle_effect_load));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_Play", reinterpret_cast<void*>(&interop::particle_effect_play));
@@ -361,6 +384,16 @@ scripting_module::scripting_module() {
   _register_managed_components();
 
   _core_assembly.upload_internal_calls();
+
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  scenes_module.on_scene_unloading().connect([this](std::uint32_t handle) { _destroy_scene_member_scripts(handle); });
+  scenes_module.on_scene_loaded().connect([this](const scenes::scene_loaded_event& event) {
+    _instantiate_scene_member_scripts(event.handle);
+    _broadcast("DispatchSceneLoaded", event.handle, static_cast<std::uint32_t>(event.mode));
+  });
+  scenes_module.on_scene_unloaded().connect([this](const scenes::loaded_scene& scene) { _broadcast("DispatchSceneUnloaded", scene.handle); });
+  scenes_module.on_active_scene_changed().connect([this](const scenes::active_scene_changed_event& event) { _broadcast("DispatchActiveSceneChanged", event.previous, event.current); });
 
   auto& physics_module = core::engine::get_module<physics::physics_module>();
 
@@ -726,6 +759,49 @@ auto scripting_module::_dispatch_value_changed(const scenes::node& node) -> void
 
   for (const auto& instance : scripts->instances) {
     instance.invoke("OnValueChanged");
+  }
+}
+
+auto scripting_module::_instantiate_scene_member_scripts(std::uint32_t handle) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  // Edit mode loads scenes too, and their scripts must not run.
+  if (!scenes_module.is_simulating()) {
+    return;
+  }
+
+  // Create every instance before any OnCreate runs, so GetComponent in OnCreate can find siblings' scripts.
+  auto created = std::vector<managed::object>{};
+
+  for (auto node : scenes_module.active_scene().members_of(handle)) {
+    if (const auto* list = node.try_get_component<scenes::script_component>().get()) {
+      for (const auto& entry : list->scripts) {
+        created.push_back(instantiate(node, entry.class_name));
+      }
+    }
+  }
+
+  for (auto& instance : created) {
+    instance.invoke("OnCreate");
+  }
+}
+
+auto scripting_module::_destroy_scene_member_scripts(std::uint32_t handle) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  if (!scenes_module.is_simulating()) {
+    return;
+  }
+
+  for (auto node : scenes_module.active_scene().members_of(handle)) {
+    if (auto scripts = node.try_get_component<scripting::scripts>()) {
+      for (auto& instance : scripts->instances) {
+        instance.invoke("OnDestroy");
+        instance.destroy();
+      }
+
+      scripts->instances.clear();
+    }
   }
 }
 

@@ -1630,7 +1630,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
   }
 }
 
-auto scene_serializer::build(scene& target) -> YAML::Node {
+auto scene_serializer::build(scene& target, std::optional<std::uint32_t> membership) -> YAML::Node {
   auto& registry = target._registry;
   // Registry order is unspecified, so order-sensitive passes walk the hierarchy depth-first from the root.
   auto ordered_nodes = std::vector<ecs::entity>{};
@@ -1643,8 +1643,14 @@ auto scene_serializer::build(scene& target) -> YAML::Node {
     }
   };
 
+  const auto in_scope = [&](ecs::entity entity) {
+    return !membership || target.scene_of(target.node_of(entity)) == *membership;
+  };
+
   for (const auto entity : registry.get<relationship>(target._root).children) {
-    collect(entity);
+    if (in_scope(entity)) {
+      collect(entity);
+    }
   }
 
   auto keys = asset_key_table{};
@@ -1655,6 +1661,12 @@ auto scene_serializer::build(scene& target) -> YAML::Node {
   for (const auto entity : ordered_nodes) {
     auto node_yaml = YAML::Node{};
     write_node(node_yaml, registry, entity, keys, true);
+
+    // Scene handles are runtime-only, so only whole-world snapshots record them.
+    if (!membership && registry.get<relationship>(entity).parent == target._root) {
+      node_yaml["scene"] = target.scene_of(target.node_of(entity));
+    }
+
     nodes_node.push_back(node_yaml);
   }
 
@@ -1662,11 +1674,11 @@ auto scene_serializer::build(scene& target) -> YAML::Node {
 
   metadata["name"] = target.name();
 
-  if (target._active_camera != ecs::null_entity) {
+  if (target._active_camera != ecs::null_entity && in_scope(target._active_camera)) {
     metadata["camera"] = registry.get<id>(target._active_camera).value();
   }
 
-  if (target._primary_light != ecs::null_entity) {
+  if (target._primary_light != ecs::null_entity && in_scope(target._primary_light)) {
     metadata["primary_light"] = registry.get<id>(target._primary_light).value();
   }
 
@@ -1689,9 +1701,9 @@ auto scene_serializer::build(scene& target) -> YAML::Node {
   return root;
 }
 
-auto scene_serializer::serialize(scene& target) -> std::string {
+auto scene_serializer::serialize(scene& target, std::optional<std::uint32_t> membership) -> std::string {
   auto stream = std::ostringstream{};
-  stream << build(target);
+  stream << build(target, membership);
   return stream.str();
 }
 
@@ -1737,7 +1749,6 @@ auto scene_serializer::load(scene& target, const YAML::Node& root) -> void {
   target._root = target._registry.create();
   target._registry.emplace<relationship>(target._root);
   target._entities_by_id.clear();
-  target._entities_by_name.clear();
   target._active_camera = ecs::null_entity;
   target._primary_light = ecs::null_entity;
 
@@ -1745,13 +1756,34 @@ auto scene_serializer::load(scene& target, const YAML::Node& root) -> void {
     target.set_name(metadata["name"].as<std::string>());
   }
 
+  load_into(target, root, target._active_membership, true);
+}
+
+auto scene_serializer::load_into(scene& target, const YAML::Node& source, std::uint32_t membership, bool take_camera) -> void {
+  const auto collides = [&] {
+    for (const auto node_yaml : source["nodes"]) {
+      if (target.contains(node_yaml["id"].as<math::uuid>())) {
+        return true;
+      }
+    }
+
+    return false;
+  }();
+
+  // The same scene loaded twice: a fresh id per node, with references inside the scene remapped. The metadata camera/light then no longer resolve, and are skipped below.
+  const auto root = collides ? with_fresh_ids(source) : source;
+
   const auto key_to_uuid = register_asset_keys(root);
 
   const auto nodes_node = root["nodes"];
 
   // Pass 1: create every node with its id, so references resolve.
   for (const auto node_yaml : nodes_node) {
-    target._create_node(node_yaml["tag"].as<std::string>(), local_transform{}, node_yaml["id"].as<math::uuid>());
+    auto created = target._create_node(node_yaml["tag"].as<std::string>(), local_transform{}, node_yaml["id"].as<math::uuid>());
+
+    const auto recorded = node_yaml["scene"];
+
+    target._registry.emplace_or_replace<scene_membership>(created._entity, recorded ? recorded.as<std::uint32_t>() : membership);
   }
 
   // Pass 2: tag, parent and components.
@@ -1768,12 +1800,16 @@ auto scene_serializer::load(scene& target, const YAML::Node& root) -> void {
   }
 
   if (const auto metadata = root["metadata"]) {
-    if (const auto camera = metadata["camera"]) {
-      target.set_active_camera(target.find(camera.as<math::uuid>()));
+    if (const auto camera = metadata["camera"]; camera && (take_camera || !target.has_active_camera())) {
+      if (const auto found = target.find(camera.as<math::uuid>()); found.is_valid()) {
+        target.set_active_camera(found);
+      }
     }
 
-    if (const auto primary_light = metadata["primary_light"]) {
-      target.set_primary_light(target.find(primary_light.as<math::uuid>()));
+    if (const auto primary_light = metadata["primary_light"]; primary_light && (take_camera || !target.has_primary_light())) {
+      if (const auto found = target.find(primary_light.as<math::uuid>()); found.is_valid()) {
+        target.set_primary_light(found);
+      }
     }
   }
 

@@ -23,6 +23,12 @@ inline constexpr auto layer_count = std::size_t{32u};
 /** @brief The root of the mixer group tree. A fixed id so scenes can reference it before the project is ever saved. */
 inline constexpr auto master_mixer_group_id = math::uuid::from_value(1u);
 
+/** @brief One row of the project's scene list (Unity's Build Settings). */
+struct scene_list_entry {
+  std::filesystem::path path{}; // relative to the assets directory
+  bool enabled{true};
+}; // struct scene_list_entry
+
 /** @brief One node of the project's audio mixer tree; a source's gain is multiplied by every group up to Master. */
 struct mixer_group {
   math::uuid id{math::uuid::nil()};
@@ -54,7 +60,7 @@ public:
   inline static constexpr auto default_max_voices = std::uint32_t{64u};
 
   /** @brief Bumped whenever the on-disk format changes; written by @ref save, checked by @ref load. */
-  inline static constexpr auto current_format_version = std::uint32_t{4u}; // v2: added layers/layer_collision_matrix, v3: added physics/time, v4: added audio
+  inline static constexpr auto current_format_version = std::uint32_t{5u}; // v2: added layers/layer_collision_matrix, v3: added physics/time, v4: added audio, v5: scene list replaces startup_scene
 
   project() {
     _layers[0] = "Default";
@@ -115,10 +121,34 @@ public:
     return _root / relative;
   }
 
-  /** @brief The scene (relative to @ref assets_directory) an application should load on startup, if any. */
-  [[nodiscard]] auto startup_scene() const noexcept -> const std::optional<std::filesystem::path>& {
-    return _startup_scene;
+  /** @brief The game's scenes in build order; disabled entries are kept but don't count. */
+  [[nodiscard]] auto scene_list() const noexcept -> const std::vector<scene_list_entry>& {
+    return _scene_list;
   }
+
+  auto set_scene_list(std::vector<scene_list_entry> list) -> void {
+    _scene_list = std::move(list);
+  }
+
+  /** @brief The scene to open on start: build index 0, the first enabled entry. */
+  [[nodiscard]] auto startup_scene() const -> std::optional<std::filesystem::path> {
+    return scene_at(0u);
+  }
+
+  /** @brief How many scenes have a build index (enabled entries). */
+  [[nodiscard]] auto scene_count_in_build() const -> std::size_t;
+
+  /** @brief The enabled scene at @p build_index. */
+  [[nodiscard]] auto scene_at(std::size_t build_index) const -> std::optional<std::filesystem::path>;
+
+  /** @brief The build index of an enabled scene, by its assets-relative path. */
+  [[nodiscard]] auto build_index_of(const std::filesystem::path& path) const -> std::optional<std::size_t>;
+
+  /**
+   * @brief An enabled scene by name or path, like Unity's LoadScene(string): a bare name matches the file name without extension, case-insensitively;
+   * anything with a '/' or the .scene extension matches the assets-relative path (the extension may be omitted).
+   */
+  [[nodiscard]] auto resolve_scene(std::string_view name_or_path) const -> std::optional<std::filesystem::path>;
 
   auto set_name(std::string name) -> void {
     _name = std::move(name);
@@ -130,10 +160,6 @@ public:
 
   auto set_library_directory(std::filesystem::path relative) -> void {
     _library = std::move(relative);
-  }
-
-  auto set_startup_scene(std::optional<std::filesystem::path> relative) -> void {
-    _startup_scene = std::move(relative);
   }
 
   /** @brief The project's 32 named layers, index 0 ("Default") onward — an empty entry is an unnamed/unused layer. */
@@ -218,7 +244,7 @@ private:
   std::filesystem::path _assets{"assets"};
   std::filesystem::path _library{".sbx/library"};
   std::filesystem::path _logs{"logs"};
-  std::optional<std::filesystem::path> _startup_scene{};
+  std::vector<scene_list_entry> _scene_list{};
 
   std::array<std::string, layer_count> _layers{};
   std::array<std::uint32_t, layer_count> _layer_collision_matrix{};

@@ -3,8 +3,8 @@
 #include <editor/panels/asset_browser_panel.hpp>
 
 #include <algorithm>
+#include <cfloat>
 #include <filesystem>
-#include <limits>
 #include <vector>
 
 #include <imgui.h>
@@ -77,7 +77,7 @@ auto asset_browser_panel::_draw_directory_tree(editor_state& state, const std::f
 
     if (is_renaming_this) {
       ImGui::SameLine();
-      _draw_rename_field(state, std::numeric_limits<std::float_t>::lowest());
+      _draw_rename_field(state, -FLT_MIN); // -FLT_MIN fills the rest of the row
     }
 
     if (ImGui::BeginPopupContextItem("##dir_context")) {

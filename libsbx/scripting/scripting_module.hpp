@@ -199,6 +199,33 @@ private:
 
   auto _invoke_collision_handler(scenes::node& self, const scenes::node& other, const physics::collision_event& event, bool began) -> void;
 
+  /** @brief Instantiates and starts the scripts of a just-loaded scene's nodes; no-op unless simulating. */
+  auto _instantiate_scene_member_scripts(std::uint32_t handle) -> void;
+
+  /** @brief Runs OnDestroy for a scene about to be unloaded; no-op unless simulating. */
+  auto _destroy_scene_member_scripts(std::uint32_t handle) -> void;
+
+  /** @brief Invokes @p method on every running script instance, for scene-wide events; no-op unless simulating. */
+  template<typename... Args>
+  auto _broadcast(std::string_view method, Args... args) -> void {
+    auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+    if (!scenes_module.is_simulating()) {
+      return;
+    }
+
+    // Collected first: a handler may create or destroy nodes, which would invalidate the view mid-iteration.
+    auto instances = std::vector<managed::object>{};
+
+    for (auto&& [entity, scripts] : scenes_module.active_scene().query<scripting::scripts>().each()) {
+      instances.insert(instances.end(), scripts.instances.begin(), scripts.instances.end());
+    }
+
+    for (auto& instance : instances) {
+      instance.invoke(method, args...);
+    }
+  }
+
   /** @brief Delivers OnControllerColliderHit to the scripts on the moving controller's node. */
   auto _dispatch_controller_hit(const physics::controller_hit& hit) -> void;
 

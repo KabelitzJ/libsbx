@@ -31,8 +31,11 @@ auto scene::find(math::uuid id) -> node {
 }
 
 auto scene::find(const utility::hashed_string& name) -> node {
-  if (const auto [first, last] = _entities_by_name.equal_range(name); first != last) {
-    return node{memory::make_observer(_registry), first->second};
+  // A scan rather than an index: names are edited in place through node::name(), so an index would go stale on rename.
+  for (auto&& [entity, node_tag] : _registry.view<tag>().each()) {
+    if (node_tag == name) {
+      return node{memory::make_observer(_registry), entity};
+    }
   }
 
   return node{};
@@ -53,6 +56,11 @@ auto scene::insert_child(node parent, node child, std::size_t index) -> void {
     if (ancestor == child._entity) {
       return;
     }
+  }
+
+  // A node moved to the top level keeps the scene it's in now; a nested node's own tag may be stale, so it's rewritten.
+  if (parent._entity == _root) {
+    _registry.emplace_or_replace<scene_membership>(child._entity, scene_of(child));
   }
 
   auto& child_relationship = _registry.get<relationship>(child._entity);
@@ -81,6 +89,53 @@ auto scene::destroy_node(node target) -> void {
   }
 
   _destroy_node_recursive(entity);
+}
+
+auto scene::scene_of(node target) -> std::uint32_t {
+  auto entity = target._entity;
+
+  while (entity != ecs::null_entity && _registry.get<relationship>(entity).parent != _root) {
+    entity = _registry.get<relationship>(entity).parent;
+  }
+
+  if (entity == ecs::null_entity) {
+    return _active_membership;
+  }
+
+  const auto membership = _registry.try_get<scene_membership>(entity);
+
+  return membership ? membership->handle : _active_membership;
+}
+
+auto scene::members_of(std::uint32_t handle) -> std::vector<node> {
+  auto members = std::vector<node>{};
+
+  const auto collect = [&](this const auto& self, ecs::entity entity) -> void {
+    members.push_back(node{memory::make_observer(_registry), entity});
+
+    for (const auto child : _registry.get<relationship>(entity).children) {
+      self(child);
+    }
+  };
+
+  for (const auto entity : _registry.get<relationship>(_root).children) {
+    if (scene_of(node{memory::make_observer(_registry), entity}) == handle) {
+      collect(entity);
+    }
+  }
+
+  return members;
+}
+
+auto scene::destroy_scene_nodes(std::uint32_t handle) -> void {
+  // Copied: destroy_node erases from the root's children.
+  const auto top_level = _registry.get<relationship>(_root).children;
+
+  for (const auto entity : top_level) {
+    if (const auto target = node{memory::make_observer(_registry), entity}; scene_of(target) == handle) {
+      destroy_node(target);
+    }
+  }
 }
 
 auto scene::set_active_camera(node camera) -> void {
@@ -116,9 +171,9 @@ auto scene::_create_node(const utility::hashed_string& name, const scenes::local
   _registry.emplace<scenes::id>(entity, id);
   _registry.emplace<scenes::tag>(entity, name);
   _registry.emplace<scenes::layer>(entity);
+  _registry.emplace<scene_membership>(entity, _active_membership);
 
   _entities_by_id.emplace(id, entity);
-  _entities_by_name.emplace(name, entity);
 
   _set_parent(entity, _root);
 
@@ -138,19 +193,7 @@ auto scene::_destroy_node_recursive(ecs::entity entity) -> void {
     _destroy_node_recursive(child);
   }
 
-  const auto& node_id = _registry.get<id>(entity);
-  const auto& node_tag = _registry.get<tag>(entity);
-
-  _entities_by_id.erase(node_id);
-
-  if (const auto [first, last] = _entities_by_name.equal_range(node_tag); first != last) {
-    for (auto entry = first; entry != last; ++entry) {
-      if (entry->second == entity) {
-        _entities_by_name.erase(entry);
-        break;
-      }
-    }
-  }
+  _entities_by_id.erase(_registry.get<id>(entity));
 
   if (_active_camera == entity) {
     _active_camera = ecs::null_entity;

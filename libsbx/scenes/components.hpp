@@ -99,6 +99,17 @@ struct relationship {
  */
 struct inactive {}; // struct inactive
 
+/** @brief The persistent scene (DontDestroyOnLoad): survives single-mode loads. */
+inline constexpr auto persistent_scene_handle = std::uint32_t{0u};
+
+/**
+ * @brief Which loaded scene a top-level node belongs to (a scenes_module handle). Descendants belong to their top-level ancestor's scene;
+ * a tag on a nested node is ignored. All loaded scenes share one world, like Unity's.
+ */
+struct scene_membership {
+  std::uint32_t handle{1u};
+}; // struct scene_membership
+
 struct id final : math::uuid {
 
   using base_type = math::uuid;

@@ -37,6 +37,12 @@ namespace Sbx.Core
 
     public static object? FromHandle(ulong handle) => Get(handle);
 
+    /** Keeps node's top-level node (with its children) alive across single-mode scene loads, like Unity's Object.DontDestroyOnLoad. */
+    public static void DontDestroyOnLoad(Node node)
+    {
+      unsafe { InternalCalls.Node_DontDestroyOnLoad(node.UUID); }
+    }
+
     public string? Name
     {
       get
@@ -170,6 +176,7 @@ namespace Sbx.Core
       }
     }
 
+    /** The first node with this name in any loaded scene. Searches every node, so cache the result instead of calling it every frame. */
     public static Node? Find(string name)
     {
       ulong uuid;

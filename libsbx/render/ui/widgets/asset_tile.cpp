@@ -26,6 +26,7 @@ auto drag_payload_type_for(assets::asset_type type) -> const char* {
     case assets::asset_type::shader_graph: return drag_drop_payload_shader_graph;
     case assets::asset_type::font: return drag_drop_payload_font;
     case assets::asset_type::audio_clip: return drag_drop_payload_audio_clip;
+    case assets::asset_type::scene: return drag_drop_payload_scene;
     case assets::asset_type::prefab: return drag_drop_payload_prefab;
     default: return nullptr;
   }

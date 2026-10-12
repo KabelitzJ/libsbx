@@ -6,11 +6,11 @@
 #include <cctype>
 #include <cfloat>
 #include <cstdint>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <fmt/format.h>
@@ -255,7 +255,7 @@ auto hierarchy_panel::_draw_node_row(editor_state& state, sbx::scenes::scene& sc
   if (is_renaming) {
     ImGui::SameLine();
 
-    const auto rename_result = draw_rename_field(_rename_buffer, _rename_focus_pending, std::numeric_limits<std::float_t>::lowest());
+    const auto rename_result = draw_rename_field(_rename_buffer, _rename_focus_pending, -FLT_MIN); // -FLT_MIN fills the rest of the row
 
     if (rename_result.committed) {
       _commit_rename(state, scene, node);
@@ -356,6 +356,105 @@ auto hierarchy_panel::_commit_rename(editor_state& state, sbx::scenes::scene& sc
   state.push_command(scene, std::make_unique<modify_component_command<sbx::scenes::tag>>(node.id(), before, after, "Rename Node"));
 }
 
+auto hierarchy_panel::_draw_scene_header(editor_state& state, const sbx::scenes::loaded_scene& loaded, bool can_unload) -> bool {
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+
+  const auto is_persistent = loaded.handle == sbx::scenes::persistent_scene_handle;
+  const auto is_active = loaded.handle == scenes_module.active_scene_handle();
+  const auto is_editing = !scenes_module.is_simulating();
+
+  const auto label = fmt::format("{} {}{}{}", is_persistent ? ICON_MDI_INFINITY : ICON_MDI_FILE_TREE, loaded.name, state.is_scene_dirty(loaded.handle) ? " *" : "", is_active && can_unload ? "  (active)" : "");
+
+  ImGui::PushID(static_cast<int>(loaded.handle));
+
+  const auto is_open = ImGui::TreeNodeEx("##scene_header", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_NoTreePushOnOpen, "%s", label.c_str());
+
+  if (ImGui::IsItemHovered() && !loaded.path.empty()) {
+    ImGui::SetTooltip("%s", loaded.path.generic_string().c_str());
+  }
+
+  // Dropping nodes on a scene moves them into it, as top-level nodes.
+  if (ImGui::BeginDragDropTarget()) {
+    if (const auto* payload = ImGui::AcceptDragDropPayload(node_drag_drop_payload_type)) {
+      const auto dragged_id = sbx::math::uuid::from_value(*static_cast<const std::uint64_t*>(payload->Data));
+      const auto& selected = state.selected_node_ids();
+      const auto drags_selection = std::ranges::find(selected, dragged_id) != selected.end();
+
+      _pending_scene_move = pending_scene_move{drags_selection ? selected : std::vector<sbx::math::uuid>{dragged_id}, loaded.handle};
+    }
+
+    ImGui::EndDragDropTarget();
+  }
+
+  if (ImGui::BeginPopupContextItem("##scene_header_context")) {
+    if (ImGui::MenuItem(ICON_MDI_CHECK_CIRCLE_OUTLINE " Set Active Scene", nullptr, false, !is_active && !is_persistent)) {
+      scenes_module.set_active_scene(loaded.handle);
+    }
+
+    ImGui::Separator();
+
+    ImGui::BeginDisabled(!is_editing || is_persistent);
+
+    if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE " Save Scene")) {
+      state.request_scene_file_action(editor_state::scene_file_action::save, loaded.handle);
+    }
+
+    if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE_EDIT " Save Scene As...")) {
+      state.request_scene_file_action(editor_state::scene_file_action::save_as, loaded.handle);
+    }
+
+    ImGui::Separator();
+
+    if (ImGui::MenuItem(ICON_MDI_CLOSE " Unload Scene", nullptr, false, can_unload)) {
+      state.request_scene_file_action(editor_state::scene_file_action::unload, loaded.handle);
+    }
+
+    ImGui::EndDisabled();
+
+    ImGui::Separator();
+
+    if (ImGui::MenuItem(ICON_MDI_PLUS " Create Empty", nullptr, false, !is_persistent)) {
+      _pending_create_in_scene = loaded.handle;
+    }
+
+    ImGui::EndPopup();
+  }
+
+  ImGui::PopID();
+
+  return is_open;
+}
+
+auto hierarchy_panel::_apply_pending_scene_move(editor_state& state, sbx::scenes::scene& scene) -> void {
+  if (!_pending_scene_move) {
+    return;
+  }
+
+  const auto move = std::exchange(_pending_scene_move, std::nullopt);
+
+  auto commands = std::vector<std::unique_ptr<command>>{};
+  auto end_index = scene.root().get_component<sbx::scenes::relationship>().children.size();
+
+  for (const auto id : selection_roots(scene, move->dragged_ids)) {
+    auto node = scene.find(id);
+
+    if (!node.is_valid()) {
+      continue;
+    }
+
+    // Scenes own top-level nodes, so a nested node first moves to the top level, appended in drag order.
+    if (scene.node_of(node.get_component<sbx::scenes::relationship>().parent) != scene.root()) {
+      commands.push_back(std::make_unique<reparent_node_command>(scene, node, std::nullopt, end_index++));
+    }
+
+    commands.push_back(std::make_unique<set_scene_membership_command>(scene, id, move->handle));
+  }
+
+  if (!commands.empty()) {
+    state.push_command(scene, std::make_unique<composite_command>(std::move(commands), "Move to Scene"));
+  }
+}
+
 auto hierarchy_panel::_draw_empty_space_context_menu(editor_state& state, sbx::scenes::scene& scene) -> void {
   if (ImGui::MenuItem(ICON_MDI_PLUS " Add Node")) {
     create_and_select_node<create_node_command>(state, scene);
@@ -380,8 +479,21 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
 
   const auto& top_level = scene.root().get_component<sbx::scenes::relationship>().children;
 
-  for (auto i = std::size_t{0u}; i < top_level.size(); ++i) {
-    _draw_node_row(state, scene, top_level[i], std::nullopt, i);
+  // Copied: a header's "Set Active Scene" runs while the list is walked.
+  const auto loaded_scenes = scenes_module.loaded_scenes();
+  const auto editable_scene_count = std::ranges::count_if(loaded_scenes, [](const sbx::scenes::loaded_scene& loaded) { return loaded.handle != sbx::scenes::persistent_scene_handle; });
+
+  for (const auto& loaded : loaded_scenes) {
+    if (!_draw_scene_header(state, loaded, editable_scene_count > 1)) {
+      continue;
+    }
+
+    // sibling_index stays the position among all top-level nodes, which is what reordering works in.
+    for (auto i = std::size_t{0u}; i < top_level.size(); ++i) {
+      if (scene.scene_of(scene.node_of(top_level[i])) == loaded.handle) {
+        _draw_node_row(state, scene, top_level[i], std::nullopt, i);
+      }
+    }
   }
 
   if (top_level.empty()) {
@@ -434,6 +546,20 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
   }
 
   _apply_pending_reparent(state, scene);
+  _apply_pending_scene_move(state, scene);
+
+  if (_pending_create_in_scene) {
+    const auto id = sbx::math::uuid::create();
+
+    auto commands = std::vector<std::unique_ptr<command>>{};
+    commands.push_back(std::make_unique<create_node_command>(std::nullopt, "Node", id));
+    commands.push_back(std::make_unique<set_scene_membership_command>(scene, id, *_pending_create_in_scene));
+
+    state.push_command(scene, std::make_unique<composite_command>(std::move(commands), "Create Node"));
+    state.select_node(scene.find(id));
+
+    _pending_create_in_scene.reset();
+  }
 
   if (_pending_node_action != nullptr) {
     _pending_node_action(state, scene);

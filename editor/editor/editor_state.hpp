@@ -4,6 +4,7 @@
 #define EDITOR_EDITOR_STATE_HPP_
 
 #include <algorithm>
+#include <cstdint>
 #include <cstddef>
 #include <filesystem>
 #include <optional>
@@ -238,13 +239,39 @@ struct editor_state {
   /** @brief One-shot request to open a scene, consumed by editor_ui_layer's guarded open_scene(). */
   struct scene_edit_request {
     std::filesystem::path path{}; // project-relative
+    bool additive{false}; // alongside the open scenes instead of replacing them
   }; // struct scene_edit_request
 
-  auto request_open_scene(std::filesystem::path path) -> void {
-    open_scene_request = scene_edit_request{std::move(path)};
+  auto request_open_scene(std::filesystem::path path, bool additive = false) -> void {
+    open_scene_request = scene_edit_request{std::move(path), additive};
   }
 
   std::optional<scene_edit_request> open_scene_request{};
+
+  enum class scene_file_action : std::uint8_t {
+    save,
+    save_as,
+    unload
+  }; // enum class scene_file_action
+
+  /** @brief One-shot save/unload of one loaded scene (by scenes_module handle), consumed by editor_ui_layer, which owns the dialogs. */
+  struct scene_file_request {
+    scene_file_action action{scene_file_action::save};
+    std::uint32_t handle{0u};
+  }; // struct scene_file_request
+
+  auto request_scene_file_action(scene_file_action action, std::uint32_t handle) -> void {
+    pending_scene_file_request = scene_file_request{action, handle};
+  }
+
+  std::optional<scene_file_request> pending_scene_file_request{};
+
+  // Loaded scenes with unsaved changes (scenes_module handles), kept current by editor_ui_layer.
+  std::vector<std::uint32_t> dirty_scenes{};
+
+  [[nodiscard]] auto is_scene_dirty(std::uint32_t handle) const -> bool {
+    return std::ranges::find(dirty_scenes, handle) != dirty_scenes.end();
+  }
 
   /** @brief One-shot request to open Project Settings on its Layers tab. */
   auto request_open_layer_settings() -> void {

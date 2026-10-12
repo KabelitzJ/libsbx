@@ -130,7 +130,7 @@ auto asset_browser_panel::_create_scene(editor_state& state, const std::filesyst
   camera.add_component<sbx::scenes::camera>();
   blank.set_active_camera(camera);
 
-  auto handle = assets_module.create_scene(sbx::scenes::scene_serializer::build(blank), "Scene");
+  auto handle = assets_module.create_scene(sbx::scenes::scene_serializer::build(blank, blank.active_membership()), "Scene");
   const auto id = assets_module.save_scene(handle, relative_path);
 
   // Only creates the file; opening the scene is a separate action.
@@ -168,6 +168,7 @@ auto asset_browser_panel::_create_script(editor_state& state, const std::filesys
 
   _navigate_to(target_directory);
   state.select_asset(sbx::math::uuid::nil(), relative_path, sbx::assets::asset_type::script);
+  _begin_rename(relative_path, false); // the name typed now becomes the class name too, like Unity
 }
 
 auto asset_browser_panel::_create_folder(const std::filesystem::path& target_directory) -> void {

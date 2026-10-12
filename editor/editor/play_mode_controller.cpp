@@ -40,6 +40,7 @@ auto play_mode_controller::enter_play_mode() -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
   sbx::scenes::scene_serializer::save(scenes_module.active_scene(), _snapshot_path());
+  _scene_set_snapshot = scenes_module.current_scene_set();
 
   scenes_module.set_simulating(true);
 
@@ -61,6 +62,7 @@ auto play_mode_controller::exit_play_mode() -> void {
   scenes_module.set_simulating(false);
 
   sbx::scenes::scene_serializer::load(scenes_module.active_scene(), _snapshot_path());
+  scenes_module.restore_scene_set(_scene_set_snapshot);
 
   std::filesystem::remove(_snapshot_path());
 

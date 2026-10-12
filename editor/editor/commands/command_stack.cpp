@@ -10,6 +10,7 @@ auto command_stack::push(sbx::scenes::scene& target, std::unique_ptr<command> cm
   }
 
   cmd->execute(target);
+  ++_revision;
 
   _redo_stack.clear();
   _undo_stack.push_back(std::move(cmd));
@@ -28,6 +29,7 @@ auto command_stack::undo(sbx::scenes::scene& target) -> void {
   _undo_stack.pop_back();
 
   cmd->undo(target);
+  ++_revision;
 
   _redo_stack.push_back(std::move(cmd));
 }
@@ -41,6 +43,7 @@ auto command_stack::redo(sbx::scenes::scene& target) -> void {
   _redo_stack.pop_back();
 
   cmd->execute(target);
+  ++_revision;
 
   _undo_stack.push_back(std::move(cmd));
 }
@@ -56,6 +59,7 @@ auto command_stack::redo_label() const -> std::string {
 auto command_stack::clear() -> void {
   _undo_stack.clear();
   _redo_stack.clear();
+  ++_revision;
 }
 
 } // namespace editor

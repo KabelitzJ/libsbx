@@ -4,6 +4,7 @@
 #define EDITOR_PANELS_HIERARCHY_PANEL_HPP_
 
 #include <array>
+#include <cstdint>
 #include <optional>
 #include <unordered_set>
 #include <vector>
@@ -13,6 +14,7 @@
 #include <libsbx/math/uuid.hpp>
 
 #include <libsbx/scenes/scene.hpp>
+#include <libsbx/scenes/scenes_module.hpp>
 
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
 
@@ -81,6 +83,16 @@ private:
   /** @brief "Apply to Prefab"/"Revert to Prefab" submenus per overridden component, plus Apply All/Revert All. Draws nothing without overrides. */
   auto _draw_prefab_override_menu(sbx::scenes::scene& scene, const sbx::scenes::node& node) -> void;
 
+  /**
+   * @brief One loaded scene's header: collapsible, a drop target that moves dragged nodes into the scene, and the scene's context menu.
+   *
+   * @return Whether the scene's rows should be drawn (the header is open).
+   */
+  auto _draw_scene_header(editor_state& state, const sbx::scenes::loaded_scene& loaded, bool can_unload) -> bool;
+
+  /** @brief Moves the queued nodes' top-level ancestors into the target scene, as one undo step. */
+  auto _apply_pending_scene_move(editor_state& state, sbx::scenes::scene& scene) -> void;
+
   /** @brief "Add Node" and the 3D Object submenu, shared by both empty-space context menus. */
   auto _draw_empty_space_context_menu(editor_state& state, sbx::scenes::scene& scene) -> void;
 
@@ -96,6 +108,17 @@ private:
   };
 
   std::optional<pending_reparent> _pending_reparent{};
+
+  /** @brief Nodes dropped on a scene header, moved after the tree finishes drawing. */
+  struct pending_scene_move {
+    std::vector<sbx::math::uuid> dragged_ids;
+    std::uint32_t handle;
+  };
+
+  std::optional<pending_scene_move> _pending_scene_move{};
+
+  // A scene header's "Create Empty", run after the tree walk.
+  std::optional<std::uint32_t> _pending_create_in_scene{};
 
   /** @brief A Shift+click range select, applied after the tree finishes drawing. */
   struct pending_range_select {

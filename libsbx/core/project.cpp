@@ -3,6 +3,7 @@
 #include <libsbx/core/project.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <ranges>
 #include <stdexcept>
@@ -47,8 +48,13 @@ auto project::load(const std::filesystem::path& file) -> project {
     result._logs = node["logs"].as<std::string>();
   }
 
-  if (node["startup_scene"]) {
-    result._startup_scene = std::filesystem::path{node["startup_scene"].as<std::string>()};
+  if (const auto scenes_node = node["scenes"]) {
+    for (const auto& entry : scenes_node) {
+      result._scene_list.push_back(scene_list_entry{entry["path"].as<std::string>(), entry["enabled"].as<bool>(true)});
+    }
+  } else if (node["startup_scene"]) {
+    // v4 and older: the single startup scene becomes the list's first entry.
+    result._scene_list.push_back(scene_list_entry{node["startup_scene"].as<std::string>(), true});
   }
 
   if (const auto layers_node = node["layers"]) {
@@ -98,6 +104,69 @@ auto project::load(const std::filesystem::path& file) -> project {
   }
 
   return result;
+}
+
+auto project::scene_count_in_build() const -> std::size_t {
+  return static_cast<std::size_t>(std::ranges::count_if(_scene_list, &scene_list_entry::enabled));
+}
+
+auto project::scene_at(std::size_t build_index) const -> std::optional<std::filesystem::path> {
+  for (const auto& entry : _scene_list | std::views::filter(&scene_list_entry::enabled)) {
+    if (build_index-- == 0u) {
+      return entry.path;
+    }
+  }
+
+  return std::nullopt;
+}
+
+auto project::build_index_of(const std::filesystem::path& path) const -> std::optional<std::size_t> {
+  const auto wanted = path.lexically_normal().generic_string();
+
+  auto index = std::size_t{0u};
+
+  for (const auto& entry : _scene_list | std::views::filter(&scene_list_entry::enabled)) {
+    if (entry.path.lexically_normal().generic_string() == wanted) {
+      return index;
+    }
+
+    ++index;
+  }
+
+  return std::nullopt;
+}
+
+auto project::resolve_scene(std::string_view name_or_path) const -> std::optional<std::filesystem::path> {
+  const auto lowercase = [](std::string text) {
+    std::ranges::transform(text, text.begin(), [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
+    return text;
+  };
+
+  const auto is_path = name_or_path.find('/') != std::string_view::npos || std::filesystem::path{name_or_path}.extension() == ".scene";
+
+  if (is_path) {
+    auto path = std::filesystem::path{name_or_path};
+
+    if (path.extension() != ".scene") {
+      path += ".scene";
+    }
+
+    if (build_index_of(path)) {
+      return path.lexically_normal();
+    }
+
+    return std::nullopt;
+  }
+
+  const auto wanted = lowercase(std::string{name_or_path});
+
+  for (const auto& entry : _scene_list | std::views::filter(&scene_list_entry::enabled)) {
+    if (lowercase(entry.path.stem().string()) == wanted) {
+      return entry.path;
+    }
+  }
+
+  return std::nullopt;
 }
 
 auto project::set_mixer_groups(std::vector<mixer_group> groups) -> void {
@@ -175,9 +244,14 @@ auto project::save(const std::filesystem::path& file) const -> void {
   emitter << YAML::Key << "library" << YAML::Value << _library.generic_string();
   emitter << YAML::Key << "logs" << YAML::Value << _logs.generic_string();
 
-  if (_startup_scene) {
-    emitter << YAML::Key << "startup_scene" << YAML::Value << _startup_scene->generic_string();
+  emitter << YAML::Key << "scenes" << YAML::Value << YAML::BeginSeq;
+  for (const auto& entry : _scene_list) {
+    emitter << YAML::BeginMap;
+    emitter << YAML::Key << "path" << YAML::Value << entry.path.generic_string();
+    emitter << YAML::Key << "enabled" << YAML::Value << entry.enabled;
+    emitter << YAML::EndMap;
   }
+  emitter << YAML::EndSeq;
 
   emitter << YAML::Key << "layers" << YAML::Value << YAML::BeginSeq;
   for (const auto& layer_name : _layers) {

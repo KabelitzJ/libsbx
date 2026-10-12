@@ -3,8 +3,11 @@
 #include <libsbx/scripting/interop.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <filesystem>
+#include <optional>
+#include <ranges>
 
 #include <libsbx/utility/logger.hpp>
 
@@ -978,42 +981,242 @@ auto interop::node_get_is_active(std::uint64_t uuid) -> managed::bool32 {
   return node.is_active();
 }
 
-auto interop::scene_load(managed::string path) -> void {
-  auto& assets_module = core::engine::get_module<assets::assets_module>();
-
-  auto handle = assets_module.load_scene(std::filesystem::path{std::string{path}});
-
-  if (!handle.is_valid()) {
-    utility::logger<"scripting">::error("SceneManager.Load('{}') resolved to an invalid scene", std::string{path});
-
-    return;
-  }
-
-  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-
-  scenes::scene_serializer::load(scenes_module.active_scene(), handle->snapshot());
-}
-
 auto interop::scene_save(managed::string path) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
   auto& scene = scenes_module.active_scene();
 
-  auto handle = assets_module.create_scene(scenes::scene_serializer::build(scene), scene.name());
-  assets_module.save_scene(handle, std::filesystem::path{std::string{path}});
+  const auto scene_path = std::filesystem::path{std::string{path}};
+
+  auto handle = assets_module.create_scene(scenes::scene_serializer::build(scene, scenes_module.active_scene_handle()), scene.name());
+  assets_module.save_scene(handle, scene_path);
+
+  scenes_module.set_scene_path(scenes_module.active_scene_handle(), scene_path);
 }
 
 auto interop::scene_new() -> void {
+  core::engine::get_module<scenes::scenes_module>().new_scene();
+}
+
+static auto load_scene_mode_of(std::uint32_t mode) -> scenes::load_scene_mode {
+  return mode == static_cast<std::uint32_t>(scenes::load_scene_mode::additive) ? scenes::load_scene_mode::additive : scenes::load_scene_mode::single;
+}
+
+// A scene-list name or path; outside the list it's still tried as a path, which the runtime then rejects in scenes_module.
+static auto requested_scene_path(managed::string name_or_path) -> std::filesystem::path {
+  const auto requested = std::string{name_or_path};
+
+  if (auto path = core::engine::project().resolve_scene(requested)) {
+    return *path;
+  }
+
+  auto path = std::filesystem::path{requested};
+
+  if (path.extension() != ".scene") {
+    path += ".scene";
+  }
+
+  return path;
+}
+
+static auto report(const scenes::queued_load& queued, std::uint32_t* out_handle) -> std::uint32_t {
+  if (out_handle) {
+    *out_handle = queued.handle;
+  }
+
+  return queued.operation;
+}
+
+static auto build_index_scene_path(std::int32_t build_index, std::uint32_t* out_handle) -> std::optional<std::filesystem::path> {
+  if (out_handle) {
+    *out_handle = scenes::invalid_scene_handle;
+  }
+
+  auto path = build_index >= 0 ? core::engine::project().scene_at(static_cast<std::size_t>(build_index)) : std::nullopt;
+
+  if (!path) {
+    utility::logger<"scripting">::error("SceneManager.LoadScene({}): no enabled scene with that build index", build_index);
+  }
+
+  return path;
+}
+
+auto interop::scene_load_by_name(managed::string name_or_path, std::uint32_t mode, std::uint32_t* out_handle) -> std::uint32_t {
+  return report(core::engine::get_module<scenes::scenes_module>().load_scene(requested_scene_path(name_or_path), load_scene_mode_of(mode)), out_handle);
+}
+
+auto interop::scene_load_by_index(std::int32_t build_index, std::uint32_t mode, std::uint32_t* out_handle) -> std::uint32_t {
+  const auto path = build_index_scene_path(build_index, out_handle);
+
+  return path ? report(core::engine::get_module<scenes::scenes_module>().load_scene(*path, load_scene_mode_of(mode)), out_handle) : 0u;
+}
+
+auto interop::scene_load_async_by_name(managed::string name_or_path, std::uint32_t mode, std::uint32_t* out_handle) -> std::uint32_t {
+  return report(core::engine::get_module<scenes::scenes_module>().load_scene_async(requested_scene_path(name_or_path), load_scene_mode_of(mode)), out_handle);
+}
+
+auto interop::scene_load_async_by_index(std::int32_t build_index, std::uint32_t mode, std::uint32_t* out_handle) -> std::uint32_t {
+  const auto path = build_index_scene_path(build_index, out_handle);
+
+  return path ? report(core::engine::get_module<scenes::scenes_module>().load_scene_async(*path, load_scene_mode_of(mode)), out_handle) : 0u;
+}
+
+auto interop::scene_get_operation_progress(std::uint32_t operation) -> std::float_t {
+  return core::engine::get_module<scenes::scenes_module>().operation_progress(operation);
+}
+
+auto interop::scene_get_allow_activation(std::uint32_t operation) -> managed::bool32 {
+  return core::engine::get_module<scenes::scenes_module>().allow_scene_activation(operation);
+}
+
+auto interop::scene_set_allow_activation(std::uint32_t operation, managed::bool32 allow) -> void {
+  core::engine::get_module<scenes::scenes_module>().set_allow_scene_activation(operation, allow != 0u);
+}
+
+auto interop::scene_unload(std::uint32_t handle) -> std::uint32_t {
+  return core::engine::get_module<scenes::scenes_module>().unload_scene(handle);
+}
+
+auto interop::scene_is_operation_done(std::uint32_t operation) -> managed::bool32 {
+  return core::engine::get_module<scenes::scenes_module>().is_operation_done(operation);
+}
+
+// The loaded scenes scripts see: everything but the persistent scene, like Unity's SceneManager.
+static auto script_visible_scenes() -> std::vector<scenes::loaded_scene> {
+  auto visible = std::vector<scenes::loaded_scene>{};
+
+  for (const auto& loaded : core::engine::get_module<scenes::scenes_module>().loaded_scenes()) {
+    if (loaded.handle != scenes::persistent_scene_handle) {
+      visible.push_back(loaded);
+    }
+  }
+
+  return visible;
+}
+
+auto interop::scene_get_count() -> std::int32_t {
+  return static_cast<std::int32_t>(script_visible_scenes().size());
+}
+
+auto interop::scene_get_at(std::int32_t index) -> std::uint32_t {
+  const auto visible = script_visible_scenes();
+
+  return (index >= 0 && static_cast<std::size_t>(index) < visible.size()) ? visible[static_cast<std::size_t>(index)].handle : scenes::invalid_scene_handle;
+}
+
+auto interop::scene_get_active() -> std::uint32_t {
+  return core::engine::get_module<scenes::scenes_module>().active_scene_handle();
+}
+
+auto interop::scene_set_active(std::uint32_t handle) -> managed::bool32 {
+  return core::engine::get_module<scenes::scenes_module>().set_active_scene(handle);
+}
+
+auto interop::scene_find_by_name(managed::string name) -> std::uint32_t {
+  const auto lowercase = [](std::string text) {
+    std::ranges::transform(text, text.begin(), [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
+    return text;
+  };
+
+  const auto wanted = lowercase(std::string{name});
+
+  for (const auto& loaded : script_visible_scenes()) {
+    if (lowercase(loaded.name) == wanted) {
+      return loaded.handle;
+    }
+  }
+
+  return scenes::invalid_scene_handle;
+}
+
+auto interop::scene_find_by_path(managed::string path) -> std::uint32_t {
+  auto wanted = std::filesystem::path{std::string{path}};
+
+  if (wanted.extension() != ".scene") {
+    wanted += ".scene";
+  }
+
+  for (const auto& loaded : script_visible_scenes()) {
+    if (loaded.path.lexically_normal() == wanted.lexically_normal()) {
+      return loaded.handle;
+    }
+  }
+
+  return scenes::invalid_scene_handle;
+}
+
+auto interop::scene_find_by_build_index(std::int32_t build_index) -> std::uint32_t {
+  for (const auto& loaded : script_visible_scenes()) {
+    if (loaded.build_index >= 0 && loaded.build_index == build_index) {
+      return loaded.handle;
+    }
+  }
+
+  return scenes::invalid_scene_handle;
+}
+
+auto interop::scene_get_name(std::uint32_t handle) -> managed::string {
+  const auto loaded = core::engine::get_module<scenes::scenes_module>().find_loaded_scene(handle);
+
+  return managed::string::create(loaded ? loaded->name.c_str() : "");
+}
+
+auto interop::scene_get_path(std::uint32_t handle) -> managed::string {
+  const auto loaded = core::engine::get_module<scenes::scenes_module>().find_loaded_scene(handle);
+
+  return managed::string::create(loaded ? loaded->path.generic_string().c_str() : "");
+}
+
+auto interop::scene_get_build_index(std::uint32_t handle) -> std::int32_t {
+  const auto loaded = core::engine::get_module<scenes::scenes_module>().find_loaded_scene(handle);
+
+  return loaded ? loaded->build_index : -1;
+}
+
+auto interop::scene_is_loaded(std::uint32_t handle) -> managed::bool32 {
+  return static_cast<bool>(core::engine::get_module<scenes::scenes_module>().find_loaded_scene(handle));
+}
+
+auto interop::scene_get_root_nodes(std::uint32_t handle, std::uint64_t* out_node_uuids, std::uint32_t capacity) -> std::uint32_t {
+  auto& scene = core::engine::get_module<scenes::scenes_module>().active_scene();
+
+  auto roots = std::vector<std::uint64_t>{};
+
+  for (const auto entity : scene.root().get_component<scenes::relationship>().children) {
+    if (const auto node = scene.node_of(entity); scene.scene_of(node) == handle) {
+      roots.push_back(node.id().value());
+    }
+  }
+
+  if (out_node_uuids) {
+    std::ranges::copy(roots | std::views::take(capacity), out_node_uuids);
+  }
+
+  return static_cast<std::uint32_t>(roots.size());
+}
+
+auto interop::scene_move_node(std::uint64_t node_uuid, std::uint32_t handle) -> managed::bool32 {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  scenes_module.active_scene() = scenes::scene{};
+  return scenes_module.move_node_to_scene(scenes_module.active_scene().find(math::uuid::from_value(node_uuid)), handle);
+}
 
-  auto& scene = scenes_module.active_scene();
+auto interop::node_dont_destroy_on_load(std::uint64_t node_uuid) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto camera = scene.create_node("Camera");
-  camera.add_component<scenes::camera>();
-  scene.set_active_camera(camera);
+  auto node = scenes_module.active_scene().find(math::uuid::from_value(node_uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Node.DontDestroyOnLoad: invalid node {}", node_uuid);
+    return;
+  }
+
+  scenes_module.dont_destroy_on_load(node);
+}
+
+auto interop::scene_count_in_build_settings() -> std::int32_t {
+  return static_cast<std::int32_t>(core::engine::project().scene_count_in_build());
 }
 
 auto interop::particle_effect_load(std::uint64_t uuid, managed::string path) -> void {

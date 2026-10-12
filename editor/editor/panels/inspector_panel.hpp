@@ -99,6 +99,7 @@ private:
   // Staged name, re-synced only when the selection changes so typing isn't clobbered.
   std::array<char, 128u> _name_buffer{};
   sbx::math::uuid _name_buffer_id{sbx::math::uuid::nil()};
+  bool _name_field_active{false};
   std::optional<sbx::scenes::tag> _pending_name_before{};
 
   // Euler degrees cached per node: re-deriving from the quaternion every frame is unstable near gimbal lock.

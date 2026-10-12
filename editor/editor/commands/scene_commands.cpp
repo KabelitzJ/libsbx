@@ -232,6 +232,25 @@ auto reparent_node_command::undo(sbx::scenes::scene& target) -> void {
   }
 }
 
+set_scene_membership_command::set_scene_membership_command(sbx::scenes::scene& scene, sbx::math::uuid node_id, std::uint32_t handle)
+: _id{node_id}, _handle{handle} {
+  if (auto node = scene.find(node_id); node.is_valid()) {
+    _previous = scene.scene_of(node);
+  }
+}
+
+auto set_scene_membership_command::execute(sbx::scenes::scene& target) -> void {
+  if (auto node = target.find(_id); node.is_valid()) {
+    node.get_or_add_component<sbx::scenes::scene_membership>().handle = _handle;
+  }
+}
+
+auto set_scene_membership_command::undo(sbx::scenes::scene& target) -> void {
+  if (auto node = target.find(_id); node.is_valid()) {
+    node.get_or_add_component<sbx::scenes::scene_membership>().handle = _previous;
+  }
+}
+
 set_active_camera_command::set_active_camera_command(sbx::scenes::scene& scene, const sbx::scenes::node& target)
 : _id{target.id()} {
   if (auto current = scene.active_camera(); current.is_valid()) {

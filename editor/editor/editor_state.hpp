@@ -273,6 +273,16 @@ struct editor_state {
     return std::ranges::find(dirty_scenes, handle) != dirty_scenes.end();
   }
 
+  /** @brief Rechecks dirty_scenes next frame; for edits that bypass the undo history, which is what normally triggers it. */
+  auto request_dirty_refresh() -> void {
+    dirty_refresh_requested = true;
+  }
+
+  bool dirty_refresh_requested{false};
+
+  // A .cs file was added, changed or removed; editor_ui_layer recompiles once out of Play.
+  bool scripts_changed{false};
+
   /** @brief One-shot request to open Project Settings on its Layers tab. */
   auto request_open_layer_settings() -> void {
     open_layer_settings_request = true;

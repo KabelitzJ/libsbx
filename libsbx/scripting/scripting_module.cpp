@@ -389,6 +389,8 @@ scripting_module::scripting_module() {
 
   scenes_module.on_scene_unloading().connect([this](std::uint32_t handle) { _destroy_scene_member_scripts(handle); });
   scenes_module.on_scene_loaded().connect([this](const scenes::scene_loaded_event& event) {
+    // Before instantiating, so a scene saved before its script was renamed still starts the right class.
+    resolve_renamed_scripts(core::engine::get_module<scenes::scenes_module>().active_scene());
     _instantiate_scene_member_scripts(event.handle);
     _broadcast("DispatchSceneLoaded", event.handle, static_cast<std::uint32_t>(event.mode));
   });
@@ -538,7 +540,7 @@ auto scripting_module::attach_script(scenes::node& node, std::string_view class_
     return;
   }
 
-  scripts.scripts.push_back(scenes::script_entry{.class_name = std::string{class_name}});
+  scripts.scripts.push_back(scenes::script_entry{.class_name = std::string{class_name}, .script = script_asset_of(class_name)});
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
@@ -818,8 +820,80 @@ auto scripting_module::run_on_destroy(scenes::scene& target) -> void {
   _resources.clear();
 }
 
-auto scripting_module::recompile_scripts() -> void {
+auto scripting_module::recompile_scripts() -> bool {
   _load_game_assembly();
+
+  return resolve_renamed_scripts(core::engine::get_module<scenes::scenes_module>().active_scene());
+}
+
+// A class's name without its namespace, which is what its .cs file is named.
+static auto short_class_name(std::string_view class_name) -> std::string_view {
+  const auto dot = class_name.rfind('.');
+  return dot == std::string_view::npos ? class_name : class_name.substr(dot + 1u);
+}
+
+auto scripting_module::script_asset_of(std::string_view class_name) const -> math::uuid {
+  const auto name = short_class_name(class_name);
+
+  for (const auto& [id, path] : core::engine::get_module<assets::assets_module>().assets_of(assets::asset_type::script)) {
+    if (path.stem().string() == name) {
+      return id;
+    }
+  }
+
+  return math::uuid::nil();
+}
+
+auto scripting_module::resolve_renamed_scripts(scenes::scene& target) -> bool {
+  if (!_has_game_assembly) {
+    return false;
+  }
+
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+  const auto exists = [this](const std::string& class_name) {
+    return _game_assembly.get_type(class_name).get_type_id() != -1;
+  };
+
+  auto changed = false;
+
+  for (auto&& [entity, component] : target.query<scenes::script_component>().each()) {
+    for (auto& entry : component.scripts) {
+      if (entry.script == math::uuid::nil() || exists(entry.class_name)) {
+        continue;
+      }
+
+      const auto path = assets_module.path_of(entry.script);
+
+      if (path.empty()) {
+        continue; // the script was deleted: stays missing, like Unity's "Missing (Mono Script)"
+      }
+
+      // Keeps any namespace: only the class's own name follows the file.
+      const auto short_name = short_class_name(entry.class_name);
+      const auto renamed = entry.class_name.substr(0u, entry.class_name.size() - short_name.size()) + path.stem().string();
+
+      if (renamed != entry.class_name && exists(renamed)) {
+        utility::logger<"scripting">::info("Script '{}' was renamed to '{}'", entry.class_name, renamed);
+        entry.class_name = renamed;
+        changed = true;
+      }
+    }
+  }
+
+  return changed;
+}
+
+auto scripting_module::assign_missing_script_ids(scenes::scene& target, std::uint32_t handle) -> void {
+  for (auto node : target.members_of(handle)) {
+    if (auto component = node.try_get_component<scenes::script_component>()) {
+      for (auto& entry : component->scripts) {
+        if (entry.script == math::uuid::nil()) {
+          entry.script = script_asset_of(entry.class_name);
+        }
+      }
+    }
+  }
 }
 
 auto scripting_module::_dotnet_directory() const -> std::filesystem::path {

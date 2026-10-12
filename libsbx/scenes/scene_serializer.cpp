@@ -850,6 +850,10 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
       component["type"] = "script";
       component["class_name"] = entry.class_name;
 
+      if (entry.script != math::uuid::nil()) {
+        component["script"] = entry.script.value();
+      }
+
       auto fields = YAML::Node{YAML::NodeType::Sequence};
 
       for (const auto& field : entry.field_overrides) {
@@ -1454,6 +1458,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
 
       auto entry = script_entry{};
       entry.class_name = component["class_name"].as<std::string>();
+      entry.script = component["script"].as<math::uuid>(math::uuid::nil());
 
       if (const auto fields = component["fields"]) {
         for (const auto field_yaml : fields) {

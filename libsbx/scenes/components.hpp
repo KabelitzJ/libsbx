@@ -500,6 +500,7 @@ struct script_field_override {
  */
 struct script_entry {
   std::string class_name;
+  math::uuid script{math::uuid::nil()}; // the .cs asset, so a renamed class can be found again; nil in scenes saved before scripts had ids
   std::vector<script_field_override> field_overrides{};
 }; // struct script_entry
 

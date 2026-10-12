@@ -58,7 +58,7 @@ private:
    * @param new_parent_id The new parent, or nullopt for the top level.
    * @param new_index The index among the new siblings.
    */
-  auto _try_reparent(editor_state& state, sbx::scenes::scene& scene, sbx::math::uuid payload_id, std::optional<sbx::math::uuid> new_parent_id, std::size_t new_index) -> void;
+  auto _try_reparent(editor_state& state, sbx::scenes::scene& scene, sbx::math::uuid payload_id, std::optional<sbx::math::uuid> new_parent_id, std::size_t new_index, std::optional<std::uint32_t> target_scene = std::nullopt) -> void;
 
   /**
    * @brief The node's current parent.
@@ -105,6 +105,7 @@ private:
     std::vector<sbx::math::uuid> dragged_ids;
     std::optional<sbx::math::uuid> new_parent_id;
     std::size_t new_index;
+    std::optional<std::uint32_t> target_scene; // set for drops between top-level rows: the scene those rows belong to
   };
 
   std::optional<pending_reparent> _pending_reparent{};

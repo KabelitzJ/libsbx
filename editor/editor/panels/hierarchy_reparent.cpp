@@ -3,7 +3,9 @@
 #include <editor/panels/hierarchy_panel.hpp>
 
 #include <algorithm>
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <fmt/format.h>
@@ -17,7 +19,7 @@
 
 namespace editor {
 
-auto hierarchy_panel::_try_reparent(editor_state& state, sbx::scenes::scene& scene, sbx::math::uuid payload_id, std::optional<sbx::math::uuid> new_parent_id, std::size_t new_index) -> void {
+auto hierarchy_panel::_try_reparent(editor_state& state, sbx::scenes::scene& scene, sbx::math::uuid payload_id, std::optional<sbx::math::uuid> new_parent_id, std::size_t new_index, std::optional<std::uint32_t> target_scene) -> void {
   const auto& selected = state.selected_node_ids();
 
   const auto has_selected = (selected.size() > 1u && std::find(selected.begin(), selected.end(), payload_id) != selected.end());
@@ -46,7 +48,7 @@ auto hierarchy_panel::_try_reparent(editor_state& state, sbx::scenes::scene& sce
     }
   }
 
-  _pending_reparent = pending_reparent{std::move(dragged_ids), new_parent_id, new_index};
+  _pending_reparent = pending_reparent{std::move(dragged_ids), new_parent_id, new_index, target_scene};
 }
 
 auto hierarchy_panel::_current_parent_id(sbx::scenes::scene& scene, sbx::math::uuid id) const -> std::optional<sbx::math::uuid> {
@@ -81,33 +83,37 @@ auto hierarchy_panel::_apply_pending_reparent(editor_state& state, sbx::scenes::
     return index_of(a) < index_of(b);
   });
 
-  if (ordered.size() == 1u) {
-    if (auto target = scene.find(ordered.front()); target.is_valid()) {
-      state.push_command(scene, std::make_unique<reparent_node_command>(scene, target, _pending_reparent->new_parent_id, _pending_reparent->new_index));
-    }
-  } else if (ordered.size() > 1u) {
-    auto sub_commands = std::vector<std::unique_ptr<command>>{};
-    auto foreign_count = std::size_t{0u};
+  auto commands = std::vector<std::unique_ptr<command>>{};
+  auto moved_count = std::size_t{0u};
+  auto foreign_count = std::size_t{0u};
 
-    for (const auto id : ordered) {
-      auto target = scene.find(id);
+  for (const auto id : ordered) {
+    auto target = scene.find(id);
 
-      if (!target.is_valid()) {
-        continue;
-      }
-
-      const auto was_already_sibling = _current_parent_id(scene, id) == _pending_reparent->new_parent_id;
-
-      sub_commands.push_back(std::make_unique<reparent_node_command>(scene, target, _pending_reparent->new_parent_id, _pending_reparent->new_index + foreign_count));
-
-      if (!was_already_sibling) {
-        foreign_count += 1u;
-      }
+    if (!target.is_valid()) {
+      continue;
     }
 
-    if (!sub_commands.empty()) {
-      state.push_command(scene, std::make_unique<composite_command>(std::move(sub_commands), fmt::format("Move {} Nodes", sub_commands.size())));
+    const auto was_already_sibling = _current_parent_id(scene, id) == _pending_reparent->new_parent_id;
+
+    commands.push_back(std::make_unique<reparent_node_command>(scene, target, _pending_reparent->new_parent_id, _pending_reparent->new_index + foreign_count));
+    ++moved_count;
+
+    if (!was_already_sibling) {
+      foreign_count += 1u;
     }
+
+    // Dropped among another scene's top-level rows: it joins that scene too, in the same undo step.
+    if (const auto target_scene = _pending_reparent->target_scene; target_scene && scene.scene_of(target) != *target_scene) {
+      commands.push_back(std::make_unique<set_scene_membership_command>(scene, id, *target_scene));
+    }
+  }
+
+  if (commands.size() == 1u) {
+    state.push_command(scene, std::move(commands.front()));
+  } else if (!commands.empty()) {
+    const auto label = moved_count == 1u ? std::string{"Move Node"} : fmt::format("Move {} Nodes", moved_count);
+    state.push_command(scene, std::make_unique<composite_command>(std::move(commands), label));
   }
 
   _pending_reparent.reset();

@@ -530,6 +530,37 @@ auto physics_module::fixed_update() -> void {
   }
 }
 
+// Whether @p candidate is @p ancestor or one of its descendants; an invalid @p ancestor contains nothing.
+[[nodiscard]] auto is_within_subtree(scenes::scene& scene, const scenes::node& candidate, const scenes::node& ancestor) -> bool {
+  if (!ancestor.is_valid()) {
+    return false;
+  }
+
+  const auto root = scene.root();
+
+  for (auto current = candidate; current.is_valid() && current != root; current = scene.node_of(current.get_component<scenes::relationship>().parent)) {
+    if (current == ancestor) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+auto physics_module::_ensure_broadphase(scenes::scene& scene) -> void {
+  if (!core::engine::get_module<scenes::scenes_module>().is_simulating() || (_was_simulating && !_reset_pending)) {
+    return;
+  }
+
+  // The same start-of-simulation work as fixed_update's, done early; fixed_update then sees it's already done.
+  _reset(scene);
+  _reset_pending = false;
+  _was_simulating = true;
+
+  _pose_cache.clear();
+  _sync_broadphase(scene);
+}
+
 auto physics_module::query_sphere_contacts(scenes::scene& scene, const math::vector3& center, std::float_t radius, std::vector<sphere_query_hit>& out_hits, const scenes::layer_mask& mask) -> void {
   overlap_shape(scene, convex_shape{physics::sphere{radius}}, transform{center, math::quaternion::identity, math::vector3::one}, out_hits, mask);
 }
@@ -552,6 +583,8 @@ auto physics_module::query_sphere_contacts(scenes::scene& scene, const math::vec
 auto physics_module::overlap_shape(scenes::scene& scene, const convex_shape& shape, const transform& pose, std::vector<sphere_query_hit>& out_hits, const scenes::layer_mask& mask, const scenes::node& ignore, bool include_triggers) -> void {
   out_hits.clear();
 
+  _ensure_broadphase(scene);
+
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
   const auto bounds = world_aabb(shape, pose);
@@ -560,7 +593,7 @@ auto physics_module::overlap_shape(scenes::scene& scene, const convex_shape& sha
   auto cache = pose_cache{};
 
   const auto passes_filter = [&](const scenes::node& candidate) {
-    return candidate != ignore && mask.test(candidate.get_component<scenes::layer>().index) && (include_triggers || !node_has_trigger_collider(candidate));
+    return !is_within_subtree(scene, candidate, ignore) && mask.test(candidate.get_component<scenes::layer>().index) && (include_triggers || !node_has_trigger_collider(candidate));
   };
 
   const auto test = [&](const scenes::node& candidate, const convex_shape& target, const transform& target_pose) {
@@ -621,6 +654,8 @@ auto physics_module::shape_cast(scenes::scene& scene, const convex_shape& shape,
     return std::nullopt;
   }
 
+  _ensure_broadphase(scene);
+
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
   const auto unit_direction = math::vector3::normalized(direction);
@@ -638,7 +673,7 @@ auto physics_module::shape_cast(scenes::scene& scene, const convex_shape& shape,
   };
 
   const auto passes_filter = [&](const scenes::node& candidate) {
-    return candidate != ignore && mask.test(candidate.get_component<scenes::layer>().index) && (include_triggers || !node_has_trigger_collider(candidate));
+    return !is_within_subtree(scene, candidate, ignore) && mask.test(candidate.get_component<scenes::layer>().index) && (include_triggers || !node_has_trigger_collider(candidate));
   };
 
   const auto visit = [&](const scenes::node& candidate) {
@@ -679,6 +714,8 @@ auto physics_module::shape_cast(scenes::scene& scene, const convex_shape& shape,
 }
 
 auto physics_module::raycast(scenes::scene& scene, const math::ray& ray, std::float_t max_distance, const scenes::layer_mask& mask) -> std::optional<raycast_hit> {
+  _ensure_broadphase(scene);
+
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
   auto nearest = std::optional<raycast_hit>{};

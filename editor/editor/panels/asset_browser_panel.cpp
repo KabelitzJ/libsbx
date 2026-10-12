@@ -26,7 +26,6 @@
 
 #include <libsbx/scenes/scenes_module.hpp>
 
-#include <libsbx/scripting/scripting_module.hpp>
 
 #include <editor/commands/scene_commands.hpp>
 
@@ -105,7 +104,7 @@ auto asset_browser_panel::_draw_rename_field(editor_state& state, std::float_t w
 }
 
 // Keeps a script's class named after its file, like a freshly created Unity script: Add Component lists classes, not files.
-auto rename_script_class(const std::filesystem::path& file, const std::string& old_name, const std::string& new_name) -> void {
+auto rename_script_class(editor_state& state, const std::filesystem::path& file, const std::string& old_name, const std::string& new_name) -> void {
   if (!is_csharp_identifier(old_name) || !is_csharp_identifier(new_name)) {
     sbx::utility::logger<"editor">::warn("'{}' isn't a valid C# class name, so the class inside '{}' keeps its name", new_name, file.filename().string());
     return;
@@ -130,26 +129,25 @@ auto rename_script_class(const std::filesystem::path& file, const std::string& o
     out << std::regex_replace(source, declaration, "$1 " + new_name);
   }
 
-  // Open scenes attach scripts by class name, so they follow the rename (namespaced names by their last part).
+  // Open scenes follow the rename right away (namespaced names by their last part), even attachments saved before scripts had ids.
+  // The asset watcher sees the rewritten file and recompiles.
   auto& scene = sbx::core::engine::get_module<sbx::scenes::scenes_module>().active_scene();
+  auto changed = false;
 
   for (auto&& [entity, component] : scene.query<sbx::scenes::script_component>().each()) {
     for (auto& entry : component.scripts) {
       if (entry.class_name == old_name) {
         entry.class_name = new_name;
+        changed = true;
       } else if (entry.class_name.ends_with("." + old_name)) {
         entry.class_name.replace(entry.class_name.size() - old_name.size(), old_name.size(), new_name);
+        changed = true;
       }
     }
   }
 
-  auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
-
-  // Recompiling swaps the game assembly, which running scripts in Play can't survive.
-  if (sbx::core::engine::get_module<sbx::scenes::scenes_module>().is_simulating()) {
-    sbx::utility::logger<"editor">::info("Renamed class '{}' to '{}'; scripts recompile after Play (Scripting > Recompile All)", old_name, new_name);
-  } else {
-    scripting_module.recompile_scripts();
+  if (changed) {
+    state.request_dirty_refresh();
   }
 }
 
@@ -183,7 +181,7 @@ auto asset_browser_panel::_commit_rename(editor_state& state) -> void {
   }
 
   if (!_renaming_is_directory && new_relative.extension() == ".cs") {
-    rename_script_class(new_absolute, _renaming_path.stem().string(), new_relative.stem().string());
+    rename_script_class(state, new_absolute, _renaming_path.stem().string(), new_relative.stem().string());
   }
 
   _needs_refresh = true;

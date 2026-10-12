@@ -27,7 +27,7 @@ enum class [[=reflection::named]] asset_type : std::uint8_t {
   audio_clip,
   prefab,
   scene, // no cook step, but manifest-registered like prefab
-  script // reference-only, compiled by scripting::script_compiler
+  script // no cook step; compiled by scripting::script_compiler. Manifested so scenes can reference a script across renames
 }; // enum class asset_type
 
 /** @brief The single extension -> type table; case-insensitive. */
@@ -36,7 +36,7 @@ enum class [[=reflection::named]] asset_type : std::uint8_t {
 /** @brief Every (extension, type) pair asset_type_of knows; extensions are lowercase with the leading dot. */
 [[nodiscard]] auto known_extensions() -> std::span<const std::pair<std::string_view, asset_type>>;
 
-/** @brief Whether the manifest tracks files of this type (everything but unknown and script). */
+/** @brief Whether the manifest tracks files of this type (everything but unknown). */
 [[nodiscard]] auto is_manifested(asset_type type) -> bool;
 
 /** @brief Whether the type has an importer with settings stored in its `.meta`. */

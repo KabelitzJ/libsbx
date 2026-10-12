@@ -133,6 +133,15 @@ auto editor_ui_layer::build() -> void {
 
   _asset_watcher.update(_state);
 
+  // Waits out Play: swapping the game assembly would kill the running scripts.
+  if (_state.scripts_changed && !sbx::core::engine::get_module<sbx::scenes::scenes_module>().is_simulating()) {
+    _state.scripts_changed = false;
+
+    if (sbx::core::engine::get_module<sbx::scripting::scripting_module>().recompile_scripts()) {
+      _state.request_dirty_refresh();
+    }
+  }
+
   _handle_scene_file_request();
   _refresh_dirty_scenes();
   _thumbnails.update();
@@ -388,7 +397,9 @@ auto editor_ui_layer::_draw_dockspace() -> void {
       ImGui::BeginDisabled(editor_module.play_state() != editor::play_state::edit);
 
       if (ImGui::MenuItem(ICON_MDI_REFRESH " Recompile All")) {
-        sbx::core::engine::get_module<sbx::scripting::scripting_module>().recompile_scripts();
+        if (sbx::core::engine::get_module<sbx::scripting::scripting_module>().recompile_scripts()) {
+          _state.request_dirty_refresh();
+        }
       }
 
       ImGui::EndDisabled();

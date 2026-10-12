@@ -45,6 +45,10 @@ auto asset_watcher::update(editor_state& state) -> void {
 
     changed_anything = true;
 
+    if (sbx::assets::asset_type_of(path) == sbx::assets::asset_type::script) {
+      state.scripts_changed = true;
+    }
+
     if (const auto id = assets_module.find(path); id != sbx::math::uuid::nil()) {
       assets_module.forget(id);
     }
@@ -61,6 +65,10 @@ auto asset_watcher::update(editor_state& state) -> void {
 
     const auto path = std::filesystem::path{path_string};
     const auto type = sbx::assets::asset_type_of(path);
+
+    if (type == sbx::assets::asset_type::script) {
+      state.scripts_changed = true;
+    }
 
     if (!sbx::assets::is_manifested(type)) {
       continue;

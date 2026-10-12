@@ -45,7 +45,7 @@ auto known_extensions() -> std::span<const std::pair<std::string_view, asset_typ
 }
 
 auto is_manifested(asset_type type) -> bool {
-  return type != asset_type::unknown && type != asset_type::script;
+  return type != asset_type::unknown;
 }
 
 auto has_import_settings(asset_type type) -> bool {

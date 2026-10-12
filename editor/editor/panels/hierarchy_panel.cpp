@@ -227,9 +227,12 @@ auto hierarchy_panel::_draw_node_row(editor_state& state, sbx::scenes::scene& sc
       if (const auto* payload = ImGui::AcceptDragDropPayload(node_drag_drop_payload_type, ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
         const auto dragged_id = sbx::math::uuid::from_value(*static_cast<const std::uint64_t*>(payload->Data));
 
+        // Between top-level rows, the drop also picks the scene those rows belong to.
+        const auto row_scene = parent_id ? std::nullopt : std::optional<std::uint32_t>{scene.scene_of(node)};
+
         switch (zone) {
-          case drop_zone::before: _try_reparent(state, scene, dragged_id, parent_id, sibling_index); break;
-          case drop_zone::after: _try_reparent(state, scene, dragged_id, parent_id, sibling_index + 1u); break;
+          case drop_zone::before: _try_reparent(state, scene, dragged_id, parent_id, sibling_index, row_scene); break;
+          case drop_zone::after: _try_reparent(state, scene, dragged_id, parent_id, sibling_index + 1u, row_scene); break;
           case drop_zone::into: _try_reparent(state, scene, dragged_id, node.id(), relationship.children.size()); break;
         }
       }

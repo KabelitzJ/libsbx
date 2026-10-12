@@ -305,3 +305,29 @@ TEST(scene_serializer_test, loaded_scenes_share_one_world_but_serialize_separate
   EXPECT_TRUE(world.members_of(1u).empty());
   EXPECT_EQ(world.members_of(2u).size(), 2u);
 }
+
+TEST(scene_serializer_test, script_ids_round_trip_and_scenes_without_them_still_load) {
+  auto source = scenes::scene{};
+
+  auto player = source.create_node("Player");
+  const auto script_id = math::uuid::create();
+
+  player.add_component<scenes::script_component>().scripts.push_back(scenes::script_entry{.class_name = "Game.PlayerController", .script = script_id});
+
+  auto loaded = scenes::scene{};
+  load_from_string(loaded, serializer::serialize(source));
+
+  const auto& entry = loaded.find(player.id()).get_component<scenes::script_component>().scripts.at(0u);
+
+  EXPECT_EQ(entry.class_name, "Game.PlayerController");
+  EXPECT_EQ(entry.script, script_id);
+
+  // Saved before scripts had ids: only the class name.
+  auto old_scene = scenes::scene{};
+  load_from_string(old_scene, "assets: {}\nnodes:\n  - id: 7\n    tag: Enemy\n    components:\n      - type: script\n        class_name: Game.EnemyBrain\n");
+
+  const auto& old_entry = old_scene.find(math::uuid::from_value(7u)).get_component<scenes::script_component>().scripts.at(0u);
+
+  EXPECT_EQ(old_entry.class_name, "Game.EnemyBrain");
+  EXPECT_EQ(old_entry.script, math::uuid::nil());
+}

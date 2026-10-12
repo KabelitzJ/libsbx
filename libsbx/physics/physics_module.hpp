@@ -152,7 +152,7 @@ public:
    * @brief The first collider @p shape hits when swept from @p pose along @p direction, rotation held fixed. Only valid while simulating, like raycast().
    *
    * @param direction Need not be normalized.
-   * @param ignore A node to skip, typically the caster itself.
+   * @param ignore A node to skip together with its whole subtree, typically the caster itself.
    * @param include_triggers Whether trigger colliders count as hits.
    * @param include_dynamic Whether dynamic and kinematic bodies count as hits; false leaves static colliders, meshes and terrain.
    *
@@ -164,6 +164,7 @@ public:
    * @brief Every collider overlapping @p shape at @p pose, with a push-out normal and depth per hit. A non-convex mesh or terrain yields one hit per overlapping triangle.
    *
    * @param out_hits Cleared, then receives the hits.
+   * @param ignore A node to skip together with its whole subtree.
    */
   auto overlap_shape(scenes::scene& scene, const convex_shape& shape, const transform& pose, std::vector<sphere_query_hit>& out_hits, const scenes::layer_mask& mask = scenes::layer_mask::everything(), const scenes::node& ignore = scenes::node{}, bool include_triggers = true) -> void;
 
@@ -273,6 +274,9 @@ private:
 
   // Sweeps fast continuous bodies along this step's displacement against static geometry; call after the velocity solve, before integration.
   [[nodiscard]] auto _sweep_continuous_bodies(scenes::scene& scene, std::float_t dt) -> std::vector<continuous_clamp>;
+
+  // Queries can run before the first physics step of a play session (e.g. a Move in OnCreate): fills the broadphase then, instead of answering from empty trees.
+  auto _ensure_broadphase(scenes::scene& scene) -> void;
 
   // Drops every leaf, pair and manifold when simulation starts: Stop reloads the scene in place, so held nodes are stale.
   auto _reset(scenes::scene& scene) -> void;

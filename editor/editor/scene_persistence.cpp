@@ -3,6 +3,7 @@
 #include <editor/editor_ui_layer.hpp>
 
 #include <algorithm>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -27,6 +28,8 @@
 #include <libsbx/scenes/components.hpp>
 #include <libsbx/scenes/scene_serializer.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
+
+#include <libsbx/scripting/scripting_module.hpp>
 
 namespace editor {
 
@@ -138,6 +141,9 @@ auto editor_ui_layer::_save_scene(std::uint32_t handle, const std::filesystem::p
     return;
   }
 
+  // Scenes saved before scripts had ids gain them now, so later renames don't orphan these attachments.
+  sbx::core::engine::get_module<sbx::scripting::scripting_module>().assign_missing_script_ids(scenes_module.active_scene(), handle);
+
   auto asset = assets_module.create_scene(sbx::scenes::scene_serializer::build(scenes_module.active_scene(), handle), path.stem().string());
   assets_module.save_scene(asset, path);
 
@@ -220,6 +226,10 @@ auto editor_ui_layer::_refresh_dirty_scenes() -> void {
     _state.dirty_scenes.clear();
     _dirty_scenes_stale = true;
     return;
+  }
+
+  if (std::exchange(_state.dirty_refresh_requested, false)) {
+    _dirty_scenes_stale = true;
   }
 
   if (!_dirty_scenes_stale && _state.commands.revision() == _dirty_revision) {
@@ -331,57 +341,126 @@ auto editor_ui_layer::_draw_save_as_dialog() -> void {
 }
 
 auto editor_ui_layer::_draw_unsaved_changes_dialog() -> void {
+  static constexpr auto popup_id = ICON_MDI_CONTENT_SAVE_ALERT " Unsaved Changes###unsaved_changes";
+  static constexpr auto button_width = 120.0f;
+  static constexpr auto max_listed_rows = 5u;
+
   if (_show_unsaved_changes_dialog) {
-    ImGui::OpenPopup("Unsaved Changes");
+    ImGui::OpenPopup(popup_id);
     _show_unsaved_changes_dialog = false;
   }
 
-  if (ImGui::BeginPopupModal("Unsaved Changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-    auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2{0.5f, 0.5f});
+  ImGui::SetNextWindowSize(ImVec2{480.0f, 0.0f}, ImGuiCond_Appearing);
 
-    ImGui::Text(ICON_MDI_CONTENT_SAVE_ALERT " These scenes have unsaved changes:");
+  // Pushed around Begin only: padding and spacing are read when the window opens.
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{20.0f, 18.0f});
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{8.0f, 8.0f});
+
+  const auto is_open = ImGui::BeginPopupModal(popup_id, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
+
+  ImGui::PopStyleVar(2);
+
+  if (!is_open) {
+    return;
+  }
+
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+
+  const auto scene_name = [&](std::uint32_t handle) {
+    const auto loaded = scenes_module.find_loaded_scene(handle);
+    return loaded ? loaded->name : std::string{"Scene"};
+  };
+
+  const auto headline = [&]() -> std::string {
+    switch (_pending_scene_action) {
+      case pending_scene_action::quit: return "Save your changes before quitting?";
+      case pending_scene_action::new_scene: return "Save your changes before creating a new scene?";
+      case pending_scene_action::open_scene: return fmt::format("Save your changes before opening '{}'?", _pending_open_path.stem().string());
+      case pending_scene_action::unload_scene: return fmt::format("Save your changes to '{}' before unloading it?", scene_name(_pending_scene_handle));
+      case pending_scene_action::none: break;
+    }
+
+    return "Save your changes?";
+  }();
+
+  ImGui::TextColored(ImVec4{1.0f, 0.72f, 0.25f, 1.0f}, ICON_MDI_ALERT_OUTLINE);
+  ImGui::SameLine();
+  ImGui::TextUnformatted(headline.c_str());
+  ImGui::TextDisabled("Changes you don't save will be lost.");
+
+  ImGui::Spacing();
+
+  // A scrolling list beyond a handful of scenes, so the dialog never grows past the screen.
+  const auto rows = std::min(_guarded_scenes.size(), std::size_t{max_listed_rows});
+  const auto list_height = static_cast<std::float_t>(rows) * ImGui::GetTextLineHeightWithSpacing() + ImGui::GetStyle().WindowPadding.y * 2.0f;
+
+  if (ImGui::BeginChild("##unsaved_scenes", ImVec2{0.0f, list_height}, ImGuiChildFlags_Borders)) {
+    for (const auto handle : _guarded_scenes) {
+      const auto loaded = scenes_module.find_loaded_scene(handle);
+
+      if (!loaded) {
+        continue;
+      }
+
+      ImGui::TextUnformatted(fmt::format(ICON_MDI_FILE_TREE " {}", loaded->name).c_str());
+      ImGui::SameLine();
+      ImGui::TextDisabled("%s", loaded->path.empty() ? "(never saved)" : loaded->path.generic_string().c_str());
+    }
+  }
+
+  ImGui::EndChild();
+
+  ImGui::Spacing();
+  ImGui::Separator();
+  ImGui::Spacing();
+
+  // Right-aligned like a native dialog, with Save as the primary action.
+  const auto buttons_width = button_width * 3.0f + ImGui::GetStyle().ItemSpacing.x * 2.0f;
+  ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, ImGui::GetContentRegionAvail().x - buttons_width));
+
+  if (ImGui::Button("Cancel", ImVec2{button_width, 0.0f}) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+    ImGui::CloseCurrentPopup();
+    _pending_scene_action = pending_scene_action::none;
+  }
+
+  ImGui::SameLine();
+
+  if (ImGui::Button("Don't Save", ImVec2{button_width, 0.0f})) {
+    ImGui::CloseCurrentPopup();
+    _run_pending_scene_action();
+  }
+
+  ImGui::SameLine();
+
+  ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+
+  const auto save_clicked = ImGui::Button(ICON_MDI_CONTENT_SAVE " Save", ImVec2{button_width, 0.0f});
+
+  ImGui::PopStyleColor();
+
+  ImGui::SetItemDefaultFocus();
+
+  if (save_clicked || ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) {
+    auto all_saved = true;
 
     for (const auto handle : _guarded_scenes) {
-      if (const auto loaded = scenes_module.find_loaded_scene(handle)) {
-        ImGui::BulletText("%s", loaded->name.c_str());
+      if (!_save_scene_or_prompt(handle)) {
+        // Save As opened; the action is guarded again once it's done.
+        _run_pending_after_save_as = true;
+        all_saved = false;
+        break;
       }
     }
 
-    if (ImGui::Button(ICON_MDI_CONTENT_SAVE " Save")) {
-      auto all_saved = true;
-
-      for (const auto handle : _guarded_scenes) {
-        if (!_save_scene_or_prompt(handle)) {
-          // Save As opened; the action is guarded again once it's done.
-          _run_pending_after_save_as = true;
-          all_saved = false;
-          break;
-        }
-      }
-
-      if (all_saved) {
-        _run_pending_scene_action();
-      }
-
-      ImGui::CloseCurrentPopup();
-    }
-
-    ImGui::SameLine();
-
-    if (ImGui::Button("Don't Save")) {
-      ImGui::CloseCurrentPopup();
+    if (all_saved) {
       _run_pending_scene_action();
     }
 
-    ImGui::SameLine();
-
-    if (ImGui::Button("Cancel")) {
-      ImGui::CloseCurrentPopup();
-      _pending_scene_action = pending_scene_action::none;
-    }
-
-    ImGui::EndPopup();
+    ImGui::CloseCurrentPopup();
   }
+
+  ImGui::EndPopup();
 }
 
 auto editor_ui_layer::_new_scene() -> void {

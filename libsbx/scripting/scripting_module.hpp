@@ -161,8 +161,25 @@ public:
    */
   auto run_on_destroy(scenes::scene& target) -> void;
 
-  /** @brief Recompiles the project's scripts and, on success, reloads the game assembly. Only call while no game script is instantiated. */
-  auto recompile_scripts() -> void;
+  /**
+   * @brief Recompiles the project's scripts and, on success, reloads the game assembly and runs resolve_renamed_scripts(). Only call while no game script is instantiated.
+   *
+   * @return Whether resolving renamed scripts changed any attached script, so open scenes now differ from their files.
+   */
+  auto recompile_scripts() -> bool;
+
+  /** @brief The .cs asset whose file name matches the class's name (without its namespace); nil if none. Scripts are named after their file. */
+  [[nodiscard]] auto script_asset_of(std::string_view class_name) const -> math::uuid;
+
+  /**
+   * @brief Points attached scripts whose class no longer exists at the class now named after their .cs file, i.e. follows renames by script id.
+   *
+   * @return Whether any attached script changed.
+   */
+  auto resolve_renamed_scripts(scenes::scene& target) -> bool;
+
+  /** @brief Gives one loaded scene's attached scripts their script id where it's missing (scenes saved before scripts had ids). Call before saving. */
+  auto assign_missing_script_ids(scenes::scene& target, std::uint32_t handle) -> void;
 
   /**
    * @brief Whether the last script compile left a usable assembly.

@@ -54,6 +54,9 @@ auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx:
 /** @brief An animation graph picker; preview_mesh_id (nil if unknown) lets the graph editor list the mesh's real clip names. */
 auto draw_animation_graph_picker(editor_state& state, const char* popup_id, sbx::assets::animation_graph_handle& slot, sbx::math::uuid preview_mesh_id) -> bool;
 
+/** @brief An environment map (.hdr) picker for skybox.environment. */
+auto draw_environment_map_picker(editor_state& state, const char* popup_id, sbx::assets::environment_map_handle& slot) -> bool;
+
 /** @brief A shader graph picker with a button to open the graph editor. */
 auto draw_shader_graph_picker(editor_state& state, const char* popup_id, sbx::assets::shader_graph_handle& slot) -> bool;
 

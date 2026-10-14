@@ -304,6 +304,33 @@ auto draw_animation_graph_picker(editor_state& state, const char* popup_id, sbx:
   return result.changed;
 }
 
+auto draw_environment_map_picker(editor_state& state, const char* popup_id, sbx::assets::environment_map_handle& slot) -> bool {
+  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+
+  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::asset_picker_item{};
+
+  const auto options = sbx::render::asset_picker_options{
+    .kind = sbx::assets::asset_type::environment_map,
+    .allow_none = true,
+    .show_reveal_button = true,
+    .width = ImGui::CalcItemWidth(),
+  };
+
+  const auto result = sbx::render::draw_asset_picker(popup_id, current, {}, options);
+
+  if (result.cleared) {
+    slot = sbx::assets::environment_map_handle{};
+  } else if (result.changed) {
+    slot = assets_module.load_environment_map(result.picked.path);
+  }
+
+  if (result.reveal_requested && slot.is_valid()) {
+    state.request_reveal_in_browser(relative_asset_path(assets_module, slot->id()));
+  }
+
+  return result.changed;
+}
+
 auto draw_shader_graph_picker(editor_state& state, const char* popup_id, sbx::assets::shader_graph_handle& slot) -> bool {
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 

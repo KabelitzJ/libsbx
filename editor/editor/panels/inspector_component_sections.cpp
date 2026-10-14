@@ -675,7 +675,7 @@ auto draw_audio_listener_section(editor_state& state, sbx::scenes::scene& target
   }
 }
 
-auto draw_skybox_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
+auto draw_skybox_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& /*assets_module*/) -> void {
   if (!draw_component_header<sbx::scenes::skybox>(state, target, node, ICON_MDI_EARTH, "Skybox")) {
     return;
   }
@@ -683,18 +683,18 @@ auto draw_skybox_section(editor_state& state, sbx::scenes::scene& target, sbx::s
   auto& sky = node.get_component<sbx::scenes::skybox>();
   static auto pending = std::optional<sbx::scenes::skybox>{};
 
-  if (sky.environment.is_valid()) {
-    ImGui::LabelText("Environment", "%s", relative_asset_path(assets_module, sky.environment->id()).string().c_str());
+  {
+    const auto before = sky;
 
-    if (ImGui::IsItemHovered()) {
-      ImGui::SetTooltip("%s", asset_path_text(assets_module, sky.environment->id()).c_str());
+    if (draw_property_row("Environment", [&] { return draw_environment_map_picker(state, "##skybox_environment_picker", sky.environment); })) {
+      state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::skybox>>(node.id(), before, sky, "Edit Skybox"));
     }
+  }
 
+  if (sky.environment.is_valid()) {
     const auto* environment = sky.environment.get();
     const auto is_baked = environment->radiance_index() != sbx::assets::environment_map::invalid_index && environment->irradiance_index() != sbx::assets::environment_map::invalid_index && environment->prefiltered_index() != sbx::assets::environment_map::invalid_index;
     ImGui::LabelText("Baked", "%s", is_baked ? "Yes" : "No");
-  } else {
-    ImGui::LabelText("Environment", "(None)");
   }
 
   ImGui::DragFloat("Background Intensity", &sky.intensity, 0.05f, 0.0f, 100.0f);

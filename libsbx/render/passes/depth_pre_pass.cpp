@@ -25,7 +25,8 @@
 
 namespace sbx::render {
 
-depth_pre_pass::depth_pre_pass() {
+depth_pre_pass::depth_pre_pass(graphics::samples samples)
+: _samples{samples} {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& shader_cache = graphics_module.shader_cache();
@@ -48,7 +49,7 @@ depth_pre_pass::depth_pre_pass() {
       .depth_test = true,
       .depth_write = true,
       .depth_compare = graphics::compare_operation::less_or_equal,
-      .samples = render_pass::sample_count,
+      .samples = _samples,
       .name = name
     });
   };
@@ -87,7 +88,7 @@ auto depth_pre_pass::_resolve_custom_pipeline(const std::string& shader_path, bo
     .depth_test = true,
     .depth_write = true,
     .depth_compare = graphics::compare_operation::less_or_equal,
-    .samples = render_pass::sample_count,
+    .samples = _samples,
   }, "Depth Pre");
 }
 
@@ -103,21 +104,37 @@ auto depth_pre_pass::declare(graphics_pass_builder& builder, const graph_resourc
     .image = resources.depth,
     .access_mask = graphics::access::depth_stencil_attachment_write | graphics::access::depth_stencil_attachment_read,
     .store_op = graphics::attachment_store_op::store,
-    .clear_value = graphics::depth_stencil_clear_value{1.0f, 0u},
-    .resolve_image = resources.scene_depth,
-    .resolve_mode = _scene_depth_resolve_mode
+    .clear_value = graphics::depth_stencil_clear_value{1.0f, 0u}
   };
 
-  const auto group_index = builder.add_group(group);
+  // Vulkan can't resolve a single-sample image, so without MSAA a second group copies depth into scene depth.
+  if (_samples != graphics::samples::count_1) {
+    group.depth->resolve_image = resources.scene_depth;
+    group.depth->resolve_mode = _scene_depth_resolve_mode;
+  }
+
+  auto group_index = builder.add_group(group);
+
+  if (_samples == graphics::samples::count_1) {
+    group_index = builder.add_group(render_attachment_group{.extent = resources.extent});
+
+    builder.reads_image(resources.depth, graphics::pipeline_stage::transfer, graphics::access::transfer_read, graphics::image_layout::transfer_source_optimal, group_index);
+    builder.writes_image(resources.scene_depth, graphics::pipeline_stage::transfer, graphics::access::transfer_write, graphics::image_layout::transfer_destination_optimal, group_index);
+  }
 
   // No pass declares a read of scene_depth (it's sampled through bindless), so transition it here.
   builder.transitions_after(group_index, resources.scene_depth, graphics::pipeline_stage::fragment_shader, graphics::access::shader_read, graphics::image_layout::shader_read_only_optimal);
 }
 
-auto depth_pre_pass::execute(render_context& context, std::uint32_t /*group*/) -> void {
+auto depth_pre_pass::execute(render_context& context, std::uint32_t group) -> void {
   SBX_PROFILE_SCOPE("depth_pre_pass::execute");
   SBX_STATS_SCOPE("depth_pre_pass::execute");
   SBX_PROFILE_GPU_SCOPE((*context.command_buffer), "depth_pre_pass::execute");
+
+  if (group == 1u) {
+    _copy_scene_depth(context);
+    return;
+  }
 
   if (!context.packet->camera.is_active) {
     return;
@@ -125,6 +142,22 @@ auto depth_pre_pass::execute(render_context& context, std::uint32_t /*group*/) -
 
   bind_globals(context);
   submit_draw_commands_indirect(context, context.packet->opaque_commands, _pipelines, [this](const std::string& shader_path, bool is_double_sided) { return _resolve_custom_pipeline(shader_path, is_double_sided); });
+}
+
+auto depth_pre_pass::_copy_scene_depth(render_context& context) -> void {
+  auto& registry = core::engine::get_module<graphics::graphics_module>().resource_registry();
+
+  const auto& depth = registry.get<graphics::image>(context.depth);
+  const auto& scene_depth = registry.get<graphics::image>(context.scene_depth);
+
+  const auto subresource = VkImageSubresourceLayers{VK_IMAGE_ASPECT_DEPTH_BIT, 0u, 0u, 1u};
+
+  auto region = VkImageCopy{};
+  region.srcSubresource = subresource;
+  region.dstSubresource = subresource;
+  region.extent = VkExtent3D{depth.extent().x(), depth.extent().y(), 1u};
+
+  vkCmdCopyImage(context.command_buffer->handle(), depth.handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, scene_depth.handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &region);
 }
 
 } // namespace sbx::render

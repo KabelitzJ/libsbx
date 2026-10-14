@@ -19,6 +19,8 @@
 #include <libsbx/core/engine.hpp>
 #include <libsbx/core/project.hpp>
 
+#include <libsbx/graphics/graphics_module.hpp>
+
 #include <libsbx/math/uuid.hpp>
 #include <libsbx/math/vector3.hpp>
 
@@ -74,6 +76,11 @@ auto project_settings_panel::draw(editor_state& state) -> void {
 
     if (ImGui::BeginTabItem("Audio")) {
       _draw_audio_tab();
+      ImGui::EndTabItem();
+    }
+
+    if (ImGui::BeginTabItem("Rendering")) {
+      _draw_rendering_tab();
       ImGui::EndTabItem();
     }
 
@@ -142,6 +149,38 @@ auto project_settings_panel::_draw_physics_tab() -> void {
   }
 
   ImGui::TextDisabled("%.1f physics/FixedUpdate steps per second.", 1.0f / project.fixed_timestep());
+}
+
+auto project_settings_panel::_draw_rendering_tab() -> void {
+  static constexpr auto msaa_options = std::array<std::pair<std::uint32_t, const char*>, 4u>{{{1u, "Off"}, {2u, "2x"}, {4u, "4x"}, {8u, "8x"}}};
+
+  auto& project = sbx::core::engine::project();
+
+  const auto& limits = sbx::core::engine::get_module<sbx::graphics::graphics_module>().physical_device().properties().limits;
+  const auto supported = limits.framebufferColorSampleCounts & limits.framebufferDepthSampleCounts;
+
+  const auto current = std::ranges::find(msaa_options, project.msaa_samples(), &std::pair<std::uint32_t, const char*>::first);
+
+  if (ImGui::BeginCombo("MSAA", current != msaa_options.end() ? current->second : "Custom")) {
+    for (const auto& [samples, label] : msaa_options) {
+      if ((supported & samples) == 0u) {
+        continue;
+      }
+
+      if (ImGui::Selectable(label, samples == project.msaa_samples())) {
+        project.set_msaa_samples(samples);
+        project.save();
+      }
+    }
+
+    ImGui::EndCombo();
+  }
+
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Smooths geometry edges by rendering several samples per pixel; each step up costs GPU memory and fill rate.\nFor shader and alpha-cutout edges, enable FXAA on the camera; both can be combined.");
+  }
+
+  ImGui::TextDisabled("Applies immediately; counts the GPU doesn't support aren't listed.");
 }
 
 // Whether @p ancestor is @p candidate or one of its parents, so a drop can't create a cycle.

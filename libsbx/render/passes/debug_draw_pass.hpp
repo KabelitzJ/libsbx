@@ -23,7 +23,7 @@ class debug_draw_pass final : public graphics_pass {
 
 public:
 
-  debug_draw_pass();
+  explicit debug_draw_pass(graphics::samples samples);
 
   [[nodiscard]] auto name() const -> std::string_view override {
     return "Debug Draw";
@@ -42,6 +42,8 @@ private:
   // One buffer per frame slot, grown geometrically, since the vertex count varies per frame.
   std::array<graphics::buffer_handle, graphics::swapchain::max_frames_in_flight> _buffers{};
   std::array<std::size_t, graphics::swapchain::max_frames_in_flight> _capacities{};
+
+  graphics::samples _samples;
 
 }; // class debug_draw_pass
 

@@ -58,9 +58,10 @@ public:
   inline static constexpr auto default_fixed_timestep = std::float_t{1.0f / 60.0f};
 
   inline static constexpr auto default_max_voices = std::uint32_t{64u};
+  inline static constexpr auto default_msaa_samples = std::uint32_t{4u};
 
   /** @brief Bumped whenever the on-disk format changes; written by @ref save, checked by @ref load. */
-  inline static constexpr auto current_format_version = std::uint32_t{5u}; // v2: added layers/layer_collision_matrix, v3: added physics/time, v4: added audio, v5: scene list replaces startup_scene
+  inline static constexpr auto current_format_version = std::uint32_t{6u}; // v2: added layers/layer_collision_matrix, v3: added physics/time, v4: added audio, v5: scene list replaces startup_scene, v6: added rendering
 
   project() {
     _layers[0] = "Default";
@@ -237,6 +238,15 @@ public:
     _max_voices = count;
   }
 
+  /** @brief MSAA samples per pixel (1 = off, 2, 4 or 8); the renderer clamps it to what the device supports. */
+  [[nodiscard]] auto msaa_samples() const noexcept -> std::uint32_t {
+    return _msaa_samples;
+  }
+
+  auto set_msaa_samples(std::uint32_t samples) noexcept -> void {
+    _msaa_samples = samples;
+  }
+
 private:
 
   std::filesystem::path _root{};
@@ -261,6 +271,8 @@ private:
     mixer_group{math::uuid::from_value(5u), "Voice", master_mixer_group_id}
   };
   std::uint32_t _max_voices{default_max_voices};
+
+  std::uint32_t _msaa_samples{default_msaa_samples};
 
 }; // class project
 

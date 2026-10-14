@@ -184,6 +184,8 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetViewportOffset", reinterpret_cast<void*>(&interop::camera_get_viewport_offset));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RenderSettings_SetWireframeEnabled", reinterpret_cast<void*>(&interop::render_settings_set_wireframe_enabled));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RenderSettings_GetWireframeEnabled", reinterpret_cast<void*>(&interop::render_settings_get_wireframe_enabled));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RenderSettings_GetMsaaSamples", reinterpret_cast<void*>(&interop::render_settings_get_msaa_samples));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RenderSettings_SetMsaaSamples", reinterpret_cast<void*>(&interop::render_settings_set_msaa_samples));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetFovDegrees", reinterpret_cast<void*>(&interop::camera_get_fov_degrees));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_SetFovDegrees", reinterpret_cast<void*>(&interop::camera_set_fov_degrees));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetNearPlane", reinterpret_cast<void*>(&interop::camera_get_near_plane));

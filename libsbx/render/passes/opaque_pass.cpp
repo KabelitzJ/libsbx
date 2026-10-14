@@ -39,7 +39,7 @@ auto opaque_pass::_make_pipeline(memory::observer_ptr<const graphics::shader> sh
     .depth_test = true,
     .depth_write = false,
     .depth_compare = graphics::compare_operation::less_or_equal,
-    .samples = render_pass::sample_count,
+    .samples = _samples,
     .specialization_constants = {{0u, shadow_pcf_quality}},
     .name = name
   });
@@ -59,12 +59,13 @@ auto opaque_pass::_resolve_custom_pipeline(const std::string& shader_path, bool 
     .depth_test = true,
     .depth_write = false,
     .depth_compare = graphics::compare_operation::less_or_equal,
-    .samples = render_pass::sample_count,
+    .samples = _samples,
     .specialization_constants = {{0u, shadow_pcf_quality}},
   }, "Mesh Opaque");
 }
 
-opaque_pass::opaque_pass() {
+opaque_pass::opaque_pass(graphics::samples samples)
+: _samples{samples} {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& shader_cache = graphics_module.shader_cache();

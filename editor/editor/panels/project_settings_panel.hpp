@@ -33,6 +33,8 @@ private:
 
   auto _draw_audio_tab() -> void;
 
+  auto _draw_rendering_tab() -> void;
+
   auto _draw_scenes_tab() -> void;
 
   // The layer rows in display order, resynced when the tab appears and changed only by Add and each row's remove, so a layer being retyped through an empty name doesn't vanish.

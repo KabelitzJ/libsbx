@@ -19,7 +19,7 @@ class grid_pass final : public graphics_pass {
 
 public:
 
-  grid_pass();
+  explicit grid_pass(graphics::samples samples);
 
   [[nodiscard]] auto name() const -> std::string_view override {
     return "Grid";
@@ -34,6 +34,8 @@ public:
 private:
 
   memory::observer_ptr<graphics::graphics_pipeline> _pipeline{nullptr};
+
+  graphics::samples _samples;
 
 }; // class grid_pass
 

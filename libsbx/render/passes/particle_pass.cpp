@@ -107,7 +107,8 @@ auto make_additive_blend_attachments() -> std::vector<graphics::blend_attachment
   };
 }
 
-particle_pass::particle_pass() {
+particle_pass::particle_pass(graphics::samples samples)
+: _samples{samples} {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& shader_cache = graphics_module.shader_cache();
@@ -152,7 +153,7 @@ particle_pass::particle_pass() {
     .depth_test = true,
     .depth_write = false,
     .depth_compare = graphics::compare_operation::less_or_equal,
-    .samples = render_pass::sample_count,
+    .samples = _samples,
     .color_blend_attachments = make_alpha_blend_blend_attachments(),
     .name = "Particles Billboard Alpha Blend"
   };
@@ -166,7 +167,7 @@ particle_pass::particle_pass() {
     .depth_test = true,
     .depth_write = false,
     .depth_compare = graphics::compare_operation::less_or_equal,
-    .samples = render_pass::sample_count,
+    .samples = _samples,
     .color_blend_attachments = make_additive_blend_attachments(),
     .name = "Particles Billboard Additive"
   };

@@ -191,6 +191,13 @@ auto mark_ready(sync_state& state, graphics::pipeline_stage stage, graphics::acc
   state.touched = true;
 }
 
+auto render_graph::clear() -> void {
+  _compiled.clear();
+  _passes.clear();
+  _pass_timings.clear();
+  _frames_executed = 0u;
+}
+
 auto render_graph::compile(const graph_resources& resources) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& registry = graphics_module.resource_registry();
@@ -325,7 +332,8 @@ auto render_graph::compile(const graph_resources& resources) -> void {
           info.storeOp = graphics::to_vk_enum<VkAttachmentStoreOp>(op.store_op);
           info.clearValue.color = VkClearColorValue{{op.clear_color.r(), op.clear_color.g(), op.clear_color.b(), op.clear_color.a()}};
 
-          if (op.resolve_image.is_valid()) {
+          // Without MSAA a pass's multisampled target is its resolve target, so there's nothing to resolve.
+          if (op.resolve_image.is_valid() && op.resolve_image != op.image) {
             if (!image_states[op.resolve_image].touched) {
               record_clear(op.resolve_image, op.group_index); // first written by this group's resolve
             }

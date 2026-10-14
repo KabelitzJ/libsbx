@@ -11,6 +11,13 @@ namespace Sbx.Core
     ScreenBand = 1,
   }
 
+  public enum AntiAliasingMode : uint
+  {
+    None = 0,
+    /** Smooths every edge on screen, including shader and alpha-cutout ones, at the cost of some sharpness. Combines with RenderSettings.MsaaSamples. */
+    Fxaa = 1,
+  }
+
   /**
    * A camera's post processing (CameraSettings.PostProcess) -- everything the renderer does to its
    * lit image before the UI. A copy: read it, change fields, assign it back. Every effect is off or
@@ -69,6 +76,14 @@ namespace Sbx.Core
     public float AmbientOcclusionIntensity;
     /** Hemisphere samples per (half-resolution) pixel, 1..32. */
     public uint AmbientOcclusionSamples;
+
+    private uint _antiAliasing;
+
+    public AntiAliasingMode AntiAliasing
+    {
+      get => (AntiAliasingMode)_antiAliasing;
+      set => _antiAliasing = (uint)value;
+    }
 
     public bool AmbientOcclusionEnabled
     {

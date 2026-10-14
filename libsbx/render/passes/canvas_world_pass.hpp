@@ -25,7 +25,7 @@ class canvas_world_pass final : public graphics_pass {
 
 public:
 
-  canvas_world_pass();
+  explicit canvas_world_pass(graphics::samples samples);
 
   [[nodiscard]] auto name() const -> std::string_view override {
     return "Canvas World";
@@ -49,6 +49,8 @@ private:
 
   std::array<graphics::buffer_handle, graphics::swapchain::max_frames_in_flight> _glyph_buffers{};
   std::array<std::size_t, graphics::swapchain::max_frames_in_flight> _glyph_capacities{};
+
+  graphics::samples _samples;
 
 }; // class canvas_world_pass
 

@@ -93,6 +93,7 @@ auto texture_asset_key(asset_key_table& keys, const math::uuid& id) -> std::stri
 auto serialize_post_process(const post_process_settings& settings, asset_key_table& keys) -> YAML::Node {
   auto node = YAML::Node{};
   node["exposure"] = settings.exposure;
+  node["anti_aliasing"] = settings.anti_aliasing == post_anti_aliasing::fxaa ? "fxaa" : "none";
 
   auto bloom = YAML::Node{};
   bloom["enabled"] = settings.bloom.enabled;
@@ -159,6 +160,10 @@ auto deserialize_post_process(const YAML::Node& node, const std::unordered_map<s
   };
 
   read(node, "exposure", settings.exposure);
+
+  if (node["anti_aliasing"]) {
+    settings.anti_aliasing = node["anti_aliasing"].as<std::string>() == "fxaa" ? post_anti_aliasing::fxaa : post_anti_aliasing::none;
+  }
 
   if (const auto bloom = node["bloom"]) {
     read(bloom, "enabled", settings.bloom.enabled);

@@ -65,7 +65,8 @@ struct render_context {
   math::matrix4x4 inverse_view_projection{math::matrix4x4::identity};
 
   graphics::image_handle depth{};
-  // Single-sample depth (depth_pre_pass's resolve), shader_read_only_optimal after that pass.
+  // Single-sample depth (depth_pre_pass's resolve, or its copy without MSAA), shader_read_only_optimal after that pass.
+  graphics::image_handle scene_depth{};
   std::uint32_t scene_depth_index{0u};
 
   // ambient_occlusion_pass's half-resolution targets (raw -> blurred): sampled and storage indices.
@@ -78,6 +79,9 @@ struct render_context {
   graphics::image_handle color{};
   graphics::image_handle color_msaa{};
   std::uint32_t color_index{0u};
+
+  // tonemap_pass's output, which fxaa_pass reads.
+  std::uint32_t ldr_index{0u};
 
   // The tonemapped, presentable result, shader-readable before any compositor runs. Only fresh when a camera was active.
   graphics::image_handle final_image{};
@@ -177,7 +181,6 @@ class render_pass : public utility::noncopyable {
 public:
 
   inline static constexpr auto hdr_format = graphics::format::r16g16b16a16_sfloat;
-  inline static constexpr auto sample_count = graphics::samples::count_4;
 
   virtual ~render_pass() = default;
 

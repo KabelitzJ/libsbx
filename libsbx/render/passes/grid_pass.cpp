@@ -31,7 +31,8 @@ struct grid_push {
   graphics::buffer::address_type frame_address;
 }; // struct grid_push
 
-grid_pass::grid_pass() {
+grid_pass::grid_pass(graphics::samples samples)
+: _samples{samples} {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& shader_cache = graphics_module.shader_cache();
@@ -52,7 +53,7 @@ grid_pass::grid_pass() {
     .depth_test = true,
     .depth_write = false,
     .depth_compare = graphics::compare_operation::less_or_equal,
-    .samples = render_pass::sample_count,
+    .samples = _samples,
     .color_blend_attachments = {graphics::blend_attachment{
       .enable = true,
       .source_color = graphics::blend_factor::source_alpha,

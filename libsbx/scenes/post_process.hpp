@@ -12,6 +12,12 @@
 
 namespace sbx::scenes {
 
+/** @brief Screen-space anti-aliasing after tonemapping, on top of the project's MSAA. FXAA also smooths shader and alpha-cutout edges, at the cost of some sharpness. */
+enum class post_anti_aliasing : std::uint8_t {
+  none,
+  fxaa
+}; // enum class post_anti_aliasing
+
 /**
  * @brief Everything the renderer does to a camera's lit image before the UI, one section per
  * effect. New effects (depth of field, colour grading, fog, ambient occlusion) each get their own
@@ -95,6 +101,7 @@ struct post_process_settings {
   }; // struct ambient_occlusion_settings
 
   std::float_t exposure{0.0f}; // EV stops applied as exp2(exposure) before tonemapping; 0 = unchanged.
+  post_anti_aliasing anti_aliasing{post_anti_aliasing::none};
   bloom_settings bloom{};
   ambient_occlusion_settings ambient_occlusion{};
   fog_settings fog{};

@@ -20,7 +20,7 @@ class skybox_pass final : public graphics_pass {
 
 public:
 
-  skybox_pass();
+  explicit skybox_pass(graphics::samples samples);
 
   [[nodiscard]] auto name() const -> std::string_view override {
     return "Skybox";
@@ -33,6 +33,8 @@ public:
 private:
 
   memory::observer_ptr<graphics::graphics_pipeline> _pipeline{nullptr};
+
+  graphics::samples _samples;
 
 }; // class skybox_pass
 

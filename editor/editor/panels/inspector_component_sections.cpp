@@ -121,6 +121,20 @@ auto draw_camera_section(editor_state& state, sbx::scenes::scene& target, sbx::s
   ImGui::SeparatorText("Post Processing");
   ImGui::DragFloat("Exposure", &post.exposure, 0.05f, -8.0f, 8.0f);
   bracket_edit(state, target, node, camera, pending, "Edit Camera");
+
+  static constexpr auto anti_aliasing_labels = std::array<const char*, 2u>{"None", "FXAA"};
+
+  auto anti_aliasing_index = static_cast<int>(post.anti_aliasing);
+
+  if (ImGui::Combo("Anti-aliasing", &anti_aliasing_index, anti_aliasing_labels.data(), static_cast<int>(anti_aliasing_labels.size()))) {
+    post.anti_aliasing = static_cast<sbx::scenes::post_anti_aliasing>(anti_aliasing_index);
+  }
+
+  bracket_edit(state, target, node, camera, pending, "Edit Camera");
+
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("FXAA also smooths shader and alpha-cutout edges that MSAA misses, but softens the image slightly. Combines with the project's MSAA (Project Settings > Rendering).");
+  }
   ImGui::Checkbox("Bloom", &post.bloom.enabled);
   bracket_edit(state, target, node, camera, pending, "Edit Camera");
 

@@ -478,7 +478,8 @@ auto interop::camera_get_post_process(std::uint64_t uuid, post_process_data* out
     .ao_enabled = post.ambient_occlusion.enabled ? 1u : 0u,
     .ao_radius = post.ambient_occlusion.radius,
     .ao_intensity = post.ambient_occlusion.intensity,
-    .ao_samples = post.ambient_occlusion.samples
+    .ao_samples = post.ambient_occlusion.samples,
+    .anti_aliasing = static_cast<std::uint32_t>(post.anti_aliasing)
   };
 }
 
@@ -549,6 +550,8 @@ auto interop::camera_set_post_process(std::uint64_t uuid, const post_process_dat
   ao.radius = value->ao_radius;
   ao.intensity = value->ao_intensity;
   ao.samples = value->ao_samples;
+
+  post.anti_aliasing = value->anti_aliasing == 1u ? scenes::post_anti_aliasing::fxaa : scenes::post_anti_aliasing::none;
 }
 
 auto interop::time_delta_time(std::float_t* delta_time) -> void {
@@ -563,6 +566,14 @@ auto interop::time_delta_time(std::float_t* delta_time) -> void {
 
 auto interop::time_fixed_delta_time() -> std::float_t {
   return core::engine::fixed_delta_time().value();
+}
+
+auto interop::render_settings_get_msaa_samples() -> std::uint32_t {
+  return core::engine::project().msaa_samples();
+}
+
+auto interop::render_settings_set_msaa_samples(std::uint32_t samples) -> void {
+  core::engine::project().set_msaa_samples(samples);
 }
 
 } // namespace sbx::scripting

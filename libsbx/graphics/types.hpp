@@ -3,6 +3,8 @@
 #ifndef LIBSBX_GRAPHICS_TYPES_HPP_
 #define LIBSBX_GRAPHICS_TYPES_HPP_
 
+#include <algorithm>
+#include <bit>
 #include <cinttypes>
 #include <cmath>
 #include <cstdint>
@@ -196,6 +198,17 @@ enum class samples : std::int32_t {
   count_32 = VK_SAMPLE_COUNT_32_BIT,
   count_64 = VK_SAMPLE_COUNT_64_BIT
 }; // enum class samples
+
+/** @brief The highest count in @p supported that is at most @p requested; counts that aren't a power of two round down. count_1 is always supported. */
+[[nodiscard]] constexpr auto clamp_sample_count(std::uint32_t requested, VkSampleCountFlags supported) noexcept -> samples {
+  auto count = std::bit_floor(std::clamp(requested, 1u, 64u));
+
+  while (count > 1u && (supported & count) == 0u) {
+    count >>= 1u;
+  }
+
+  return static_cast<samples>(count);
+}
 
 enum class [[=reflection::named]] polygon_mode : std::int32_t {
   fill = VK_POLYGON_MODE_FILL,

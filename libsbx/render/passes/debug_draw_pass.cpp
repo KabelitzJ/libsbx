@@ -38,7 +38,8 @@ struct debug_draw_push {
   graphics::buffer::address_type vertex_address;
 }; // struct debug_draw_push
 
-debug_draw_pass::debug_draw_pass() {
+debug_draw_pass::debug_draw_pass(graphics::samples samples)
+: _samples{samples} {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& shader_cache = graphics_module.shader_cache();
@@ -63,7 +64,7 @@ debug_draw_pass::debug_draw_pass() {
     .depth_test = true,
     .depth_write = false,
     .depth_compare = graphics::compare_operation::less_or_equal,
-    .samples = render_pass::sample_count,
+    .samples = _samples,
     .name = "Debug Draw"
   };
 

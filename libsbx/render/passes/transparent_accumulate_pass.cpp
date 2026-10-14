@@ -37,7 +37,7 @@ auto transparent_accumulate_pass::_make_pipeline(memory::observer_ptr<const grap
     .depth_test = true,
     .depth_write = false,
     .depth_compare = graphics::compare_operation::less_or_equal,
-    .samples = render_pass::sample_count,
+    .samples = _samples,
     .name = name
   };
 
@@ -81,7 +81,7 @@ auto transparent_accumulate_pass::_resolve_custom_pipeline(const std::string& sh
     .depth_test = true,
     .depth_write = false,
     .depth_compare = graphics::compare_operation::less_or_equal,
-    .samples = render_pass::sample_count,
+    .samples = _samples,
     .color_blend_attachments = {
       // Accumulator: additive sum of weight * premultiplied color.
       graphics::blend_attachment{
@@ -107,7 +107,8 @@ auto transparent_accumulate_pass::_resolve_custom_pipeline(const std::string& sh
   }, "Transparent Accumulate");
 }
 
-transparent_accumulate_pass::transparent_accumulate_pass() {
+transparent_accumulate_pass::transparent_accumulate_pass(graphics::samples samples)
+: _samples{samples} {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& shader_cache = graphics_module.shader_cache();

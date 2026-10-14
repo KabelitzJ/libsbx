@@ -28,6 +28,8 @@ target_sources(
 
     "${PROJECT_SOURCE_DIR}/core/project_scene_list_test.cpp"
 
+    "${PROJECT_SOURCE_DIR}/graphics/sample_count_test.cpp"
+
     "${PROJECT_SOURCE_DIR}/physics/physics_queries_test.cpp"
 
     "${PROJECT_SOURCE_DIR}/scenes/scene_serializer_test.cpp"

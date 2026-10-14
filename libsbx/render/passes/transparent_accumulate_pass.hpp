@@ -29,7 +29,7 @@ class transparent_accumulate_pass final : public graphics_pass {
 
 public:
 
-  transparent_accumulate_pass();
+  explicit transparent_accumulate_pass(graphics::samples samples);
 
   [[nodiscard]] auto name() const -> std::string_view override {
     return "Transparent Accumulate";
@@ -46,6 +46,8 @@ private:
   auto _resolve_custom_pipeline(const std::string& shader_path, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u> _pipelines{};
+
+  graphics::samples _samples;
 
 }; // class transparent_accumulate_pass
 

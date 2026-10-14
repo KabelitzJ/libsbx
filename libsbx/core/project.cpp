@@ -103,6 +103,10 @@ auto project::load(const std::filesystem::path& file) -> project {
     }
   }
 
+  if (const auto rendering_node = node["rendering"]) {
+    result._msaa_samples = rendering_node["msaa_samples"].as<std::uint32_t>(result._msaa_samples);
+  }
+
   return result;
 }
 
@@ -287,6 +291,10 @@ auto project::save(const std::filesystem::path& file) const -> void {
     emitter << YAML::EndMap;
   }
   emitter << YAML::EndSeq;
+  emitter << YAML::EndMap;
+
+  emitter << YAML::Key << "rendering" << YAML::Value << YAML::BeginMap;
+  emitter << YAML::Key << "msaa_samples" << YAML::Value << _msaa_samples;
   emitter << YAML::EndMap;
 
   emitter << YAML::EndMap;

@@ -35,7 +35,8 @@ struct skybox_push {
   std::float_t environment_intensity;
 }; // struct skybox_push
 
-skybox_pass::skybox_pass() {
+skybox_pass::skybox_pass(graphics::samples samples)
+: _samples{samples} {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& shader_cache = graphics_module.shader_cache();
@@ -56,7 +57,7 @@ skybox_pass::skybox_pass() {
     .depth_test = true,
     .depth_write = false,
     .depth_compare = graphics::compare_operation::less_or_equal,
-    .samples = render_pass::sample_count,
+    .samples = _samples,
     .name = "Skybox"
   });
 }

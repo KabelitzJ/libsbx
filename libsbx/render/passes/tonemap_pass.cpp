@@ -107,7 +107,7 @@ auto tonemap_pass::declare(graphics_pass_builder& builder, const graph_resources
 
   // First touch, so the compiler clears it; the fullscreen triangle overwrites every pixel anyway.
   group.colors.push_back(color_attachment_slot{
-    .image = resources.final_image,
+    .image = resources.ldr,
     .store_op = graphics::attachment_store_op::store
   });
 

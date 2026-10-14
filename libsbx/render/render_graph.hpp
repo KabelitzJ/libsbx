@@ -56,7 +56,8 @@ struct graph_resources {
   graphics::image_handle ambient_occlusion_raw{};
   graphics::image_handle ambient_occlusion{};
   graphics::image_handle color{};
-  graphics::image_handle color_msaa{};
+  graphics::image_handle color_msaa{}; // the same image as color when MSAA is off; likewise for accumulator and revealage
+  graphics::image_handle ldr{};
   graphics::image_handle final_image{};
   graphics::image_handle accumulator{};
   graphics::image_handle accumulator_msaa{};
@@ -315,6 +316,9 @@ public:
 
     return ref;
   }
+
+  /** @brief Removes every pass, e.g. to re-add them with pipelines for a new sample count. Call initialize_gpu_queries() again after re-adding. */
+  auto clear() -> void;
 
   auto compile(const graph_resources& resources) -> void;
 

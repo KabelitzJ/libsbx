@@ -233,6 +233,11 @@ public:
     return _graph.total_gpu_time_ms();
   }
 
+  /** @brief The MSAA sample count the targets and pipelines are built with: the project's setting, clamped to what the device supports. */
+  [[nodiscard]] auto sample_count() const noexcept -> graphics::samples {
+    return _sample_count;
+  }
+
 private:
 
   inline static constexpr auto light_capacity = std::uint32_t{256u};
@@ -252,6 +257,13 @@ private:
   auto _ensure_resources() -> void;
 
   auto _resize_targets(const math::vector2u extent) -> void;
+
+  [[nodiscard]] auto _requested_sample_count() const -> graphics::samples;
+
+  auto _build_graph() -> void;
+
+  // Picks up a changed MSAA setting: rebuilds every pass so pipelines match the new count, and forces the targets to be recreated.
+  auto _apply_sample_count() -> void;
 
   [[nodiscard]] auto _build_graph_resources() const -> graph_resources;
 
@@ -383,10 +395,15 @@ private:
   std::array<std::uint32_t, 2u> _jump_flood_indices{};
 
   math::vector2u _target_extent{};
+  graphics::samples _sample_count{graphics::samples::count_1};
+  graphics::samples _target_sample_count{graphics::samples::count_1};
   math::vector2u _viewport_extent{0u, 0u};
   math::vector2 _viewport_offset{0.0f, 0.0f};
 
   render_graph _graph{};
+
+  graphics::image_handle _ldr_image{};
+  std::uint32_t _ldr_index{0u};
 
   graphics::image_handle _final_image{};
   std::uint32_t _final_image_index{0u};

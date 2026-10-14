@@ -24,7 +24,7 @@ class depth_pre_pass final : public graphics_pass {
 
 public:
 
-  depth_pre_pass();
+  explicit depth_pre_pass(graphics::samples samples);
 
   [[nodiscard]] auto name() const -> std::string_view override {
     return "Depth Pre";
@@ -37,12 +37,16 @@ public:
 private:
 
   // Uses depth_vertex_main/depth_fragment_main, always generated so displaced geometry matches its color pass.
+  auto _copy_scene_depth(render_context& context) -> void;
+
   [[nodiscard]] auto _resolve_custom_pipeline(const std::string& shader_path, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u> _pipelines{};
 
   // min when the device supports it for depth resolves, otherwise sample_zero (the only guaranteed mode).
   graphics::resolve_mode _scene_depth_resolve_mode{graphics::resolve_mode::sample_zero};
+
+  graphics::samples _samples;
 
 }; // class depth_pre_pass
 

@@ -58,6 +58,7 @@
 #include <libsbx/render/passes/grid_pass.hpp>
 #include <libsbx/render/passes/debug_draw_pass.hpp>
 #include <libsbx/render/passes/tonemap_pass.hpp>
+#include <libsbx/render/passes/fxaa_pass.hpp>
 #include <libsbx/render/passes/selection_outline_pass.hpp>
 #include <libsbx/render/passes/canvas_pass.hpp>
 #include <libsbx/render/passes/canvas_world_pass.hpp>
@@ -384,28 +385,8 @@ scene_renderer_module::scene_renderer_module() {
     .name = "Particle Pool Alpha Blend"
   });
 
-  _graph.add_pass<skin_pass>();
-  _graph.add_pass<frustum_cull_pass>();
-  _graph.add_pass<depth_pre_pass>();
-  _graph.add_pass<ambient_occlusion_pass>();
-  _graph.add_pass<light_culling_pass>();
-  _graph.add_pass<shadow_pass>();
-  _graph.add_pass<opaque_pass>();
-  _graph.add_pass<skybox_pass>();
-  _graph.add_pass<grid_pass>();
-  _graph.add_pass<debug_draw_pass>();
-  _graph.add_pass<transparent_accumulate_pass>();
-  _graph.add_pass<particle_simulate_pass>(*_particle_pool_additive, *_particle_pool_alpha_blend);
-  _graph.add_pass<particle_pass>();
-  _graph.add_pass<transparent_resolve_pass>();
-  _graph.add_pass<canvas_world_pass>();
-  _graph.add_pass<bloom_pass>();
-  _graph.add_pass<tonemap_pass>();
-  _graph.add_pass<selection_outline_pass>();
-  _graph.add_pass<canvas_pass>();
-
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  _graph.initialize_gpu_queries(graphics_module.physical_device(), graphics_module.logical_device());
+  _sample_count = _requested_sample_count();
+  _build_graph();
 
   // GPU particles live in render-side pools, not in the scene, so a replaced world would keep showing the old ones.
   core::engine::get_module<scenes::scenes_module>().on_scene_loaded().connect([this](const scenes::scene_loaded_event& event) {
@@ -1327,6 +1308,58 @@ auto scene_renderer_module::_build_packet() -> render_packet {
   return packet;
 }
 
+auto scene_renderer_module::_requested_sample_count() const -> graphics::samples {
+  const auto requested = core::engine::has_project() ? core::engine::project().msaa_samples() : core::project::default_msaa_samples;
+
+  const auto& limits = core::engine::get_module<graphics::graphics_module>().physical_device().properties().limits;
+
+  return graphics::clamp_sample_count(requested, limits.framebufferColorSampleCounts & limits.framebufferDepthSampleCounts);
+}
+
+auto scene_renderer_module::_build_graph() -> void {
+  _graph.clear();
+
+  _graph.add_pass<skin_pass>();
+  _graph.add_pass<frustum_cull_pass>();
+  _graph.add_pass<depth_pre_pass>(_sample_count);
+  _graph.add_pass<ambient_occlusion_pass>();
+  _graph.add_pass<light_culling_pass>();
+  _graph.add_pass<shadow_pass>();
+  _graph.add_pass<opaque_pass>(_sample_count);
+  _graph.add_pass<skybox_pass>(_sample_count);
+  _graph.add_pass<grid_pass>(_sample_count);
+  _graph.add_pass<debug_draw_pass>(_sample_count);
+  _graph.add_pass<transparent_accumulate_pass>(_sample_count);
+  _graph.add_pass<particle_simulate_pass>(*_particle_pool_additive, *_particle_pool_alpha_blend);
+  _graph.add_pass<particle_pass>(_sample_count);
+  _graph.add_pass<transparent_resolve_pass>();
+  _graph.add_pass<canvas_world_pass>(_sample_count);
+  _graph.add_pass<bloom_pass>();
+  _graph.add_pass<tonemap_pass>();
+  _graph.add_pass<fxaa_pass>();
+  _graph.add_pass<selection_outline_pass>();
+  _graph.add_pass<canvas_pass>();
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  _graph.initialize_gpu_queries(graphics_module.physical_device(), graphics_module.logical_device());
+}
+
+auto scene_renderer_module::_apply_sample_count() -> void {
+  const auto requested = _requested_sample_count();
+
+  if (requested == _sample_count) {
+    return;
+  }
+
+  // Passes own per-frame state the in-flight frames still use.
+  core::engine::get_module<graphics::graphics_module>().logical_device().wait_idle();
+
+  _sample_count = requested;
+
+  // ponytail: passes don't retire their per-slot draw buffers on destruction, so each MSAA change leaks a few small buffers until shutdown; add retiring destructors if this is ever switched often.
+  _build_graph();
+}
+
 auto scene_renderer_module::record(graphics::command_buffer& command_buffer, math::vector2u extent) -> void {
   SBX_PROFILE_SCOPE("scene_renderer_module::record");
   SBX_PROFILE_GPU_SCOPE(command_buffer, "scene_renderer_module::record");
@@ -1360,6 +1393,7 @@ auto scene_renderer_module::record(graphics::command_buffer& command_buffer, mat
     prefiltered_mip_count = packet.environment->prefiltered_mip_count();
   }
 
+  _apply_sample_count();
   _resize_targets(scene_extent);
 
   _has_rendered = packet.camera.is_active;
@@ -1390,6 +1424,7 @@ auto scene_renderer_module::record(graphics::command_buffer& command_buffer, mat
     .prefiltered_index = prefiltered_index,
     .prefiltered_mip_count = prefiltered_mip_count,
     .depth = _depth_image,
+    .scene_depth = _scene_depth_image,
     .scene_depth_index = _scene_depth_index,
     .ambient_occlusion_raw = _ambient_occlusion_raw_image,
     .ambient_occlusion = _ambient_occlusion_image,
@@ -1398,15 +1433,16 @@ auto scene_renderer_module::record(graphics::command_buffer& command_buffer, mat
     .ambient_occlusion_raw_storage_index = _ambient_occlusion_raw_storage_index,
     .ambient_occlusion_storage_index = _ambient_occlusion_storage_index,
     .color = _color_image,
-    .color_msaa = _color_msaa_image,
+    .color_msaa = _color_msaa_image.is_valid() ? _color_msaa_image : _color_image,
     .color_index = _color_index,
+    .ldr_index = _ldr_index,
     .final_image = _final_image,
     .final_image_index = _final_image_index,
     .accumulator = _accum_image,
-    .accumulator_msaa = _accumulator_msaa_image,
+    .accumulator_msaa = _accumulator_msaa_image.is_valid() ? _accumulator_msaa_image : _accum_image,
     .accumulator_index = _accumulator_index,
     .revealage = _revealage_image,
-    .revealage_msaa = _revealage_msaa_image,
+    .revealage_msaa = _revealage_msaa_image.is_valid() ? _revealage_msaa_image : _revealage_image,
     .revealage_index = _revealage_index,
     .bloom_upsample = _bloom_upsample_image,
     .bloom_upsample_index = _bloom_upsample_index,
@@ -1464,6 +1500,8 @@ auto scene_renderer_module::_ensure_resources() -> void {
   _color_index = bindless_table.reserve_sampled_image();
 
   _final_image_index = bindless_table.reserve_sampled_image();
+
+  _ldr_index = bindless_table.reserve_sampled_image();
 
   _accumulator_index = bindless_table.reserve_sampled_image();
 
@@ -1656,7 +1694,7 @@ auto scene_renderer_module::_ensure_resources() -> void {
 }
 
 auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void {
-  if (_target_extent == extent) {
+  if (_target_extent == extent && _target_sample_count == _sample_count) {
     return;
   }
 
@@ -1672,12 +1710,16 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
     registry.retire(_depth_image, frame_index);
     registry.retire(_scene_depth_image, frame_index);
     registry.retire(_color_image, frame_index);
-    registry.retire(_color_msaa_image, frame_index);
     registry.retire(_final_image, frame_index);
+    registry.retire(_ldr_image, frame_index);
     registry.retire(_accum_image, frame_index);
-    registry.retire(_accumulator_msaa_image, frame_index);
     registry.retire(_revealage_image, frame_index);
-    registry.retire(_revealage_msaa_image, frame_index);
+
+    for (auto image : {_color_msaa_image, _accumulator_msaa_image, _revealage_msaa_image}) {
+      if (image.is_valid()) {
+        registry.retire(image, frame_index);
+      }
+    }
     registry.retire(_bloom_downsample_image, frame_index);
     registry.retire(_bloom_upsample_image, frame_index);
     registry.retire(_ambient_occlusion_raw_image, frame_index);
@@ -1690,7 +1732,7 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
     }
 
     // Fresh indices: in-flight frames still sample the old images through the old ones.
-    for (auto index : {std::ref(_scene_depth_index), std::ref(_color_index), std::ref(_accumulator_index), std::ref(_revealage_index), std::ref(_bloom_upsample_index), std::ref(_final_image_index), std::ref(_ambient_occlusion_raw_index), std::ref(_ambient_occlusion_index), std::ref(_selection_mask_index), std::ref(_jump_flood_indices[0]), std::ref(_jump_flood_indices[1])}) {
+    for (auto index : {std::ref(_scene_depth_index), std::ref(_color_index), std::ref(_accumulator_index), std::ref(_revealage_index), std::ref(_bloom_upsample_index), std::ref(_final_image_index), std::ref(_ldr_index), std::ref(_ambient_occlusion_raw_index), std::ref(_ambient_occlusion_index), std::ref(_selection_mask_index), std::ref(_jump_flood_indices[0]), std::ref(_jump_flood_indices[1])}) {
       bindless_table.unregister_sampled_image(index.get());
       index.get() = bindless_table.reserve_sampled_image();
     }
@@ -1705,15 +1747,15 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
   _depth_image = registry.emplace<graphics::image>(graphics::image::create_info{
     .extent = math::vector3u{extent, 1u},
     .format = graphics::format::d32_sfloat,
-    .usage = graphics::image_usage::depth_stencil_attachment,
-    .samples = render_pass::sample_count,
+    .usage = graphics::image_usage::depth_stencil_attachment | graphics::image_usage::transfer_source,
+    .samples = _sample_count,
     .name = "Depth"
   });
 
   _scene_depth_image = registry.emplace<graphics::image>(graphics::image::create_info{
     .extent = math::vector3u{extent, 1u},
     .format = graphics::format::d32_sfloat,
-    .usage = graphics::image_usage::depth_stencil_attachment | graphics::image_usage::sampled,
+    .usage = graphics::image_usage::depth_stencil_attachment | graphics::image_usage::sampled | graphics::image_usage::transfer_destination,
     .samples = graphics::samples::count_1,
     .name = "Scene Depth"
   });
@@ -1740,11 +1782,14 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
     *storage_index = bindless_table.register_storage_image(view);
   }
 
-  _color_msaa_image = registry.emplace<graphics::image>(graphics::image::create_info{
+  // Without MSAA, passes render straight into the single-sample images (see _build_graph_resources()).
+  const auto has_msaa = _sample_count != graphics::samples::count_1;
+
+  _color_msaa_image = !has_msaa ? graphics::image_handle{} : registry.emplace<graphics::image>(graphics::image::create_info{
     .extent = math::vector3u{extent, 1u},
     .format = graphics::format::r16g16b16a16_sfloat,
     .usage = graphics::image_usage::color_attachment,
-    .samples = render_pass::sample_count,
+    .samples = _sample_count,
     .name = "HDR Color MSAA"
   });
 
@@ -1758,11 +1803,11 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
 
   bindless_table.write_sampled_image(_color_index, registry.get<graphics::image>(_color_image).view());
 
-  _accumulator_msaa_image = registry.emplace<graphics::image>(graphics::image::create_info{
+  _accumulator_msaa_image = !has_msaa ? graphics::image_handle{} : registry.emplace<graphics::image>(graphics::image::create_info{
     .extent = math::vector3u{extent, 1u},
     .format = graphics::format::r16g16b16a16_sfloat,
     .usage = graphics::image_usage::color_attachment,
-    .samples = render_pass::sample_count,
+    .samples = _sample_count,
     .name = "Transparent Accumulator MSAA"
   });
 
@@ -1776,11 +1821,11 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
 
   bindless_table.write_sampled_image(_accumulator_index, registry.get<graphics::image>(_accum_image).view());
 
-  _revealage_msaa_image = registry.emplace<graphics::image>(graphics::image::create_info{
+  _revealage_msaa_image = !has_msaa ? graphics::image_handle{} : registry.emplace<graphics::image>(graphics::image::create_info{
     .extent = math::vector3u{extent, 1u},
     .format = graphics::format::r16_sfloat,
     .usage = graphics::image_usage::color_attachment,
-    .samples = render_pass::sample_count,
+    .samples = _sample_count,
     .name = "Transparent Revealage MSAA"
   });
 
@@ -1829,6 +1874,16 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
 
   bindless_table.write_sampled_image(_final_image_index, registry.get<graphics::image>(_final_image).view());
 
+  _ldr_image = registry.emplace<graphics::image>(graphics::image::create_info{
+    .extent = math::vector3u{extent, 1u},
+    .format = final_image_format,
+    .usage = graphics::image_usage::color_attachment | graphics::image_usage::sampled,
+    .samples = graphics::samples::count_1,
+    .name = "LDR Image"
+  });
+
+  bindless_table.write_sampled_image(_ldr_index, registry.get<graphics::image>(_ldr_image).view());
+
   // Selection outline: only alpha > 0.5 of the mask matters; the jump flood targets hold (offset.xy, distance², side), so full float.
   _selection_mask_image = registry.emplace<graphics::image>(graphics::image::create_info{
     .extent = math::vector3u{extent, 1u},
@@ -1861,6 +1916,7 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
   }
 
   _target_extent = extent;
+  _target_sample_count = _sample_count;
 
   // This frame's passes already use the new indices, so flush now instead of at the next begin_frame.
   bindless_table.flush_writes();
@@ -1876,12 +1932,13 @@ auto scene_renderer_module::_build_graph_resources() const -> graph_resources {
     .ambient_occlusion_raw = _ambient_occlusion_raw_image,
     .ambient_occlusion = _ambient_occlusion_image,
     .color = _color_image,
-    .color_msaa = _color_msaa_image,
+    .color_msaa = _color_msaa_image.is_valid() ? _color_msaa_image : _color_image,
+    .ldr = _ldr_image,
     .final_image = _final_image,
     .accumulator = _accum_image,
-    .accumulator_msaa = _accumulator_msaa_image,
+    .accumulator_msaa = _accumulator_msaa_image.is_valid() ? _accumulator_msaa_image : _accum_image,
     .revealage = _revealage_image,
-    .revealage_msaa = _revealage_msaa_image,
+    .revealage_msaa = _revealage_msaa_image.is_valid() ? _revealage_msaa_image : _revealage_image,
     .bloom_downsample = _bloom_downsample_image,
     .bloom_upsample = _bloom_upsample_image,
     .shadow_maps = _shadow_map_images,

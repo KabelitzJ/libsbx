@@ -25,7 +25,7 @@ class opaque_pass final : public graphics_pass {
 
 public:
 
-  opaque_pass();
+  explicit opaque_pass(graphics::samples samples);
 
   [[nodiscard]] auto name() const -> std::string_view override {
     return "Opaque";
@@ -53,6 +53,8 @@ private:
 
   // The 4 pipeline variants with line polygon mode and a small depth bias, drawn as an overlay when context.wireframe is set. Custom-shader materials have no wireframe variant.
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u> _wireframe_pipelines{};
+
+  graphics::samples _samples;
 
 }; // class opaque_pass
 

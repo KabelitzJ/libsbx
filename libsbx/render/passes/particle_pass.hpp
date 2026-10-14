@@ -31,7 +31,7 @@ class particle_pass final : public graphics_pass {
 
 public:
 
-  particle_pass();
+  explicit particle_pass(graphics::samples samples);
 
   [[nodiscard]] auto name() const -> std::string_view override {
     return "Particles";
@@ -71,6 +71,8 @@ private:
   auto _draw_trails(render_context& context, std::uint32_t group) -> void;
 
   auto _draw_gpu_particles(render_context& context, std::uint32_t group) -> void;
+
+  graphics::samples _samples;
 
 }; // class particle_pass
 

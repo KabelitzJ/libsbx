@@ -77,6 +77,8 @@ struct post_process_data {
   std::float_t ao_radius;
   std::float_t ao_intensity;
   std::uint32_t ao_samples;
+
+  std::uint32_t anti_aliasing; // scenes::post_anti_aliasing
 }; // struct post_process_data
 
 // Whole-component mirrors for the layout calls: flags are uint32 (0/1) and enums their underlying value, so the managed structs lay out identically.
@@ -469,6 +471,11 @@ struct interop {
 
   /** @brief Seconds per fixed_update step. */
   static auto time_fixed_delta_time() -> std::float_t;
+
+  static auto render_settings_get_msaa_samples() -> std::uint32_t;
+
+  /** @brief Sets the project's MSAA samples (1, 2, 4 or 8); the renderer picks it up next frame, clamped to the device. */
+  static auto render_settings_set_msaa_samples(std::uint32_t samples) -> void;
 
   /**
    * @brief Raycasts against the active scene's colliders and terrain.

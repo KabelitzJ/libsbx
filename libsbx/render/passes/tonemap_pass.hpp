@@ -16,7 +16,7 @@
 namespace sbx::render {
 
 /**
- * @brief Tonemaps the HDR scene target and composites it into the final viewport image.
+ * @brief Tonemaps the HDR scene target into the LDR image, which fxaa_pass turns into the final viewport image.
  */
 class tonemap_pass final : public graphics_pass {
 

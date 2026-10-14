@@ -340,6 +340,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/selection_outline_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/skybox_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/tonemap_pass.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/passes/fxaa_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/transparent_accumulate_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/transparent_resolve_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/compositor.cpp"

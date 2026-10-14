@@ -31,7 +31,8 @@ struct canvas_world_push {
   std::uint32_t sampler_index;
 }; // struct canvas_world_push
 
-canvas_world_pass::canvas_world_pass() {
+canvas_world_pass::canvas_world_pass(graphics::samples samples)
+: _samples{samples} {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& shader_cache = graphics_module.shader_cache();
@@ -68,7 +69,7 @@ canvas_world_pass::canvas_world_pass() {
     .depth_test = true,
     .depth_write = false,
     .depth_compare = graphics::compare_operation::less_or_equal,
-    .samples = render_pass::sample_count,
+    .samples = _samples,
     .color_blend_attachments = {blend},
     .name = "Canvas World"
   });
@@ -81,7 +82,7 @@ canvas_world_pass::canvas_world_pass() {
     .depth_test = true,
     .depth_write = false,
     .depth_compare = graphics::compare_operation::less_or_equal,
-    .samples = render_pass::sample_count,
+    .samples = _samples,
     .color_blend_attachments = {blend},
     .name = "Canvas World Text"
   });

@@ -685,6 +685,15 @@ struct interop {
 
   static auto material_set_generic_texture(std::uint64_t material_uuid, std::uint32_t index, std::uint64_t texture_uuid) -> void;
 
+  /** @brief Whether the material's shader graph has a property named @p reference; false while the graph isn't resident. */
+  static auto material_has_property(std::uint64_t material_uuid, managed::string reference) -> managed::bool32;
+
+  /** @brief Writes a value property's own packed components (as many of x/y/z/w as its type has). False for an unknown reference or a texture property. */
+  static auto material_set_property(std::uint64_t material_uuid, managed::string reference, std::float_t x, std::float_t y, std::float_t z, std::float_t w) -> managed::bool32;
+
+  /** @brief Sets a texture property. False for an unknown reference or a value property. */
+  static auto material_set_property_texture(std::uint64_t material_uuid, managed::string reference, std::uint64_t texture_uuid) -> managed::bool32;
+
   // Script compute: every object is an opaque id into scripting_module::resources().
   // Functions returning bool log the reason and return false on misuse; the C# wrappers turn that into an exception.
   // Shader parameters bind by push_data field name via Slang reflection, type-checked against the setter.

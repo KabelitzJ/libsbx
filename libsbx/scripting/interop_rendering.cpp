@@ -2,9 +2,11 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/scripting/interop.hpp>
 
+#include <algorithm>
 #include <cstring>
 #include <filesystem>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include <stb_image.h>
@@ -600,6 +602,19 @@ auto interop::material_set_generic_param(std::uint64_t material_uuid, std::uint3
     return;
   }
 
+  // Shader graphs pack several small properties into one float4; writing all of it would clobber the others.
+  if (const auto& graph = material->shader_graph(); graph.is_valid()) {
+    const auto float4_mask = std::uint64_t{0xFu} << (index * 4u);
+    const auto sharing = std::ranges::count_if(graph->properties(), [float4_mask](const auto& property) {
+      return (assets::shader_graph_property_component_mask(property.type, property.slot) & float4_mask) != 0u;
+    });
+
+    if (sharing > 1) {
+      utility::logger<"scripting">::error("material_set_generic_param: generic param {} holds {} packed shader graph properties; set them by reference with SetFloat/SetVector/SetColor instead", index, sharing);
+      return;
+    }
+  }
+
   auto create_info = material->to_create_info();
   create_info.generic_params[index] = math::vector4{x, y, z, w};
 
@@ -643,6 +658,62 @@ auto interop::material_set_generic_texture(std::uint64_t material_uuid, std::uin
   create_info.generic_texture_arrays[index] = assets::texture2d_array_handle{};
 
   assets_module.update_material(material, create_info);
+}
+
+// The material's shader graph property named @p reference, or null.
+static auto find_material_property(const assets::material_handle& material, const std::string& reference) -> memory::observer_ptr<const assets::shader_graph_property> {
+  if (!material.is_valid() || !material->shader_graph().is_valid()) {
+    return {};
+  }
+
+  const auto& properties = material->shader_graph()->properties();
+  const auto entry = std::ranges::find(properties, reference, &assets::shader_graph_property::reference);
+
+  return entry != properties.end() ? memory::make_observer(*entry) : memory::observer_ptr<const assets::shader_graph_property>{};
+}
+
+auto interop::material_has_property(std::uint64_t material_uuid, managed::string reference) -> managed::bool32 {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  const auto material = assets_module.load_material(math::uuid::from_value(material_uuid));
+
+  return find_material_property(material, std::string{reference}).is_valid();
+}
+
+auto interop::material_set_property(std::uint64_t material_uuid, managed::string reference, std::float_t x, std::float_t y, std::float_t z, std::float_t w) -> managed::bool32 {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto material = assets_module.load_material(math::uuid::from_value(material_uuid));
+
+  const auto property = find_material_property(material, std::string{reference});
+
+  if (!property || property->type == assets::shader_graph_parameter_type::texture_value) {
+    return false;
+  }
+
+  auto create_info = material->to_create_info();
+  assets::shader_graph_write_parameter(create_info.generic_params, property->type, property->slot, math::vector4{x, y, z, w});
+
+  assets_module.update_material(material, create_info);
+
+  return true;
+}
+
+auto interop::material_set_property_texture(std::uint64_t material_uuid, managed::string reference, std::uint64_t texture_uuid) -> managed::bool32 {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto material = assets_module.load_material(math::uuid::from_value(material_uuid));
+
+  const auto property = find_material_property(material, std::string{reference});
+
+  if (!property || property->type != assets::shader_graph_parameter_type::texture_value || property->slot >= assets::shader_graph_max_textures) {
+    return false;
+  }
+
+  auto create_info = material->to_create_info();
+  create_info.generic_textures[property->slot] = assets_module.find_texture(math::uuid::from_value(texture_uuid));
+  create_info.generic_texture_arrays[property->slot] = assets::texture2d_array_handle{};
+
+  assets_module.update_material(material, create_info);
+
+  return true;
 }
 
 auto interop::debug_draw_line(math::vector3* start, math::vector3* end, math::color* color) -> void {

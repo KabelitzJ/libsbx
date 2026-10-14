@@ -1,5 +1,8 @@
 using System;
 
+using Sbx.Core.Math;
+using Sbx.Managed.Interop;
+
 namespace Sbx.Core
 {
 
@@ -98,9 +101,10 @@ namespace Sbx.Core
     }
 
     /**
-     * Overwrites one of this material's generic parameter slots (0-7) in place -- a shader graph's
-     * exposed parameter, or a shader_code material's `material.generic_params[index]`. Same sharing
-     * caveat as SetTexture.
+     * Overwrites one whole generic parameter float4 (0-7) in place: a shader_code material's
+     * `material.generic_params[index]`. Shader graphs pack small properties together, so for them
+     * use SetFloat/SetVector/SetColor by reference; this refuses (and logs) a float4 holding more
+     * than one graph property. Same sharing caveat as SetTexture.
      */
     public void SetGenericParam(int index, float x, float y = 0.0f, float z = 0.0f, float w = 0.0f)
     {
@@ -117,6 +121,46 @@ namespace Sbx.Core
     public void SetGenericTexture(int index, Font font)
     {
       unsafe { InternalCalls.Material_SetGenericTextureFont(_uuid, (uint)index, font.UUID); }
+    }
+
+    /** Whether this material's shader graph has a property with this reference (e.g. "_BaseColor"). False until the graph has loaded. */
+    public bool HasProperty(string reference)
+    {
+      using (NativeString nativeReference = reference)
+      {
+        unsafe { return InternalCalls.Material_HasProperty(_uuid, nativeReference); }
+      }
+    }
+
+    /**
+     * Shader graph property setters, by the property's reference as shown in the graph's blackboard.
+     * Each writes only its own property's floats, even when the graph packs several properties into one generic param.
+     * Returns false for an unknown reference (or before the graph has loaded) or a value/texture mismatch. Same sharing caveat as SetTexture.
+     */
+    public bool SetFloat(string reference, float value) => SetValue(reference, value, 0.0f, 0.0f, 0.0f);
+
+    public bool SetVector(string reference, Vector2 value) => SetValue(reference, value.X, value.Y, 0.0f, 0.0f);
+
+    public bool SetVector(string reference, Vector3 value) => SetValue(reference, value.X, value.Y, value.Z, 0.0f);
+
+    public bool SetVector(string reference, Vector4 value) => SetValue(reference, value.X, value.Y, value.Z, value.W);
+
+    public bool SetColor(string reference, Color value) => SetValue(reference, value.R, value.G, value.B, value.A);
+
+    public bool SetTexture(string reference, Texture2D texture)
+    {
+      using (NativeString nativeReference = reference)
+      {
+        unsafe { return InternalCalls.Material_SetPropertyTexture(_uuid, nativeReference, texture.UUID); }
+      }
+    }
+
+    private bool SetValue(string reference, float x, float y, float z, float w)
+    {
+      using (NativeString nativeReference = reference)
+      {
+        unsafe { return InternalCalls.Material_SetProperty(_uuid, nativeReference, x, y, z, w); }
+      }
     }
 
     /** Frees this material's slot for reuse. Only call on an instance from CreateInstance -- never on a shared Load()'d template, see the class doc comment. */

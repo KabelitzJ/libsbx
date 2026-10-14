@@ -10,10 +10,12 @@
 #include <optional>
 #include <string>
 #include <unordered_set>
+#include <variant>
 
 #include <fmt/format.h>
 
 #include <imgui.h>
+#include <imgui_internal.h>
 
 #include <libsbx/core/engine.hpp>
 
@@ -128,9 +130,84 @@ static auto pin_color_for(std::optional<sbx::assets::shader_value_type> type) ->
     case sbx::assets::shader_value_type::vector2: return ImVec4(0.650f, 0.890f, 0.631f, 1.0f); // green  #a6e3a1
     case sbx::assets::shader_value_type::vector3: return ImVec4(0.980f, 0.913f, 0.596f, 1.0f); // yellow #f9e2af
     case sbx::assets::shader_value_type::vector4: return ImVec4(0.796f, 0.698f, 0.972f, 1.0f); // mauve  #cba6f7
+    case sbx::assets::shader_value_type::texture2d: return ImVec4(0.980f, 0.701f, 0.529f, 1.0f); // peach  #fab387
   }
 
   return ImVec4(0.576f, 0.584f, 0.654f, 1.0f);
+}
+
+static constexpr auto property_drag_payload = "SBX_SHADER_GRAPH_PROPERTY";
+
+constexpr auto all_property_types = std::array{
+  sbx::assets::shader_graph_parameter_type::float_value,
+  sbx::assets::shader_graph_parameter_type::vector2_value,
+  sbx::assets::shader_graph_parameter_type::vector3_value,
+  sbx::assets::shader_graph_parameter_type::vector4_value,
+  sbx::assets::shader_graph_parameter_type::color_value,
+  sbx::assets::shader_graph_parameter_type::texture_value
+};
+
+static auto property_type_label(sbx::assets::shader_graph_parameter_type type) -> const char* {
+  switch (type) {
+    case sbx::assets::shader_graph_parameter_type::float_value: return "Float";
+    case sbx::assets::shader_graph_parameter_type::vector2_value: return "Vector2";
+    case sbx::assets::shader_graph_parameter_type::vector3_value: return "Vector3";
+    case sbx::assets::shader_graph_parameter_type::vector4_value: return "Vector4";
+    case sbx::assets::shader_graph_parameter_type::color_value: return "Color";
+    case sbx::assets::shader_graph_parameter_type::texture_value: return "Texture2D";
+  }
+
+  return "?";
+}
+
+static auto property_default_value(sbx::assets::shader_graph_parameter_type type) -> sbx::assets::shader_graph_node_value {
+  switch (type) {
+    case sbx::assets::shader_graph_parameter_type::float_value: return 0.0f;
+    case sbx::assets::shader_graph_parameter_type::vector2_value: return sbx::math::vector2{0.0f, 0.0f};
+    case sbx::assets::shader_graph_parameter_type::vector3_value: return sbx::math::vector3{0.0f, 0.0f, 0.0f};
+    case sbx::assets::shader_graph_parameter_type::vector4_value: return sbx::math::vector4{0.0f, 0.0f, 0.0f, 0.0f};
+    case sbx::assets::shader_graph_parameter_type::color_value: return sbx::math::color{1.0f, 1.0f, 1.0f, 1.0f};
+    case sbx::assets::shader_graph_parameter_type::texture_value: return sbx::assets::texture2d_handle{};
+  }
+
+  return std::monostate{};
+}
+
+// The property type a constant node converts to, or nullopt for every other node.
+static auto property_type_of_constant(sbx::assets::shader_node_type type) -> std::optional<sbx::assets::shader_graph_parameter_type> {
+  switch (type) {
+    case sbx::assets::shader_node_type::constant_float: return sbx::assets::shader_graph_parameter_type::float_value;
+    case sbx::assets::shader_node_type::constant_vector2: return sbx::assets::shader_graph_parameter_type::vector2_value;
+    case sbx::assets::shader_node_type::constant_vector3: return sbx::assets::shader_graph_parameter_type::vector3_value;
+    case sbx::assets::shader_node_type::constant_vector4: return sbx::assets::shader_graph_parameter_type::vector4_value;
+    case sbx::assets::shader_node_type::constant_color: return sbx::assets::shader_graph_parameter_type::color_value;
+    default: return std::nullopt;
+  }
+}
+
+static auto constant_node_type_of(sbx::assets::shader_graph_parameter_type type) -> sbx::assets::shader_node_type {
+  switch (type) {
+    case sbx::assets::shader_graph_parameter_type::vector2_value: return sbx::assets::shader_node_type::constant_vector2;
+    case sbx::assets::shader_graph_parameter_type::vector3_value: return sbx::assets::shader_node_type::constant_vector3;
+    case sbx::assets::shader_graph_parameter_type::vector4_value: return sbx::assets::shader_node_type::constant_vector4;
+    case sbx::assets::shader_graph_parameter_type::color_value: return sbx::assets::shader_node_type::constant_color;
+    default: return sbx::assets::shader_node_type::constant_float;
+  }
+}
+
+static auto has_texture_input(const sbx::assets::shader_graph::create_info& edit, std::uint32_t node_id) -> bool {
+  return std::ranges::any_of(edit.edges, [node_id](const auto& edge) { return edge.to_node == node_id && edge.to_pin == 1u; });
+}
+
+// "Color", then "Color 1", "Color 2", ... so new properties don't share a display name.
+static auto unique_property_name(const std::vector<sbx::assets::shader_graph_property>& properties, const std::string& base) -> std::string {
+  auto name = base;
+
+  for (auto suffix = 1u; std::ranges::any_of(properties, [&name](const auto& property) { return property.name == name; }); ++suffix) {
+    name = fmt::format("{} {}", base, suffix);
+  }
+
+  return name;
 }
 
 // Filled/hollow pin icon, duplicated from animation_graph_panel.cpp since the panels are independent.
@@ -155,7 +232,9 @@ static auto draw_pin_icon(bool connected, ImU32 color) -> void {
 static auto pin_row_text(const char* label, std::optional<sbx::assets::shader_value_type> resolved) -> std::string {
   auto text = std::string{label};
 
-  if (resolved) {
+  if (resolved == sbx::assets::shader_value_type::texture2d) {
+    text += "(T)";
+  } else if (resolved) {
     text += fmt::format("({})", sbx::assets::shader_value_type_component_count(*resolved));
   }
 
@@ -268,6 +347,7 @@ static auto category_name(sbx::assets::shader_node_category category) -> const c
     case sbx::assets::shader_node_category::vector: return ICON_MDI_VECTOR_LINE " Vector";
     case sbx::assets::shader_node_category::noise: return ICON_MDI_WAVES " Noise";
     case sbx::assets::shader_node_category::channel: return ICON_MDI_SHUFFLE_VARIANT " Channel";
+    case sbx::assets::shader_node_category::property: return ICON_MDI_TUNE " Properties";
     case sbx::assets::shader_node_category::output: return ICON_MDI_EXPORT " Output";
   }
 
@@ -342,6 +422,7 @@ auto shader_graph_panel::_open(sbx::assets::shader_graph_handle graph, std::file
   _path = std::move(path);
   _is_open = true;
   _selection = std::monostate{};
+  _renaming_property_id.reset();
   _seeded_positions.clear();
 
   // Node ids are graph-local, so previews from the previous graph would collide.
@@ -349,6 +430,7 @@ auto shader_graph_panel::_open(sbx::assets::shader_graph_handle graph, std::file
 
   if (_graph.is_valid()) {
     _edit.name = _graph->name();
+    _edit.properties = _graph->properties();
     _edit.nodes = _graph->nodes();
     _edit.edges = _graph->edges();
   } else {
@@ -429,8 +511,15 @@ auto shader_graph_panel::draw(editor_state& state) -> void {
 
   const auto region = ImGui::GetContentRegionAvail();
   constexpr auto inspector_width = 320.0f;
+  constexpr auto blackboard_width = 220.0f;
 
-  ImGui::BeginChild("##shader_graph_canvas_region", ImVec2{region.x - inspector_width, 0.0f}, ImGuiChildFlags_Borders);
+  ImGui::BeginChild("##shader_graph_blackboard", ImVec2{blackboard_width, 0.0f}, ImGuiChildFlags_Borders);
+  _draw_blackboard();
+  ImGui::EndChild();
+
+  ImGui::SameLine();
+
+  ImGui::BeginChild("##shader_graph_canvas_region", ImVec2{region.x - inspector_width - blackboard_width - ImGui::GetStyle().ItemSpacing.x, 0.0f}, ImGuiChildFlags_Borders);
   _draw_canvas();
   ImGui::EndChild();
 
@@ -537,7 +626,32 @@ auto shader_graph_panel::_draw_add_node_menu(sbx::math::vector2 spawn_position) 
       }
     }
 
+    for (const auto& property : _edit.properties) {
+      auto lowered = property.name;
+      std::ranges::transform(lowered, lowered.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+      if (lowered.find(query) != std::string::npos && ImGui::MenuItem(fmt::format("{} {}", ICON_MDI_TUNE, property.name).c_str())) {
+        _selection = _spawn_property_node(property.id, spawn_position);
+        _apply_live();
+      }
+    }
+
     return;
+  }
+
+  if (!_edit.properties.empty() && ImGui::BeginMenu(category_name(sbx::assets::shader_node_category::property))) {
+    for (const auto& property : _edit.properties) {
+      ImGui::PushID(static_cast<std::int32_t>(property.id));
+
+      if (ImGui::MenuItem(property.name.c_str(), property_type_label(property.type))) {
+        _selection = _spawn_property_node(property.id, spawn_position);
+        _apply_live();
+      }
+
+      ImGui::PopID();
+    }
+
+    ImGui::EndMenu();
   }
 
   for (const auto category : {
@@ -596,7 +710,18 @@ auto shader_graph_panel::_draw_inline_mode_trigger(const sbx::assets::shader_gra
 
 auto shader_graph_panel::_draw_canvas() -> void {
   ax::NodeEditor::SetCurrentEditor(_context);
+
+  // The drop zone for blackboard rows; the editor's own child window would swallow a regular drag-drop target.
+  const auto canvas_min = ImGui::GetCursorScreenPos();
+  const auto canvas_size = ImGui::GetContentRegionAvail();
+  const auto canvas_rect = ImRect{canvas_min, ImVec2{canvas_min.x + canvas_size.x, canvas_min.y + canvas_size.y}};
+
   ax::NodeEditor::Begin("##shader_graph_node_canvas", ImVec2{0.0f, 0.0f});
+
+  if (_clear_canvas_selection_pending) {
+    ax::NodeEditor::ClearSelection();
+    _clear_canvas_selection_pending = false;
+  }
 
   // Connected pins, keyed by (node_id << 32 | pin), for the filled/hollow icons.
   auto connected_inputs = std::unordered_set<std::uint64_t>{};
@@ -607,7 +732,7 @@ auto shader_graph_panel::_draw_canvas() -> void {
     connected_outputs.insert((static_cast<std::uint64_t>(edge.from_node) << 32u) | edge.from_pin);
   }
 
-  auto types = sbx::assets::shader_graph_type_resolver{_edit.nodes, _edit.edges};
+  auto types = sbx::assets::shader_graph_type_resolver{_edit.properties, _edit.nodes, _edit.edges};
 
   // Set on the frame a color or mode trigger is clicked; the popup is opened after the node loop (see _color_popup_node_id).
   auto color_popup_requested = false;
@@ -621,20 +746,39 @@ auto shader_graph_panel::_draw_canvas() -> void {
       _seeded_positions.insert(node.id);
     }
 
+    const auto is_property_node = node.type == sbx::assets::shader_node_type::property;
+    const auto property_color = pin_color_for(types.output_type(node.id, 0u));
+
+    // Property nodes are compact pills: name plus one output pin, bordered in their type color.
+    if (is_property_node) {
+      ax::NodeEditor::PushStyleVar(ax::NodeEditor::StyleVar_NodeRounding, 12.0f);
+      ax::NodeEditor::PushStyleColor(ax::NodeEditor::StyleColor_NodeBorder, property_color);
+    }
+
     ax::NodeEditor::BeginNode(id);
 
     // All nodes share one ImGui window, so cursor X is window-relative; this is the node's left edge in that space.
     const auto content_start_x = ImGui::GetCursorPosX();
 
-    ImGui::TextUnformatted(sbx::assets::shader_node_display_name(node.type));
+    if (node.type == sbx::assets::shader_node_type::property) {
+      const auto property = sbx::assets::shader_graph_find_property(_edit.properties, node.property_id);
+      ImGui::TextUnformatted(property ? property->name.c_str() : "(missing property)");
+    } else {
+      ImGui::TextUnformatted(sbx::assets::shader_node_display_name(node.type));
+    }
 
     const auto output_count = sbx::assets::shader_node_output_count(node.type);
     const auto input_count = sbx::assets::shader_node_input_count(node.type);
 
-    if (!node.name.empty() && (node.type == sbx::assets::shader_node_type::constant_float || node.type == sbx::assets::shader_node_type::constant_vector2 || node.type == sbx::assets::shader_node_type::constant_vector3 || node.type == sbx::assets::shader_node_type::constant_vector4 || node.type == sbx::assets::shader_node_type::constant_color || node.type == sbx::assets::shader_node_type::texture_sample)) {
+    if (is_property_node) {
       ImGui::SameLine();
-      ImGui::TextDisabled("(%s)", node.name.c_str());
-    } else if (node.type == sbx::assets::shader_node_type::swizzle) {
+
+      ax::NodeEditor::BeginPin(output_pin_for(node.id, 0u), ax::NodeEditor::PinKind::Output);
+      draw_pin_icon(connected_outputs.contains(static_cast<std::uint64_t>(node.id) << 32u), ImGui::ColorConvertFloat4ToU32(property_color));
+      ax::NodeEditor::EndPin();
+    }
+
+    if (node.type == sbx::assets::shader_node_type::swizzle) {
       // Always shown, since the pattern is the node's whole purpose.
       ImGui::SameLine();
       ImGui::TextDisabled(".%s", sbx::assets::shader_node_swizzle_pattern(node).c_str());
@@ -643,7 +787,7 @@ auto shader_graph_panel::_draw_canvas() -> void {
     // The node's content width, set in the pin section and used to center the preview swatch.
     auto node_content_width = 0.0f;
 
-    if (input_count > 0u || output_count > 0u) {
+    if (!is_property_node && (input_count > 0u || output_count > 0u)) {
       // Where the title row ends, a content-width candidate measured fresh this frame.
       // The extra SameLine() makes GetCursorPosX() report the finished row's trailing edge instead of the next row's start.
       ImGui::SameLine();
@@ -720,7 +864,7 @@ auto shader_graph_panel::_draw_canvas() -> void {
 
         if (ImGui::DragFloat("##value", &value, 0.01f)) {
           node.value = value;
-          _apply_live(!node.exposed);
+          _apply_live();
         }
 
         break;
@@ -768,7 +912,7 @@ auto shader_graph_panel::_draw_canvas() -> void {
           else if (node.type == sbx::assets::shader_node_type::constant_vector3) node.value = sbx::math::vector3{components[0], components[1], components[2]};
           else node.value = sbx::math::vector4{components[0], components[1], components[2], components[3]};
 
-          _apply_live(!node.exposed);
+          _apply_live();
         }
 
         break;
@@ -823,6 +967,11 @@ auto shader_graph_panel::_draw_canvas() -> void {
     }
 
     ax::NodeEditor::EndNode();
+
+    if (is_property_node) {
+      ax::NodeEditor::PopStyleColor();
+      ax::NodeEditor::PopStyleVar();
+    }
 
     const auto position = ax::NodeEditor::GetNodePosition(id);
 
@@ -922,6 +1071,9 @@ auto shader_graph_panel::_draw_canvas() -> void {
     _add_node_spawn_position = sbx::math::vector2{canvas_position.x, canvas_position.y};
   }
 
+  auto convert_to_property_id = std::optional<std::uint32_t>{};
+  auto convert_to_inline_id = std::optional<std::uint32_t>{};
+
   if (ImGui::BeginPopup("##shader_graph_node_context")) {
     if (const auto context_id = node_id_from_node(_context_node_id)) {
       const auto entry = std::ranges::find(_edit.nodes, *context_id, &sbx::assets::shader_graph_node::id);
@@ -941,6 +1093,17 @@ auto shader_graph_panel::_draw_canvas() -> void {
           }
         }
 
+        const auto can_become_property = property_type_of_constant(entry->type).has_value() || (entry->type == sbx::assets::shader_node_type::texture_sample && !has_texture_input(_edit, entry->id));
+
+        // Deferred until the popup closes: both conversions can add nodes, which invalidates `entry`.
+        if (can_become_property && ImGui::MenuItem(ICON_MDI_TUNE " Convert to Property")) {
+          convert_to_property_id = entry->id;
+        }
+
+        if (entry->type == sbx::assets::shader_node_type::property && ImGui::MenuItem(ICON_MDI_ARROW_COLLAPSE_LEFT " Convert to Inline Node")) {
+          convert_to_inline_id = entry->id;
+        }
+
         ImGui::Separator();
       }
     }
@@ -950,6 +1113,26 @@ auto shader_graph_panel::_draw_canvas() -> void {
     }
 
     ImGui::EndPopup();
+  }
+
+  if (convert_to_property_id) {
+    _convert_to_property(*convert_to_property_id);
+  }
+
+  if (convert_to_inline_id) {
+    _convert_to_inline(*convert_to_inline_id);
+  }
+
+  if (ImGui::BeginDragDropTargetCustom(canvas_rect, ImGui::GetID("##shader_graph_property_drop"))) {
+    if (const auto* payload = ImGui::AcceptDragDropPayload(property_drag_payload)) {
+      const auto property_id = *static_cast<const std::uint32_t*>(payload->Data);
+      const auto position = ax::NodeEditor::ScreenToCanvas(ImGui::GetMousePos());
+
+      _selection = _spawn_property_node(property_id, sbx::math::vector2{position.x, position.y});
+      _apply_live();
+    }
+
+    ImGui::EndDragDropTarget();
   }
 
   if (ImGui::BeginPopup("##shader_graph_background_context")) {
@@ -973,7 +1156,7 @@ auto shader_graph_panel::_draw_canvas() -> void {
 
         if (ImGui::ColorPicker4("##value", components.data())) {
           entry->value = sbx::math::color{components[0], components[1], components[2], components[3]};
-          _apply_live(!entry->exposed);
+          _apply_live();
         }
       }
     }
@@ -1018,7 +1201,7 @@ auto shader_graph_panel::_draw_canvas() -> void {
     if (const auto selected_edge_index = edge_index_from_link(selected_link)) {
       _selection = *selected_edge_index;
     }
-  } else {
+  } else if (!std::holds_alternative<property_selection>(_selection)) {
     _selection = std::monostate{};
   }
 
@@ -1048,6 +1231,18 @@ auto shader_graph_panel::_draw_master_preview() -> void {
 }
 
 auto shader_graph_panel::_draw_selection_inspector(editor_state& state) -> void {
+  if (const auto* selected = std::get_if<property_selection>(&_selection)) {
+    const auto entry = std::ranges::find(_edit.properties, selected->id, &sbx::assets::shader_graph_property::id);
+
+    if (entry == _edit.properties.end()) {
+      _selection = std::monostate{};
+      return;
+    }
+
+    _draw_property_inspector(state, *entry);
+    return;
+  }
+
   if (std::holds_alternative<std::uint32_t>(_selection)) {
     const auto node_id = std::get<std::uint32_t>(_selection);
     const auto entry = std::ranges::find(_edit.nodes, node_id, &sbx::assets::shader_graph_node::id);
@@ -1061,31 +1256,23 @@ auto shader_graph_panel::_draw_selection_inspector(editor_state& state) -> void 
 
     ImGui::SeparatorText(sbx::assets::shader_node_display_name(node.type));
 
-    const auto is_constant = node.type == sbx::assets::shader_node_type::constant_float || node.type == sbx::assets::shader_node_type::constant_vector2 || node.type == sbx::assets::shader_node_type::constant_vector3 || node.type == sbx::assets::shader_node_type::constant_vector4 || node.type == sbx::assets::shader_node_type::constant_color;
-    const auto is_texture = node.type == sbx::assets::shader_node_type::texture_sample;
-
-    if (is_constant || is_texture) {
-      if (draw_text_field(is_texture ? "Texture Name" : "Parameter Name", node.name)) {
-        _apply_live(false); // display-only, not part of the generated Slang
-      }
-
-      if (is_constant) {
-        if (ImGui::Checkbox("Exposed", &node.exposed)) {
-          _apply_live();
+    switch (node.type) {
+      case sbx::assets::shader_node_type::property: {
+        if (const auto property = sbx::assets::shader_graph_find_property(_edit.properties, node.property_id)) {
+          ImGui::Text("%s (%s)", property->name.c_str(), property->reference.c_str());
+          ImGui::TextDisabled("Type: %s%s", sbx::assets::shader_graph_parameter_type_to_string(property->type), property->exposed ? "" : ", hidden from materials");
+        } else {
+          ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " This node's property no longer exists.");
         }
 
-        ImGui::TextDisabled("Exposed constants become tunable per-material parameters.");
+        break;
       }
-    }
-
-    switch (node.type) {
       case sbx::assets::shader_node_type::constant_float: {
         auto value = std::holds_alternative<std::float_t>(node.value) ? std::get<std::float_t>(node.value) : 0.0f;
 
         if (ImGui::DragFloat("Value", &value, 0.01f)) {
           node.value = value;
-          // Exposed constants are read from the material buffer at runtime; non-exposed ones are baked into the Slang and need a recompile.
-          _apply_live(!node.exposed);
+          _apply_live();
         }
 
         break;
@@ -1096,7 +1283,7 @@ auto shader_graph_panel::_draw_selection_inspector(editor_state& state) -> void 
 
         if (draw_vector2_control("Value", components, 0.0f, 0.01f).changed) {
           node.value = sbx::math::vector2{components[0], components[1]};
-          _apply_live(!node.exposed);
+          _apply_live();
         }
 
         break;
@@ -1107,7 +1294,7 @@ auto shader_graph_panel::_draw_selection_inspector(editor_state& state) -> void 
 
         if (draw_vector3_control("Value", components, 0.0f, 0.01f).changed) {
           node.value = sbx::math::vector3{components[0], components[1], components[2]};
-          _apply_live(!node.exposed);
+          _apply_live();
         }
 
         break;
@@ -1125,7 +1312,7 @@ auto shader_graph_panel::_draw_selection_inspector(editor_state& state) -> void 
 
         if (changed) {
           node.value = sbx::math::vector4{components[0], components[1], components[2], components[3]};
-          _apply_live(!node.exposed);
+          _apply_live();
         }
 
         break;
@@ -1135,7 +1322,7 @@ auto shader_graph_panel::_draw_selection_inspector(editor_state& state) -> void 
 
         if (draw_color_field("Value", value)) {
           node.value = value;
-          _apply_live(!node.exposed);
+          _apply_live();
         }
 
         break;
@@ -1152,11 +1339,10 @@ auto shader_graph_panel::_draw_selection_inspector(editor_state& state) -> void 
 
         if (draw_texture_picker(state, "##shader_graph_default_texture_picker", value, assets_module, sbx::graphics::format::r8g8b8a8_srgb)) {
           node.value = value;
-          _apply_live(false); // texture_sample always reads generic_textures at runtime
+          _apply_live(false); // read from a material slot at runtime
         }
 
-        // ponytail: only the preview uses this default; new materials with this graph start with an empty slot. Seed them from here if that's wanted.
-        ImGui::TextDisabled("Used by this graph's own preview -- a material using this graph still sets its own texture in the Material Inspector.");
+        ImGui::TextDisabled("Sampled while the Texture input is unconnected. Connect a Texture2D property to let materials choose the texture.");
         break;
       }
       case sbx::assets::shader_node_type::swizzle: {
@@ -1240,10 +1426,452 @@ auto shader_graph_panel::_draw_selection_inspector(editor_state& state) -> void 
       return;
     }
   } else {
-    ImGui::TextDisabled("Select a node or edge.");
+    ImGui::TextDisabled("Select a node, edge or property.");
     ImGui::Spacing();
     ImGui::TextDisabled("Right-click the canvas to add a node.");
   }
+}
+
+auto shader_graph_panel::_draw_blackboard() -> void {
+  ImGui::SeparatorText(ICON_MDI_TUNE " Blackboard");
+
+  if (ImGui::Button(ICON_MDI_PLUS " Add Property")) {
+    ImGui::OpenPopup("##shader_graph_add_property");
+  }
+
+  if (ImGui::BeginPopup("##shader_graph_add_property")) {
+    for (const auto type : all_property_types) {
+      const auto is_full = !sbx::assets::shader_graph_has_room_for(_edit.properties, type);
+
+      if (ImGui::MenuItem(property_type_label(type), nullptr, false, !is_full)) {
+        const auto id = _add_property(type);
+        _select_property(id);
+        _renaming_property_id = id;
+        _rename_buffer = std::ranges::find(_edit.properties, id, &sbx::assets::shader_graph_property::id)->name;
+        _rename_focus_pending = true;
+        _apply_live();
+      }
+    }
+
+    ImGui::EndPopup();
+  }
+
+  ImGui::Spacing();
+
+  // Applied after the loop, since both change _edit.properties.
+  auto pending_move = std::optional<std::pair<std::uint32_t, std::size_t>>{};
+  auto pending_delete = std::optional<std::uint32_t>{};
+
+  for (auto index = std::size_t{0u}; index < _edit.properties.size(); ++index) {
+    const auto& property = _edit.properties[index];
+    const auto* selected = std::get_if<property_selection>(&_selection);
+    const auto is_selected = selected != nullptr && selected->id == property.id;
+
+    ImGui::PushID(static_cast<std::int32_t>(property.id));
+
+    if (_renaming_property_id == property.id) {
+      if (_rename_focus_pending) {
+        ImGui::SetKeyboardFocusHere();
+        _rename_focus_pending = false;
+      }
+
+      ImGui::SetNextItemWidth(-FLT_MIN);
+      draw_text_field("##rename", _rename_buffer);
+
+      if (ImGui::IsItemDeactivated()) {
+        if (!_rename_buffer.empty()) {
+          _rename_property(property.id, _rename_buffer);
+        }
+
+        _renaming_property_id.reset();
+      }
+
+      ImGui::PopID();
+      continue;
+    }
+
+    draw_pin_icon(true, ImGui::ColorConvertFloat4ToU32(pin_color_for(sbx::assets::shader_graph_parameter_value_type(property.type))));
+    ImGui::SameLine();
+
+    const auto label = property.exposed ? property.name : fmt::format("{} (hidden)", property.name);
+    const auto* type_label = property_type_label(property.type);
+
+    // Sized to leave room for the type on the right.
+    const auto selectable_width = std::max(ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(type_label).x - ImGui::GetStyle().ItemSpacing.x, 1.0f);
+
+    if (ImGui::Selectable(label.c_str(), is_selected, ImGuiSelectableFlags_AllowDoubleClick, ImVec2{selectable_width, 0.0f})) {
+      _select_property(property.id);
+
+      if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+        _renaming_property_id = property.id;
+        _rename_buffer = property.name;
+        _rename_focus_pending = true;
+      }
+    }
+
+    if (ImGui::BeginDragDropSource()) {
+      ImGui::SetDragDropPayload(property_drag_payload, &property.id, sizeof(property.id));
+      ImGui::Text("%s %s", ICON_MDI_TUNE, property.name.c_str());
+      ImGui::EndDragDropSource();
+    }
+
+    // Dropping a row onto another moves it there.
+    if (ImGui::BeginDragDropTarget()) {
+      if (const auto* payload = ImGui::AcceptDragDropPayload(property_drag_payload)) {
+        pending_move = std::pair{*static_cast<const std::uint32_t*>(payload->Data), index};
+      }
+
+      ImGui::EndDragDropTarget();
+    }
+
+    if (ImGui::BeginPopupContextItem("##property_context")) {
+      if (ImGui::MenuItem(ICON_MDI_PENCIL " Rename")) {
+        _renaming_property_id = property.id;
+        _rename_buffer = property.name;
+        _rename_focus_pending = true;
+      }
+
+      if (ImGui::MenuItem(ICON_MDI_TRASH_CAN " Delete")) {
+        pending_delete = property.id;
+      }
+
+      ImGui::EndPopup();
+    }
+
+    ImGui::SameLine();
+    ImGui::TextDisabled("%s", type_label);
+
+    ImGui::PopID();
+  }
+
+  if (_edit.properties.empty()) {
+    ImGui::TextDisabled("No properties yet.");
+  }
+
+  const auto* selected = std::get_if<property_selection>(&_selection);
+
+  if (selected != nullptr && !_renaming_property_id && ImGui::IsWindowFocused() && ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+    pending_delete = selected->id;
+  }
+
+  if (pending_move) {
+    _move_property(pending_move->first, pending_move->second);
+  }
+
+  if (pending_delete) {
+    _delete_property(*pending_delete);
+  }
+}
+
+auto shader_graph_panel::_draw_property_inspector(editor_state& state, sbx::assets::shader_graph_property& property) -> void {
+  ImGui::SeparatorText(fmt::format("{} {} Property", ICON_MDI_TUNE, property_type_label(property.type)).c_str());
+
+  auto name = property.name;
+
+  if (draw_text_field("Name", name) && !name.empty()) {
+    _rename_property(property.id, name);
+  }
+
+  if (draw_text_field("Reference", property.reference)) {
+    _apply_live(false);
+  }
+
+  const auto is_duplicate = std::ranges::count(_edit.properties, property.reference, &sbx::assets::shader_graph_property::reference) > 1;
+
+  if (property.reference.empty() || is_duplicate) {
+    ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " The reference must be unique and non-empty; scripts look properties up by it.");
+  }
+
+  if (ImGui::Checkbox("Exposed", &property.exposed)) {
+    _apply_live(false);
+  }
+
+  ImGui::TextDisabled("Hidden properties keep their default but can still be set from scripts.");
+
+  ImGui::SeparatorText("Default");
+
+  auto changed = false;
+
+  switch (property.type) {
+    case sbx::assets::shader_graph_parameter_type::float_value: {
+      auto mode = property.float_mode == sbx::assets::shader_graph_float_mode::slider ? 1 : 0;
+      static constexpr auto mode_names = std::array<const char*, 2u>{"Default", "Slider"};
+
+      if (ImGui::Combo("Mode", &mode, mode_names.data(), static_cast<int>(mode_names.size()))) {
+        property.float_mode = mode == 1 ? sbx::assets::shader_graph_float_mode::slider : sbx::assets::shader_graph_float_mode::plain;
+        changed = true;
+      }
+
+      auto value = std::holds_alternative<std::float_t>(property.value) ? std::get<std::float_t>(property.value) : 0.0f;
+
+      if (property.float_mode == sbx::assets::shader_graph_float_mode::slider) {
+        auto range = std::array<std::float_t, 2u>{property.slider_range.x(), property.slider_range.y()};
+
+        if (ImGui::DragFloat2("Range", range.data(), 0.01f)) {
+          property.slider_range = sbx::math::vector2{range[0], range[1]};
+          changed = true;
+        }
+
+        changed |= ImGui::SliderFloat("Value", &value, range[0], range[1]);
+      } else {
+        changed |= ImGui::DragFloat("Value", &value, 0.01f);
+      }
+
+      property.value = value;
+      break;
+    }
+    case sbx::assets::shader_graph_parameter_type::vector2_value: {
+      const auto value = std::holds_alternative<sbx::math::vector2>(property.value) ? std::get<sbx::math::vector2>(property.value) : sbx::math::vector2{};
+      auto components = std::array<std::float_t, 2u>{value.x(), value.y()};
+
+      if (draw_vector2_control("Value", components, 0.0f, 0.01f).changed) {
+        property.value = sbx::math::vector2{components[0], components[1]};
+        changed = true;
+      }
+
+      break;
+    }
+    case sbx::assets::shader_graph_parameter_type::vector3_value: {
+      const auto value = std::holds_alternative<sbx::math::vector3>(property.value) ? std::get<sbx::math::vector3>(property.value) : sbx::math::vector3{};
+      auto components = std::array<std::float_t, 3u>{value.x(), value.y(), value.z()};
+
+      if (draw_vector3_control("Value", components, 0.0f, 0.01f).changed) {
+        property.value = sbx::math::vector3{components[0], components[1], components[2]};
+        changed = true;
+      }
+
+      break;
+    }
+    case sbx::assets::shader_graph_parameter_type::vector4_value: {
+      const auto value = std::holds_alternative<sbx::math::vector4>(property.value) ? std::get<sbx::math::vector4>(property.value) : sbx::math::vector4{};
+      auto components = std::array<std::float_t, 4u>{value.x(), value.y(), value.z(), value.w()};
+
+      if (ImGui::DragFloat4("Value", components.data(), 0.01f)) {
+        property.value = sbx::math::vector4{components[0], components[1], components[2], components[3]};
+        changed = true;
+      }
+
+      break;
+    }
+    case sbx::assets::shader_graph_parameter_type::color_value: {
+      changed |= ImGui::Checkbox("HDR", &property.is_hdr);
+
+      const auto value = std::holds_alternative<sbx::math::color>(property.value) ? std::get<sbx::math::color>(property.value) : sbx::math::color{1.0f, 1.0f, 1.0f, 1.0f};
+      auto components = std::array<std::float_t, 4u>{value.r(), value.g(), value.b(), value.a()};
+      const auto flags = property.is_hdr ? (ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float) : ImGuiColorEditFlags_None;
+
+      if (ImGui::ColorEdit4("Value", components.data(), flags)) {
+        property.value = sbx::math::color{components[0], components[1], components[2], components[3]};
+        changed = true;
+      }
+
+      break;
+    }
+    case sbx::assets::shader_graph_parameter_type::texture_value: {
+      changed |= ImGui::Checkbox("Linear", &property.is_linear);
+      ImGui::TextDisabled("Linear for data textures (normal, mask, roughness maps).");
+
+      auto value = std::holds_alternative<sbx::assets::texture2d_handle>(property.value) ? std::get<sbx::assets::texture2d_handle>(property.value) : sbx::assets::texture2d_handle{};
+      auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+
+      ImGui::AlignTextToFramePadding();
+      ImGui::TextUnformatted("Texture");
+      ImGui::SameLine(150.0f);
+
+      if (draw_texture_picker(state, "##shader_graph_property_texture_picker", value, assets_module, property.is_linear ? sbx::graphics::format::r8g8b8a8_unorm : sbx::graphics::format::r8g8b8a8_srgb)) {
+        property.value = value;
+        changed = true;
+      }
+
+      break;
+    }
+  }
+
+  // Defaults reach the previews through the material buffer, no recompile.
+  if (changed) {
+    _apply_live(false);
+  }
+
+  ImGui::Separator();
+  if (property.type == sbx::assets::shader_graph_parameter_type::texture_value) {
+    ImGui::TextDisabled("Material texture slot %u", property.slot);
+  } else {
+    ImGui::TextDisabled("Material floats %u-%u of %u", property.slot, property.slot + sbx::assets::shader_graph_parameter_component_count(property.type) - 1u, sbx::assets::shader_graph_max_param_components);
+  }
+
+  if (ImGui::Button(ICON_MDI_TRASH_CAN " Delete Property")) {
+    _delete_property(property.id);
+  }
+}
+
+auto shader_graph_panel::_add_property(sbx::assets::shader_graph_parameter_type type) -> std::uint32_t {
+  auto property = sbx::assets::shader_graph_property{};
+  property.id = sbx::assets::shader_graph_next_property_id(_edit.properties);
+  property.type = type;
+  property.name = unique_property_name(_edit.properties, property_type_label(type));
+  property.reference = sbx::assets::shader_graph_make_reference(property.name, _edit.properties);
+  property.slot = sbx::assets::shader_graph_next_property_slot(_edit.properties, type);
+  property.value = property_default_value(type);
+
+  _edit.properties.push_back(std::move(property));
+
+  return _edit.properties.back().id;
+}
+
+auto shader_graph_panel::_rename_property(std::uint32_t id, const std::string& name) -> void {
+  const auto entry = std::ranges::find(_edit.properties, id, &sbx::assets::shader_graph_property::id);
+
+  if (entry == _edit.properties.end()) {
+    return;
+  }
+
+  // The reference follows the name until it's edited by hand, like Unity.
+  const auto follows_name = entry->reference == sbx::assets::shader_graph_make_reference(entry->name, _edit.properties, id);
+
+  entry->name = name;
+
+  if (follows_name) {
+    entry->reference = sbx::assets::shader_graph_make_reference(name, _edit.properties, id);
+  }
+
+  _apply_live(false);
+}
+
+auto shader_graph_panel::_delete_property(std::uint32_t id) -> void {
+  auto removed_nodes = std::unordered_set<std::uint32_t>{};
+
+  for (const auto& node : _edit.nodes) {
+    if (node.type == sbx::assets::shader_node_type::property && node.property_id == id) {
+      removed_nodes.insert(node.id);
+    }
+  }
+
+  std::erase_if(_edit.nodes, [&removed_nodes](const auto& node) { return removed_nodes.contains(node.id); });
+  std::erase_if(_edit.edges, [&removed_nodes](const auto& edge) { return removed_nodes.contains(edge.from_node) || removed_nodes.contains(edge.to_node); });
+  std::erase_if(_edit.properties, [id](const auto& property) { return property.id == id; });
+
+  for (const auto node_id : removed_nodes) {
+    _seeded_positions.erase(node_id);
+    _node_previews.forget(node_id);
+  }
+
+  if (_renaming_property_id == id) {
+    _renaming_property_id.reset();
+  }
+
+  _selection = std::monostate{};
+  _apply_live();
+}
+
+auto shader_graph_panel::_move_property(std::uint32_t id, std::size_t index) -> void {
+  const auto entry = std::ranges::find(_edit.properties, id, &sbx::assets::shader_graph_property::id);
+
+  if (entry == _edit.properties.end()) {
+    return;
+  }
+
+  const auto from = static_cast<std::size_t>(entry - _edit.properties.begin());
+
+  if (from == index) {
+    return;
+  }
+
+  auto property = std::move(*entry);
+  _edit.properties.erase(entry);
+  _edit.properties.insert(_edit.properties.begin() + static_cast<std::ptrdiff_t>(std::min(index, _edit.properties.size())), std::move(property));
+
+  _apply_live(false);
+}
+
+auto shader_graph_panel::_spawn_property_node(std::uint32_t property_id, sbx::math::vector2 position) -> std::uint32_t {
+  const auto id = _spawn_node(sbx::assets::shader_node_type::property, position);
+  _edit.nodes.back().property_id = property_id;
+
+  return id;
+}
+
+auto shader_graph_panel::_convert_to_property(std::uint32_t node_id) -> void {
+  const auto entry = std::ranges::find(_edit.nodes, node_id, &sbx::assets::shader_graph_node::id);
+
+  if (entry == _edit.nodes.end()) {
+    return;
+  }
+
+  if (entry->type == sbx::assets::shader_node_type::texture_sample) {
+    if (has_texture_input(_edit, node_id)) {
+      return;
+    }
+
+    const auto texture = entry->value;
+    const auto position = entry->editor_position;
+    entry->value = sbx::assets::texture2d_handle{};
+
+    const auto property_id = _add_property(sbx::assets::shader_graph_parameter_type::texture_value);
+    _edit.properties.back().value = texture;
+
+    // _spawn_node grows _edit.nodes, so `entry` isn't used past this point.
+    const auto property_node_id = _spawn_property_node(property_id, position - sbx::math::vector2{220.0f, -60.0f});
+    _edit.edges.push_back(sbx::assets::shader_graph_edge{.from_node = property_node_id, .from_pin = 0u, .to_node = node_id, .to_pin = 1u});
+  } else if (const auto type = property_type_of_constant(entry->type)) {
+    const auto property_id = _add_property(*type);
+    _edit.properties.back().value = entry->value;
+
+    entry->type = sbx::assets::shader_node_type::property;
+    entry->property_id = property_id;
+    entry->value = std::monostate{};
+  } else {
+    return;
+  }
+
+  _apply_live();
+}
+
+auto shader_graph_panel::_convert_to_inline(std::uint32_t node_id) -> void {
+  const auto entry = std::ranges::find(_edit.nodes, node_id, &sbx::assets::shader_graph_node::id);
+
+  if (entry == _edit.nodes.end() || entry->type != sbx::assets::shader_node_type::property) {
+    return;
+  }
+
+  const auto property = sbx::assets::shader_graph_find_property(_edit.properties, entry->property_id);
+
+  if (!property) {
+    return;
+  }
+
+  if (property->type != sbx::assets::shader_graph_parameter_type::texture_value) {
+    entry->type = constant_node_type_of(property->type);
+    entry->value = property->value;
+    entry->property_id = sbx::assets::shader_graph_invalid_property_id;
+
+    _apply_live();
+    return;
+  }
+
+  // A texture has no constant node: each Sample Texture it fed gets the texture inline instead.
+  for (const auto& edge : _edit.edges) {
+    if (edge.from_node != node_id) {
+      continue;
+    }
+
+    if (const auto target = std::ranges::find(_edit.nodes, edge.to_node, &sbx::assets::shader_graph_node::id); target != _edit.nodes.end()) {
+      target->value = property->value;
+    }
+  }
+
+  std::erase_if(_edit.edges, [node_id](const auto& edge) { return edge.from_node == node_id || edge.to_node == node_id; });
+  std::erase_if(_edit.nodes, [node_id](const auto& node) { return node.id == node_id; });
+
+  _seeded_positions.erase(node_id);
+  _node_previews.forget(node_id);
+  _selection = std::monostate{};
+
+  _apply_live();
+}
+
+auto shader_graph_panel::_select_property(std::uint32_t id) -> void {
+  _selection = property_selection{id};
+  _clear_canvas_selection_pending = true;
 }
 
 } // namespace editor

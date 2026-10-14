@@ -55,25 +55,47 @@ static auto component_count(const std::string& slang_type) -> std::size_t {
   return 1u; // "float", or anything unrecognized
 }
 
-static auto validate_shader_graph_parameter_counts(const shader_graph::create_info& graph) -> std::optional<std::string> {
-  auto float_slots = std::uint32_t{0u};
-  auto texture_slots = std::uint32_t{0u};
+static auto validate_shader_graph_parameters(const shader_graph::create_info& graph) -> std::optional<std::string> {
+  auto used_texture_slots = std::unordered_set<std::uint32_t>{};
+  auto used_components = std::uint64_t{0u};
 
-  for (const auto& parameter : compute_shader_graph_parameters(graph.nodes)) {
+  // The only place the budget and packing are enforced; an out-of-range slot would index past generic_params/generic_textures on the GPU.
+  for (const auto& parameter : compute_shader_graph_parameters(graph.properties, graph.nodes, graph.edges)) {
     if (parameter.type == shader_graph_parameter_type::texture_value) {
-      ++texture_slots;
-    } else {
-      ++float_slots;
+      if (parameter.slot >= shader_graph_max_textures) {
+        return fmt::format("graph uses more than {} textures (properties plus unconnected Sample Texture nodes)", shader_graph_max_textures);
+      }
+
+      if (!used_texture_slots.insert(parameter.slot).second) {
+        return fmt::format("property '{}' shares texture slot {} with another property", parameter.name, parameter.slot);
+      }
+
+      continue;
     }
+
+    const auto count = shader_graph_parameter_component_count(parameter.type);
+
+    if (parameter.slot + count > shader_graph_max_param_components) {
+      return fmt::format("graph's properties need more than the {} floats a material holds", shader_graph_max_param_components);
+    }
+
+    if (parameter.slot % shader_graph_parameter_alignment(parameter.type) != 0u) {
+      return fmt::format("property '{}' is at float offset {}, which isn't aligned for its type", parameter.name, parameter.slot);
+    }
+
+    const auto mask = shader_graph_property_component_mask(parameter.type, parameter.slot);
+
+    if ((used_components & mask) != 0u) {
+      return fmt::format("property '{}' overlaps another property's floats", parameter.name);
+    }
+
+    used_components |= mask;
   }
 
-  // The only place the parameter budget is enforced; an over-budget graph would index past generic_params/generic_textures on the GPU.
-  if (float_slots > shader_graph_max_params) {
-    return fmt::format("graph exposes {} float/vector3/color parameters, more than the {} allowed", float_slots, shader_graph_max_params);
-  }
-
-  if (texture_slots > shader_graph_max_textures) {
-    return fmt::format("graph has {} Texture Sample nodes, more than the {} allowed", texture_slots, shader_graph_max_textures);
+  for (const auto& node : graph.nodes) {
+    if (node.type == shader_node_type::property && !shader_graph_find_property(graph.properties, node.property_id)) {
+      return fmt::format("node {} references a property that no longer exists", node.id);
+    }
   }
 
   return std::nullopt;
@@ -81,11 +103,11 @@ static auto validate_shader_graph_parameter_counts(const shader_graph::create_in
 
 // Re-validates edges, Swizzle patterns and the parameter budget: hand-edited or older .shadergraph files may not have gone through the editor's checks.
 static auto validate_shader_graph_types(const shader_graph::create_info& graph) -> std::optional<std::string> {
-  if (auto error = validate_shader_graph_parameter_counts(graph)) {
+  if (auto error = validate_shader_graph_parameters(graph)) {
     return error;
   }
 
-  auto resolver = shader_graph_type_resolver{graph.nodes, graph.edges};
+  auto resolver = shader_graph_type_resolver{graph.properties, graph.nodes, graph.edges};
 
   for (const auto& edge : graph.edges) {
     const auto source_type = resolver.output_type(edge.from_node, edge.from_pin);
@@ -170,7 +192,7 @@ public:
   // Preview overrides: the master preview packs its sampler index and Time into spare .w components to fit 128 bytes and uses a fixed Delta Time.
   // scene_depth/screen_position_preview_value replace those nodes entirely, since no preview has a real frame_data.
   shader_graph_codegen_walker(const shader_graph::create_info& graph, codegen_context context, std::string sampler_index_expression = "push.sampler_index", std::string time_expression = "push.time", std::string delta_time_expression = "push.delta_time", std::string scene_depth_preview_value = "", std::string screen_position_preview_value = "")
-  : _context{context}, _sampler_index_expression{std::move(sampler_index_expression)}, _time_expression{std::move(time_expression)}, _delta_time_expression{std::move(delta_time_expression)}, _scene_depth_preview_value{std::move(scene_depth_preview_value)}, _screen_position_preview_value{std::move(screen_position_preview_value)} {
+  : _context{context}, _properties{memory::make_observer(graph.properties)}, _sampler_index_expression{std::move(sampler_index_expression)}, _time_expression{std::move(time_expression)}, _delta_time_expression{std::move(delta_time_expression)}, _scene_depth_preview_value{std::move(scene_depth_preview_value)}, _screen_position_preview_value{std::move(screen_position_preview_value)} {
     for (const auto& node : graph.nodes) {
       _nodes_by_id.emplace(node.id, &node);
     }
@@ -179,11 +201,9 @@ public:
       _incoming.emplace(pin_key(edge.to_node, edge.to_pin), pin_key(edge.from_node, edge.from_pin));
     }
 
-    for (const auto& parameter : compute_shader_graph_parameters(graph.nodes)) {
-      if (parameter.type == shader_graph_parameter_type::texture_value) {
-        _texture_slot_of.emplace(parameter.node_id, parameter.slot);
-      } else {
-        _float_slot_of.emplace(parameter.node_id, parameter.slot);
+    for (const auto& parameter : compute_shader_graph_parameters(graph.properties, graph.nodes, graph.edges)) {
+      if (parameter.property_id == shader_graph_invalid_property_id) {
+        _inline_texture_slot_of.emplace(parameter.node_id, parameter.slot);
       }
     }
   }
@@ -212,7 +232,7 @@ private:
 
   // Pins that may stay unconnected and fall back to a default (Unity Shader Graph's defaults where it has one).
   [[nodiscard]] static auto _allows_unconnected(shader_node_type type, std::uint32_t pin) -> bool {
-    if (type == shader_node_type::texture_sample && pin == 0u) return true;
+    if (type == shader_node_type::texture_sample) return true; // UV defaults to the mesh UV, Texture to the node's inline texture
     if (type == shader_node_type::combine) return true;
     if (type == shader_node_type::remap && pin != 0u) return true;
     if (type == shader_node_type::fresnel_effect) return true;
@@ -296,7 +316,10 @@ private:
       ? fmt::format("{}_{}", shader_node_type_to_string(node.type), node_id)
       : fmt::format("{}_{}_{}", shader_node_type_to_string(node.type), node_id, pin);
 
-    _statements.push_back(fmt::format("  {} {} = {};\n", result.type, var_name, result.expression));
+    // A texture travels as its bindless index.
+    const auto declared_type = result.type == "texture2d" ? std::string{"uint"} : result.type;
+
+    _statements.push_back(fmt::format("  {} {} = {};\n", declared_type, var_name, result.expression));
 
     const auto materialized = emitted_value{var_name, result.type};
 
@@ -366,50 +389,49 @@ private:
       }
 
       case shader_node_type::constant_float: {
-        if (node.exposed) {
-          return {fmt::format("material.generic_params[{}].x", _float_slot_of.at(node.id)), "float"};
-        }
         const auto value = std::holds_alternative<std::float_t>(node.value) ? std::get<std::float_t>(node.value) : 0.0f;
         return {fmt::format("float({})", value), "float"};
       }
 
       case shader_node_type::constant_vector2: {
-        if (node.exposed) {
-          return {fmt::format("material.generic_params[{}].xy", _float_slot_of.at(node.id)), "float2"};
-        }
         const auto value = std::holds_alternative<math::vector2>(node.value) ? std::get<math::vector2>(node.value) : math::vector2{};
         return {fmt::format("float2({}, {})", value.x(), value.y()), "float2"};
       }
 
       case shader_node_type::constant_vector3: {
-        if (node.exposed) {
-          return {fmt::format("material.generic_params[{}].xyz", _float_slot_of.at(node.id)), "float3"};
-        }
         const auto value = std::holds_alternative<math::vector3>(node.value) ? std::get<math::vector3>(node.value) : math::vector3{};
         return {fmt::format("float3({}, {}, {})", value.x(), value.y(), value.z()), "float3"};
       }
 
       case shader_node_type::constant_vector4: {
-        if (node.exposed) {
-          return {fmt::format("material.generic_params[{}]", _float_slot_of.at(node.id)), "float4"};
-        }
         const auto value = std::holds_alternative<math::vector4>(node.value) ? std::get<math::vector4>(node.value) : math::vector4{};
         return {fmt::format("float4({}, {}, {}, {})", value.x(), value.y(), value.z(), value.w()), "float4"};
       }
 
       case shader_node_type::constant_color: {
-        if (node.exposed) {
-          return {fmt::format("material.generic_params[{}]", _float_slot_of.at(node.id)), "float4"};
-        }
         const auto value = std::holds_alternative<math::color>(node.value) ? std::get<math::color>(node.value) : math::color{};
         return {fmt::format("float4({}, {}, {}, {})", value.r(), value.g(), value.b(), value.a()), "float4"};
       }
 
+      case shader_node_type::property: {
+        const auto property = shader_graph_find_property(*_properties, node.property_id);
+
+        if (!property) {
+          _error = fmt::format("node {} references a property that no longer exists", node.id);
+          return {"0.0", "float"};
+        }
+
+        if (property->type == shader_graph_parameter_type::texture_value) {
+          return {fmt::format("material.generic_textures[{}]", property->slot), "texture2d"};
+        }
+
+        return {shader_graph_parameter_expression(property->type, property->slot), shader_value_type_to_slang(shader_graph_parameter_value_type(property->type))};
+      }
+
       case shader_node_type::texture_sample: {
-        // ponytail: node.value (the node's default texture) is never read; an unset material slot samples the white fallback. Revisit if a graph needs a per-graph default.
-        //
         // All 5 output pins swizzle one shared sample, emitted the first time any pin is visited, so wiring RGB and A doesn't sample twice.
-        const auto slot = _texture_slot_of.at(node.id);
+        // Unconnected Texture samples the node's inline texture, through a hidden slot asset_residency fills from the graph.
+        const auto texture_index = inputs[1].expression.empty() ? fmt::format("material.generic_textures[{}]", _inline_texture_slot_of.at(node.id)) : inputs[1].expression;
         const auto default_uv = _context == codegen_context::fragment ? std::string{"uv"} : std::string{"v.uv"};
         const auto& uv = inputs[0].expression.empty() ? default_uv : inputs[0].expression;
 
@@ -420,7 +442,7 @@ private:
           rgba_variable = cached->second;
         } else {
           rgba_variable = fmt::format("texture_sample_{}_rgba", node.id);
-          _statements.push_back(fmt::format("  float4 {} = textures[material.generic_textures[{}]].Sample(samplers[{}], {});\n", rgba_variable, slot, _sampler_index_expression, uv));
+          _statements.push_back(fmt::format("  float4 {} = textures[{}].Sample(samplers[{}], {});\n", rgba_variable, texture_index, _sampler_index_expression, uv));
           _texture_sample_variable.emplace(node.id, rgba_variable);
         }
 
@@ -576,6 +598,7 @@ private:
   }
 
   codegen_context _context;
+  memory::observer_ptr<const std::vector<shader_graph_property>> _properties;
   std::string _sampler_index_expression;
   std::string _time_expression;
   std::string _delta_time_expression;
@@ -583,8 +606,7 @@ private:
   std::string _screen_position_preview_value;
   std::unordered_map<std::uint32_t, const shader_graph_node*> _nodes_by_id{};
   std::unordered_map<std::uint64_t, std::uint64_t> _incoming{}; // pin_key(to) -> pin_key(from)
-  std::unordered_map<std::uint32_t, std::uint32_t> _float_slot_of{};
-  std::unordered_map<std::uint32_t, std::uint32_t> _texture_slot_of{};
+  std::unordered_map<std::uint32_t, std::uint32_t> _inline_texture_slot_of{};
   std::unordered_map<std::uint64_t, emitted_value> _emitted{};
   std::unordered_set<std::uint64_t> _visiting{};
   std::vector<std::string> _statements{};
@@ -1062,6 +1084,7 @@ auto generate_node_preview_source(const std::string& graph_name, const shader_gr
 
   // Scalars preview as grayscale, float2 as (x,y,0,1), float3 as (x,y,z,1), float4 as-is.
   const auto color_expression = [&]() -> std::string {
+    if (value->type == "texture2d") return fmt::format("textures[{}].Sample(samplers[uint(push.sampler_index)], uv)", value->expression);
     if (value->type == "float") return fmt::format("float4({0}, {0}, {0}, 1.0)", value->expression);
     if (value->type == "float2") return fmt::format("float4(({0}).x, ({0}).y, 0.0, 1.0)", value->expression);
     if (value->type == "float3") return fmt::format("float4({0}, 1.0)", value->expression);

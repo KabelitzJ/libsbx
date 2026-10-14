@@ -501,21 +501,11 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
         ImGui::Text("Nodes: %zu", handle->nodes().size());
         ImGui::Text("Edges: %zu", handle->edges().size());
 
-        const auto parameters = handle->parameters();
+        const auto& properties = handle->properties();
 
-        if (!parameters.empty() && ImGui::TreeNodeEx("Parameters", ImGuiTreeNodeFlags_DefaultOpen)) {
-          for (const auto& parameter : parameters) {
-            const auto* type_name = [&] {
-              switch (parameter.type) {
-                case sbx::assets::shader_graph_parameter_type::float_value: return "Float";
-                case sbx::assets::shader_graph_parameter_type::vector3_value: return "Vector3";
-                case sbx::assets::shader_graph_parameter_type::color_value: return "Color";
-                case sbx::assets::shader_graph_parameter_type::texture_value: return "Texture";
-              }
-              return "?";
-            }();
-
-            ImGui::Text("%s (%s)", parameter.name.empty() ? "(unnamed)" : parameter.name.c_str(), type_name);
+        if (!properties.empty() && ImGui::TreeNodeEx("Properties", ImGuiTreeNodeFlags_DefaultOpen)) {
+          for (const auto& property : properties) {
+            ImGui::Text("%s (%s, %s)%s", property.name.c_str(), property.reference.c_str(), sbx::assets::shader_graph_parameter_type_to_string(property.type), property.exposed ? "" : " hidden");
           }
 
           ImGui::TreePop();

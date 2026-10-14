@@ -217,13 +217,21 @@ struct shader_graph_node_description {
   shader_node_type type{shader_node_type::constant_float};
   math::vector2 editor_position{0.0f, 0.0f};
   std::string name{};
-  bool exposed{false};
+  bool exposed{false}; // only read to migrate graphs saved before blackboard properties
   bool preview{false};
   shader_graph_node_value_description value{};
+  std::uint32_t property_id{shader_graph_invalid_property_id};
 }; // struct shader_graph_node_description
+
+/** @brief A property whose texture default is still a path; property.value stays empty for textures. */
+struct shader_graph_property_description {
+  shader_graph_property property{};
+  std::string texture_path{};
+}; // struct shader_graph_property_description
 
 struct shader_graph_description {
   std::string name{"shader_graph"};
+  std::vector<shader_graph_property_description> properties{};
   std::vector<shader_graph_node_description> nodes{};
   std::vector<shader_graph_edge> edges{};
 }; // struct shader_graph_description

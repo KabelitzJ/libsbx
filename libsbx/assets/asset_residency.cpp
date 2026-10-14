@@ -1508,6 +1508,7 @@ auto asset_residency::update_shader_graph_data(shader_graph_handle& graph, const
   }
 
   graph->_name = create_info.name;
+  graph->_properties = create_info.properties;
   graph->_nodes = create_info.nodes;
   graph->_edges = create_info.edges;
 }
@@ -1523,6 +1524,7 @@ auto asset_residency::update_shader_graph(shader_graph_handle& graph, const shad
   // The caches never invalidate; the generation-suffixed output path is what makes a re-cook take effect, so bump before cooking.
   auto info = shader_graph::create_info{};
   info.name = graph->name();
+  info.properties = graph->properties();
   info.nodes = graph->nodes();
   info.edges = graph->edges();
 
@@ -1584,8 +1586,11 @@ auto asset_residency::save_shader_graph(shader_graph_handle& graph, const std::f
     node_yaml["type"] = shader_node_type_to_string(graph_node.type);
     node_yaml["position"] = graph_node.editor_position;
     node_yaml["name"] = graph_node.name;
-    node_yaml["exposed"] = graph_node.exposed;
     node_yaml["preview"] = graph_node.preview;
+
+    if (graph_node.type == shader_node_type::property) {
+      node_yaml["property"] = graph_node.property_id;
+    }
 
     if (const auto* value = std::get_if<std::float_t>(&graph_node.value)) {
       node_yaml["value"] = *value;
@@ -1613,6 +1618,47 @@ auto asset_residency::save_shader_graph(shader_graph_handle& graph, const std::f
   }
 
   node["nodes"] = nodes_node;
+
+  // Always written, even empty: a file without the key is treated as pre-property and migrated.
+  auto properties_node = YAML::Node{YAML::NodeType::Sequence};
+
+  for (const auto& property : graph->properties()) {
+    auto property_yaml = YAML::Node{};
+
+    property_yaml["id"] = property.id;
+    property_yaml["name"] = property.name;
+    property_yaml["reference"] = property.reference;
+    property_yaml["type"] = shader_graph_parameter_type_to_string(property.type);
+    property_yaml["exposed"] = property.exposed;
+    property_yaml[property.type == shader_graph_parameter_type::texture_value ? "slot" : "offset"] = property.slot;
+
+    if (property.type == shader_graph_parameter_type::texture_value) {
+      property_yaml["linear"] = property.is_linear;
+
+      if (const auto* texture = std::get_if<texture2d_handle>(&property.value)) {
+        if (const auto path = path_of(*texture)) {
+          property_yaml["texture"] = *path;
+        }
+      }
+    } else if (const auto* value = std::get_if<std::float_t>(&property.value)) {
+      property_yaml["value"] = *value;
+      property_yaml["slider"] = property.float_mode == shader_graph_float_mode::slider;
+      property_yaml["range"] = property.slider_range;
+    } else if (const auto* value = std::get_if<math::vector2>(&property.value)) {
+      property_yaml["value"] = *value;
+    } else if (const auto* value = std::get_if<math::vector3>(&property.value)) {
+      property_yaml["value"] = *value;
+    } else if (const auto* value = std::get_if<math::vector4>(&property.value)) {
+      property_yaml["value"] = *value;
+    } else if (const auto* value = std::get_if<math::color>(&property.value)) {
+      property_yaml["value"] = *value;
+      property_yaml["hdr"] = property.is_hdr;
+    }
+
+    properties_node.push_back(property_yaml);
+  }
+
+  node["properties"] = properties_node;
 
   auto edges_node = YAML::Node{YAML::NodeType::Sequence};
 
@@ -1647,6 +1693,7 @@ auto asset_residency::save_shader_graph(shader_graph_handle& graph, const std::f
 
   auto info = shader_graph::create_info{};
   info.name = graph->name();
+  info.properties = graph->properties();
   info.nodes = graph->nodes();
   info.edges = graph->edges();
 
@@ -2204,6 +2251,18 @@ auto asset_residency::_finalize_shader_graph(asset_loader::shader_graph_result& 
   info.name = description.name;
   info.edges = description.edges;
 
+  info.properties.reserve(description.properties.size());
+
+  for (const auto& property_description : description.properties) {
+    auto property = property_description.property;
+
+    if (property.type == shader_graph_parameter_type::texture_value && !property_description.texture_path.empty()) {
+      property.value = load_texture(std::filesystem::path{property_description.texture_path}, property.is_linear ? graphics::format::r8g8b8a8_unorm : graphics::format::r8g8b8a8_srgb);
+    }
+
+    info.properties.push_back(std::move(property));
+  }
+
   info.nodes.reserve(description.nodes.size());
 
   for (const auto& node_description : description.nodes) {
@@ -2212,8 +2271,8 @@ auto asset_residency::_finalize_shader_graph(asset_loader::shader_graph_result& 
     node.type = node_description.type;
     node.editor_position = node_description.editor_position;
     node.name = node_description.name;
-    node.exposed = node_description.exposed;
     node.preview = node_description.preview;
+    node.property_id = node_description.property_id;
 
     if (const auto* pattern = std::get_if<std::string>(&node_description.value); pattern && (node_description.type == shader_node_type::swizzle || node_description.type == shader_node_type::scene_depth || node_description.type == shader_node_type::screen_position)) {
       node.value = *pattern;
@@ -2611,6 +2670,17 @@ auto asset_residency::_material_data_of(const material& material) const -> mater
   const auto& generic_texture_arrays = material.generic_texture_arrays();
   for (auto i = std::size_t{0u}; i < generic_textures.size(); ++i) {
     data.generic_textures[i] = generic_texture_arrays[i].is_valid() ? generic_texture_arrays[i]->index() : resolve(generic_textures[i], _white);
+  }
+
+  // Unconnected Sample Texture nodes read hidden slots that always hold the graph's own inline texture.
+  // ponytail: refreshed only when the material re-uploads; editing a graph's inline texture doesn't reach materials already resident until then.
+  if (const auto& graph = material.shader_graph(); graph.is_valid()) {
+    for (const auto& parameter : graph->parameters()) {
+      if (parameter.property_id == shader_graph_invalid_property_id && parameter.slot < generic_textures.size()) {
+        const auto* texture = std::get_if<texture2d_handle>(&parameter.default_value);
+        data.generic_textures[parameter.slot] = resolve(texture != nullptr ? *texture : texture2d_handle{}, _white);
+      }
+    }
   }
 
   return data;

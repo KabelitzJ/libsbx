@@ -116,34 +116,15 @@ auto shader_graph_preview_renderer::_refresh_material(const sbx::assets::shader_
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
   const auto white = assets_module.white_texture();
 
-  for (const auto& parameter : sbx::assets::compute_shader_graph_parameters(graph.nodes)) {
-    const auto entry = std::ranges::find(graph.nodes, parameter.node_id, &sbx::assets::shader_graph_node::id);
-
-    if (entry == graph.nodes.end()) {
+  for (const auto& parameter : sbx::assets::compute_shader_graph_parameters(graph.properties, graph.nodes, graph.edges)) {
+    if (parameter.type != sbx::assets::shader_graph_parameter_type::texture_value) {
+      sbx::assets::shader_graph_write_parameter(data.generic_params, parameter.type, parameter.slot, sbx::assets::shader_graph_value_to_vector4(parameter.default_value));
       continue;
     }
 
-    switch (parameter.type) {
-      case sbx::assets::shader_graph_parameter_type::float_value: {
-        const auto value = std::holds_alternative<std::float_t>(entry->value) ? std::get<std::float_t>(entry->value) : 0.0f;
-        data.generic_params[parameter.slot] = sbx::math::vector4{value, 0.0f, 0.0f, 0.0f};
-        break;
-      }
-      case sbx::assets::shader_graph_parameter_type::vector3_value: {
-        const auto value = std::holds_alternative<sbx::math::vector3>(entry->value) ? std::get<sbx::math::vector3>(entry->value) : sbx::math::vector3{};
-        data.generic_params[parameter.slot] = sbx::math::vector4{value.x(), value.y(), value.z(), 0.0f};
-        break;
-      }
-      case sbx::assets::shader_graph_parameter_type::color_value: {
-        const auto value = std::holds_alternative<sbx::math::color>(entry->value) ? std::get<sbx::math::color>(entry->value) : sbx::math::color{1.0f, 1.0f, 1.0f, 1.0f};
-        data.generic_params[parameter.slot] = sbx::math::vector4{value.r(), value.g(), value.b(), value.a()};
-        break;
-      }
-      case sbx::assets::shader_graph_parameter_type::texture_value: {
-        const auto handle = std::holds_alternative<sbx::assets::texture2d_handle>(entry->value) ? std::get<sbx::assets::texture2d_handle>(entry->value) : sbx::assets::texture2d_handle{};
-        data.generic_textures[parameter.slot] = handle.is_valid() ? handle->index() : (white.is_valid() ? white->index() : 0u);
-        break;
-      }
+    if (parameter.slot < sbx::assets::shader_graph_max_textures) {
+      const auto handle = std::holds_alternative<sbx::assets::texture2d_handle>(parameter.default_value) ? std::get<sbx::assets::texture2d_handle>(parameter.default_value) : sbx::assets::texture2d_handle{};
+      data.generic_textures[parameter.slot] = handle.is_valid() ? handle->index() : (white.is_valid() ? white->index() : 0u);
     }
   }
 

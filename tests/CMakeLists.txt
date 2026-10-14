@@ -25,6 +25,7 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/ecs/registry_test.cpp"
 
     "${PROJECT_SOURCE_DIR}/assets/audio_cooker_test.cpp"
+    "${PROJECT_SOURCE_DIR}/assets/shader_graph_properties_test.cpp"
 
     "${PROJECT_SOURCE_DIR}/async/worker_pool_test.cpp"
 

@@ -410,6 +410,9 @@ scene_renderer_module::~scene_renderer_module() {
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
+  // The graph's passes and query pools are still referenced by in-flight frames.
+  graphics_module.logical_device().wait_idle();
+
   for (const auto view : _shadow_map_preview_views) {
     if (view != VK_NULL_HANDLE) {
       vkDestroyImageView(graphics_module.logical_device(), view, nullptr);

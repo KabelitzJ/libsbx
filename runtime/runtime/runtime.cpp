@@ -11,6 +11,8 @@
 
 #include <libsbx/utility/logger.hpp>
 
+#include <libsbx/async/async_module.hpp>
+
 #include <libsbx/core/command_queue.hpp>
 #include <libsbx/core/engine_config.hpp>
 #include <libsbx/core/engine.hpp>
@@ -52,6 +54,7 @@
 #include <runtime/application.hpp>
 
 using module_list = sbx::core::module_list<
+  sbx::async::async_module,
   sbx::core::projects_module,
   sbx::platform::platform_module,
   sbx::filesystem::filesystem_module,

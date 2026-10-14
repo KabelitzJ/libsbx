@@ -739,6 +739,12 @@ struct interop {
 
   static auto canvas_get_sort_order(std::uint64_t uuid, std::int32_t* out_value) -> void;
   static auto canvas_set_sort_order(std::uint64_t uuid, std::int32_t value) -> void;
+  static auto canvas_get_mode(std::uint64_t uuid, std::uint32_t* out_value) -> void;
+  static auto canvas_set_mode(std::uint64_t uuid, std::uint32_t value) -> void;
+  static auto canvas_get_billboard(std::uint64_t uuid) -> managed::bool32;
+  static auto canvas_set_billboard(std::uint64_t uuid, bool value) -> void;
+  static auto canvas_get_world_scale(std::uint64_t uuid, std::float_t* out_value) -> void;
+  static auto canvas_set_world_scale(std::uint64_t uuid, std::float_t value) -> void;
 
   static auto rect_transform_get_anchor_min(std::uint64_t uuid, math::vector2* out_value) -> void;
   static auto rect_transform_set_anchor_min(std::uint64_t uuid, math::vector2* value) -> void;

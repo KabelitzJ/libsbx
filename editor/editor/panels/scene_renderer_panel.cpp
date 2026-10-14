@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/panels/scene_renderer_panel.hpp>
 
+#include <libsbx/utility/profiler.hpp>
+
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -41,6 +43,8 @@ static auto _setup_label_value_columns() -> void {
 }
 
 auto scene_renderer_panel::draw(editor_state& state) -> void {
+  SBX_PROFILE_SCOPE("scene_renderer_panel::draw");
+
   static_cast<void>(state);
 
   if (!is_open) {

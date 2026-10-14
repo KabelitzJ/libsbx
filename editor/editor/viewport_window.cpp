@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/viewport_window.hpp>
 
+#include <libsbx/utility/profiler.hpp>
+
 #include <algorithm>
 #include <cstdint>
 #include <filesystem>
@@ -83,6 +85,8 @@ auto accept_viewport_asset_drop(editor_state& state, const sbx::math::vector2& p
 }
 
 auto draw_viewport_window(editor_state& state, const sbx::graphics::sampler& sampler) -> bool {
+  SBX_PROFILE_SCOPE("draw_viewport_window");
+
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
   ImGui::Begin(editor_ui_layer::viewport_window_name, nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
   // ImGui::PopStyleVar();

@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/panels/navigation_panel.hpp>
 
+#include <libsbx/utility/profiler.hpp>
+
 #include <imgui.h>
 
 #include <libsbx/core/engine.hpp>
@@ -13,6 +15,8 @@
 namespace editor {
 
 auto navigation_panel::draw(editor_state& state) -> void {
+  SBX_PROFILE_SCOPE("navigation_panel::draw");
+
   static_cast<void>(state);
 
   if (!is_open) {

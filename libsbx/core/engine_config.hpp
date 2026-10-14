@@ -4,6 +4,7 @@
 #define LIBSBX_CORE_ENGINE_CONFIG_HPP_
 
 #include <filesystem>
+#include <cstdint>
 #include <optional>
 #include <string>
 
@@ -28,6 +29,9 @@ struct project_config {
  */
 struct engine_config {
   core::threading_policy threading{threading_policy::multi_threaded};
+
+  /** @brief async_module's worker threads. Unset: one per core left after the main thread and, with multi_threaded, the render thread. 0 runs every job on the thread that waits for it. */
+  std::optional<std::uint32_t> worker_count{};
 
   /**
    * @brief The project to open at startup. Resolved by `engine`'s own constructor — before

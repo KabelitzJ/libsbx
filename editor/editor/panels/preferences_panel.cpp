@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/panels/preferences_panel.hpp>
 
+#include <libsbx/utility/profiler.hpp>
+
 #include <string>
 
 #include <imgui.h>
@@ -15,6 +17,8 @@
 namespace editor {
 
 auto preferences_panel::draw([[maybe_unused]] editor_state& state) -> void {
+  SBX_PROFILE_SCOPE("preferences_panel::draw");
+
   if (!is_open) {
     return;
   }

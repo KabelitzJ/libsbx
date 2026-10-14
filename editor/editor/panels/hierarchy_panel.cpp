@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/panels/hierarchy_panel.hpp>
 
+#include <libsbx/utility/profiler.hpp>
+
 #include <algorithm>
 #include <cctype>
 #include <cfloat>
@@ -468,6 +470,8 @@ auto hierarchy_panel::_draw_empty_space_context_menu(editor_state& state, sbx::s
 }
 
 auto hierarchy_panel::draw(editor_state& state) -> void {
+  SBX_PROFILE_SCOPE("hierarchy_panel::draw");
+
   ImGui::Begin(window_name);
 
   _visible_row_order.clear();

@@ -42,6 +42,8 @@
 
 #include <libsbx/core/engine.hpp>
 
+#include <libsbx/utility/profiler.hpp>
+
 #include <libsbx/platform/platform_module.hpp>
 
 #include <libsbx/scenes/scene.hpp>
@@ -129,9 +131,15 @@ auto editor_ui_layer::build() -> void {
 
   _handle_shortcuts();
 
-  _draw_dockspace();
+  {
+    SBX_PROFILE_SCOPE("editor_ui_layer::draw_dockspace");
+    _draw_dockspace();
+  }
 
-  _asset_watcher.update(_state);
+  {
+    SBX_PROFILE_SCOPE("editor_ui_layer::asset_watcher");
+    _asset_watcher.update(_state);
+  }
 
   // Waits out Play: swapping the game assembly would kill the running scripts.
   if (_state.scripts_changed && !sbx::core::engine::get_module<sbx::scenes::scenes_module>().is_simulating()) {
@@ -143,8 +151,16 @@ auto editor_ui_layer::build() -> void {
   }
 
   _handle_scene_file_request();
-  _refresh_dirty_scenes();
-  _thumbnails.update();
+
+  {
+    SBX_PROFILE_SCOPE("editor_ui_layer::refresh_dirty_scenes");
+    _refresh_dirty_scenes();
+  }
+
+  {
+    SBX_PROFILE_SCOPE("editor_ui_layer::thumbnails");
+    _thumbnails.update();
+  }
 
   _viewport_is_hovered = draw_viewport_window(_state, _sampler);
 

@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/panels/animation_graph_panel.hpp>
 
+#include <libsbx/utility/profiler.hpp>
+
 #include <algorithm>
 #include <array>
 #include <optional>
@@ -150,6 +152,8 @@ auto animation_graph_panel::_state_name(std::uint32_t state_id) const -> std::st
 }
 
 auto animation_graph_panel::draw(editor_state& state) -> void {
+  SBX_PROFILE_SCOPE("animation_graph_panel::draw");
+
   if (state.open_animation_graph_request.has_value()) {
     const auto request = *state.open_animation_graph_request;
     state.open_animation_graph_request.reset();

@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/panels/statistics_panel.hpp>
 
+#include <libsbx/utility/profiler.hpp>
+
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -77,6 +79,8 @@ static auto _setup_label_value_columns() -> void {
 }
 
 auto statistics_panel::draw(editor_state& state) -> void {
+  SBX_PROFILE_SCOPE("statistics_panel::draw");
+
   static_cast<void>(state);
 
   _sample_memory();

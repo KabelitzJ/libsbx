@@ -19,6 +19,7 @@ graphify-out/
 
 *.profile
 *.prof
+*.tracy
 
 *.log
 

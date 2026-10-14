@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/panels/asset_browser_panel.hpp>
 
+#include <libsbx/utility/profiler.hpp>
+
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
@@ -257,6 +259,8 @@ auto asset_browser_panel::_draw_entry_context_menu(editor_state& state, const as
 }
 
 auto asset_browser_panel::draw(editor_state& state) -> void {
+  SBX_PROFILE_SCOPE("asset_browser_panel::draw");
+
   // The panes scroll on their own; the panel never needs to.
   ImGui::Begin(window_name, nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 

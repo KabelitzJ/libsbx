@@ -295,6 +295,12 @@ scripting_module::scripting_module() {
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Canvas_GetSortOrder", reinterpret_cast<void*>(&interop::canvas_get_sort_order));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Canvas_SetSortOrder", reinterpret_cast<void*>(&interop::canvas_set_sort_order));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Canvas_GetMode", reinterpret_cast<void*>(&interop::canvas_get_mode));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Canvas_SetMode", reinterpret_cast<void*>(&interop::canvas_set_mode));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Canvas_GetBillboard", reinterpret_cast<void*>(&interop::canvas_get_billboard));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Canvas_SetBillboard", reinterpret_cast<void*>(&interop::canvas_set_billboard));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Canvas_GetWorldScale", reinterpret_cast<void*>(&interop::canvas_get_world_scale));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Canvas_SetWorldScale", reinterpret_cast<void*>(&interop::canvas_set_world_scale));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Canvas_WantsPointerCapture", reinterpret_cast<void*>(&interop::canvas_wants_pointer_capture));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RectTransform_GetAnchorMin", reinterpret_cast<void*>(&interop::rect_transform_get_anchor_min));

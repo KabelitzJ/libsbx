@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/panels/project_settings_panel.hpp>
 
+#include <libsbx/utility/profiler.hpp>
+
 #include <algorithm>
 #include <array>
 #include <cfloat>
@@ -34,6 +36,8 @@
 namespace editor {
 
 auto project_settings_panel::draw(editor_state& state) -> void {
+  SBX_PROFILE_SCOPE("project_settings_panel::draw");
+
   auto open_layers_tab = false;
 
   if (state.open_layer_settings_request) {

@@ -8,6 +8,8 @@
 #include <utility>
 #include <vector>
 
+#include <libsbx/utility/profiler.hpp>
+
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
@@ -507,6 +509,10 @@ auto render_graph::execute(render_context& context) -> void {
   for (auto pass_index = std::size_t{0u}; pass_index < _compiled.size(); ++pass_index) {
     auto& entry = _compiled[pass_index];
 
+    SBX_PROFILE_SCOPE("render_graph::pass");
+    [[maybe_unused]] const auto pass_name = entry.pass->name();
+    SBX_PROFILE_SET_ZONE_TEXT(pass_name.data(), pass_name.size());
+
     auto wrote_begin_timestamp = false;
 
     for (auto group_index = std::uint32_t{0u}; group_index < entry.groups.size(); ++group_index) {
@@ -564,6 +570,8 @@ auto render_graph::execute(render_context& context) -> void {
   }
 
   context.command_buffer->end_query(*_pipeline_stats_pool, context.slot);
+
+  SBX_PROFILE_SCOPE("render_graph::read_gpu_queries");
 
   ++_frames_executed;
 

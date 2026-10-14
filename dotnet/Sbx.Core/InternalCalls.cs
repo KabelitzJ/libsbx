@@ -262,6 +262,12 @@ namespace Sbx.Core
 
     internal static delegate* unmanaged<ulong, int*, void> Canvas_GetSortOrder;
     internal static delegate* unmanaged<ulong, int, void> Canvas_SetSortOrder;
+    internal static delegate* unmanaged<ulong, uint*, void> Canvas_GetMode;
+    internal static delegate* unmanaged<ulong, uint, void> Canvas_SetMode;
+    internal static delegate* unmanaged<ulong, bool> Canvas_GetBillboard;
+    internal static delegate* unmanaged<ulong, bool, void> Canvas_SetBillboard;
+    internal static delegate* unmanaged<ulong, float*, void> Canvas_GetWorldScale;
+    internal static delegate* unmanaged<ulong, float, void> Canvas_SetWorldScale;
     internal static delegate* unmanaged<bool> Canvas_WantsPointerCapture;
 
     internal static delegate* unmanaged<ulong, Vector2*, void> RectTransform_GetAnchorMin;

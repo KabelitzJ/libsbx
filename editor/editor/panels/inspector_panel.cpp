@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/panels/inspector_panel.hpp>
 
+#include <libsbx/utility/profiler.hpp>
+
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -581,6 +583,8 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
 }
 
 auto inspector_panel::draw(editor_state& state) -> void {
+  SBX_PROFILE_SCOPE("inspector_panel::draw");
+
   // WindowPadding must be pushed before Begin().
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
 

@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/panels/logger_panel.hpp>
 
+#include <libsbx/utility/profiler.hpp>
+
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
 
 #include <editor/console_sink.hpp>
@@ -46,6 +48,8 @@ auto trim_eol(const std::string& text) -> std::string_view {
 
 
 auto logger_panel::draw(editor_state&) -> void {
+  SBX_PROFILE_SCOPE("logger_panel::draw");
+
   ImGui::Begin(window_name);
 
   if (ImGui::Button(ICON_MDI_TRASH_CAN " Clear")) {

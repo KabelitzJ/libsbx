@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/panels/shader_graph_panel.hpp>
 
+#include <libsbx/utility/profiler.hpp>
+
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -391,6 +393,8 @@ auto shader_graph_panel::_next_node_id() const -> std::uint32_t {
 }
 
 auto shader_graph_panel::draw(editor_state& state) -> void {
+  SBX_PROFILE_SCOPE("shader_graph_panel::draw");
+
   if (state.open_shader_graph_request.has_value()) {
     const auto request = *state.open_shader_graph_request;
     state.open_shader_graph_request.reset();

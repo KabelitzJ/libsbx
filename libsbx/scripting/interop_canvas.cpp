@@ -47,6 +47,68 @@ auto interop::canvas_set_sort_order(std::uint64_t uuid, std::int32_t value) -> v
   component->sort_order = value;
 }
 
+auto interop::canvas_get_mode(std::uint64_t uuid, std::uint32_t* out_value) -> void {
+  auto node = resolve_node(uuid);
+  auto component = node.try_get_component<canvas::canvas>();
+
+  if (!out_value || !node.is_valid() || !component) {
+    return;
+  }
+
+  *out_value = static_cast<std::uint32_t>(component->mode);
+}
+
+auto interop::canvas_set_mode(std::uint64_t uuid, std::uint32_t value) -> void {
+  auto node = resolve_node(uuid);
+  auto component = node.try_get_component<canvas::canvas>();
+
+  if (!node.is_valid() || !component) {
+    return;
+  }
+
+  component->mode = static_cast<canvas::render_mode>(value);
+}
+
+auto interop::canvas_get_billboard(std::uint64_t uuid) -> managed::bool32 {
+  auto node = resolve_node(uuid);
+  auto component = node.try_get_component<canvas::canvas>();
+
+  return node.is_valid() && component && component->billboard;
+}
+
+auto interop::canvas_set_billboard(std::uint64_t uuid, bool value) -> void {
+  auto node = resolve_node(uuid);
+  auto component = node.try_get_component<canvas::canvas>();
+
+  if (!node.is_valid() || !component) {
+    return;
+  }
+
+  component->billboard = value;
+}
+
+auto interop::canvas_get_world_scale(std::uint64_t uuid, std::float_t* out_value) -> void {
+  auto node = resolve_node(uuid);
+  auto component = node.try_get_component<canvas::canvas>();
+
+  if (!out_value || !node.is_valid() || !component) {
+    return;
+  }
+
+  *out_value = component->world_scale;
+}
+
+auto interop::canvas_set_world_scale(std::uint64_t uuid, std::float_t value) -> void {
+  auto node = resolve_node(uuid);
+  auto component = node.try_get_component<canvas::canvas>();
+
+  if (!node.is_valid() || !component) {
+    return;
+  }
+
+  component->world_scale = value;
+}
+
 auto interop::rect_transform_get_anchor_min(std::uint64_t uuid, math::vector2* out_value) -> void {
   auto node = resolve_node(uuid);
   auto component = node.try_get_component<canvas::rect_transform>();

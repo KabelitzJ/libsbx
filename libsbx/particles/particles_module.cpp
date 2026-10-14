@@ -6,6 +6,8 @@
 
 #include <libsbx/utility/profiler.hpp>
 
+#include <libsbx/async/async_module.hpp>
+
 #include <libsbx/math/algorithm.hpp>
 
 #include <libsbx/particles/spawn.hpp>
@@ -41,12 +43,54 @@ auto particles_module::fixed_update() -> void {
   auto& scene = scenes_module.active_scene();
   const auto dt = core::engine::fixed_delta_time().value();
 
+  _parallel_effects.clear();
+  _serial_effects.clear();
+
   for (auto&& [entity, world, effect] : scene.query<scenes::world_transform, scenes::particle_effect>(ecs::exclude<scenes::inactive>).each()) {
-    _simulate_effect(scene, effect, world.matrix, dt);
+    // World collision queries physics_module, whose shape caches fill lazily and aren't thread-safe.
+    // ponytail: such effects simulate on this thread; parallelize them once the physics caches are (async plan Phase 3).
+    const auto queries_physics = effect.effect.is_valid() && std::ranges::any_of(effect.effect->emitters(), [](const auto& config) {
+      return config.collision.mode == assets::particle_collision_mode::world;
+    });
+
+    (queries_physics ? _serial_effects : _parallel_effects).push_back(effect_entry{entity, memory::make_observer(effect), memory::make_observer(world)});
+  }
+
+  static constexpr auto effects_per_chunk = std::size_t{2u};
+
+  const auto chunk_count = (_parallel_effects.size() + effects_per_chunk - 1u) / effects_per_chunk;
+
+  _chunk_requests.resize(std::max(_chunk_requests.size(), chunk_count + 1u));
+
+  for (auto& requests : _chunk_requests) {
+    requests.clear();
+  }
+
+  core::engine::get_module<async::async_module>().pool().parallel_for_chunks(0u, _parallel_effects.size(), effects_per_chunk, [&](std::size_t begin, std::size_t end) {
+    SBX_PROFILE_SCOPE("Particle effects");
+
+    auto& requests = _chunk_requests[begin / effects_per_chunk];
+
+    for (auto index = begin; index < end; ++index) {
+      _simulate_effect(scene, _parallel_effects[index], dt, requests);
+    }
+  });
+
+  auto& serial_requests = _chunk_requests.back();
+
+  for (const auto& entry : _serial_effects) {
+    _simulate_effect(scene, entry, dt, serial_requests);
+  }
+
+  for (const auto& requests : _chunk_requests) {
+    _apply_sub_emitter_requests(scene, requests);
   }
 }
 
-auto particles_module::_simulate_effect(scenes::scene& scene, scenes::particle_effect& effect, const math::matrix4x4& world, std::float_t dt) -> void {
+auto particles_module::_simulate_effect(scenes::scene& scene, const effect_entry& entry, std::float_t dt, std::vector<sub_emitter_request>& requests) -> void {
+  auto& effect = *entry.effect;
+  const auto& world = entry.world->matrix;
+
   if (effect.playback == scenes::particle_playback_state::stopped) {
     for (auto& runtime : effect.emitters) {
       runtime.particles.clear();
@@ -103,11 +147,18 @@ auto particles_module::_simulate_effect(scenes::scene& scene, scenes::particle_e
       continue;
     }
 
-    _spawn(scene, config, runtime, world, effect.inherited_velocity, emitting, dt);
-    _integrate(scene, config, runtime, dt);
+    const auto first_request = requests.size();
+
+    _spawn(config, runtime, world, effect.inherited_velocity, emitting, dt, requests);
+    _integrate(config, runtime, dt, requests);
 
     if (config.collision.mode != assets::particle_collision_mode::none) {
-      _resolve_collisions(scene, config, runtime);
+      _resolve_collisions(scene, config, runtime, requests);
+    }
+
+    for (auto request = first_request; request < requests.size(); ++request) {
+      requests[request].effect = entry.entity;
+      requests[request].emitter_index = index;
     }
 
     if (config.trail.enabled) {
@@ -126,14 +177,14 @@ auto particles_module::_simulate_effect(scenes::scene& scene, scenes::particle_e
   }
 }
 
-auto particles_module::_spawn(scenes::scene& scene, const assets::particle_emitter& config, scenes::particle_emitter& runtime, const math::matrix4x4& world, const math::vector3& inherited_velocity, bool emitting, std::float_t dt) -> void {
+auto particles_module::_spawn(const assets::particle_emitter& config, scenes::particle_emitter& runtime, const math::matrix4x4& world, const math::vector3& inherited_velocity, bool emitting, std::float_t dt, std::vector<sub_emitter_request>& requests) -> void {
   if (!emitting) {
     return;
   }
 
   const auto spawn_one = [&] {
     auto spawned = roll_particle(config, world, runtime.next_particle_id++, inherited_velocity);
-    _trigger_sub_emitters(scene, runtime, config, assets::sub_emitter_event::birth, spawned);
+    _queue_sub_emitters(config, assets::sub_emitter_event::birth, spawned, requests);
     runtime.particles.push_back(spawned);
   };
 
@@ -153,7 +204,7 @@ auto particles_module::_spawn(scenes::scene& scene, const assets::particle_emitt
   }
 }
 
-auto particles_module::_integrate(scenes::scene& scene, const assets::particle_emitter& config, scenes::particle_emitter& runtime, std::float_t dt) -> void {
+auto particles_module::_integrate(const assets::particle_emitter& config, scenes::particle_emitter& runtime, std::float_t dt, std::vector<sub_emitter_request>& requests) -> void {
   for (auto& p : runtime.particles) {
     p.age += dt;
 
@@ -181,14 +232,14 @@ auto particles_module::_integrate(scenes::scene& scene, const assets::particle_e
   // death sub-emitters must see the particle's final state, so fire them before erasing.
   for (const auto& p : runtime.particles) {
     if (p.age >= p.lifetime) {
-      _trigger_sub_emitters(scene, runtime, config, assets::sub_emitter_event::death, p);
+      _queue_sub_emitters(config, assets::sub_emitter_event::death, p, requests);
     }
   }
 
   std::erase_if(runtime.particles, [](const particle& p) { return p.age >= p.lifetime; });
 }
 
-auto particles_module::_resolve_collisions(scenes::scene& scene, const assets::particle_emitter& config, scenes::particle_emitter& runtime) -> void {
+auto particles_module::_resolve_collisions(scenes::scene& scene, const assets::particle_emitter& config, scenes::particle_emitter& runtime, std::vector<sub_emitter_request>& requests) -> void {
   const auto& collision = config.collision;
 
   const auto respond = [&](particle& p, const math::vector3& normal, std::float_t push_out) {
@@ -198,7 +249,7 @@ auto particles_module::_resolve_collisions(scenes::scene& scene, const assets::p
     p.lifetime -= p.lifetime * collision.lifetime_loss;
     p.collision_count += 1u;
 
-    _trigger_sub_emitters(scene, runtime, config, assets::sub_emitter_event::collision, p);
+    _queue_sub_emitters(config, assets::sub_emitter_event::collision, p, requests);
 
     if (collision.max_collisions_per_particle > 0u && p.collision_count >= collision.max_collisions_per_particle) {
       p.age = p.lifetime;
@@ -315,6 +366,35 @@ auto particles_module::_record_trails(const assets::particle_emitter& config, sc
       trail_it = runtime.trails.back();
       runtime.trails.pop_back();
     }
+  }
+}
+
+auto particles_module::_queue_sub_emitters(const assets::particle_emitter& config, assets::sub_emitter_event event, const particle& p, std::vector<sub_emitter_request>& requests) -> void {
+  const auto has_binding = std::ranges::any_of(config.sub_emitters, [event](const auto& binding) {
+    return binding.event == event && binding.effect.is_valid();
+  });
+
+  if (has_binding) {
+    requests.push_back(sub_emitter_request{.event = event, .source = p});
+  }
+}
+
+auto particles_module::_apply_sub_emitter_requests(scenes::scene& scene, std::span<const sub_emitter_request> requests) -> void {
+  for (const auto& request : requests) {
+    // Looked up per request: triggering adds components, which may move the effect this came from.
+    auto node = scene.node_of(request.effect);
+
+    if (!node.is_valid() || !node.has_component<scenes::particle_effect>()) {
+      continue;
+    }
+
+    auto& effect = node.get_component<scenes::particle_effect>();
+
+    if (!effect.effect.is_valid() || request.emitter_index >= effect.emitters.size() || request.emitter_index >= effect.effect->emitters().size()) {
+      continue;
+    }
+
+    _trigger_sub_emitters(scene, effect.emitters[request.emitter_index], effect.effect->emitters()[request.emitter_index], request.event, request.source);
   }
 }
 

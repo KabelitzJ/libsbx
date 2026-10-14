@@ -221,6 +221,9 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/assets/particle_effect.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/primitive_meshes.cpp"
 
+    "${CMAKE_SOURCE_DIR}/libsbx/async/async_module.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/async/worker_pool.cpp"
+
     "${CMAKE_SOURCE_DIR}/libsbx/canvas/canvas_draw_list.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/canvas/canvas_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/canvas/layout_resolve.cpp"
@@ -440,6 +443,11 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/canvas/layout_resolve.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/canvas/rect_resolve.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/canvas/text_layout.hpp"
+
+      "${CMAKE_SOURCE_DIR}/libsbx/async/async_module.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/async/job.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/async/work_stealing_deque.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/async/worker_pool.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/containers/compressed_pair.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/containers/containers.hpp"

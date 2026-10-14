@@ -139,7 +139,6 @@ auto canvas_module::update() -> void {
     auto projection = math::matrix4x4::identity;
     auto camera_world_matrix = math::matrix4x4::identity;
     auto camera_fov_degrees = 60.0f;
-    auto camera_position = math::vector3{0.0f, 0.0f, 0.0f};
 
     if (root.mode == render_mode::screen_space_camera) {
       // Pinned to an explicit camera reference (Unity's Canvas.worldCamera equivalent) --
@@ -170,7 +169,7 @@ auto canvas_module::update() -> void {
       }
 
       camera_fov_degrees = camera.fov_degrees;
-      camera_position = camera.position;
+      camera_world_matrix = math::matrix4x4::inverted(camera.view);
       view = camera.view;
       projection = math::matrix4x4::perspective(math::degree{camera.fov_degrees}, aspect, camera.near_plane, camera.far_plane);
     }
@@ -197,17 +196,14 @@ auto canvas_module::update() -> void {
       auto placement = node.world_matrix();
 
       if (root.billboard) {
-        const auto position = math::vector3{placement[3]};
-        const auto to_camera = position - camera_position;
+        // Align to the camera's view plane (copy its rotation) rather than pointing at the camera's
+        // position: point-at billboards yaw by how far off-centre they are, so a row of them bends
+        // into an arch near the camera. The camera's own forward is -Z, matching the "+Z is the
+        // legible side" convention push_quad_world's winding relies on (see its comment).
+        const auto position = placement[3];
 
-        // Same "+Z is the legible side" convention push_quad_world's winding relies on (see its
-        // comment): quaternion::look_at aims local -Z (forward) at its direction argument, so
-        // facing the viewer means aiming forward *away* from the camera, not at it.
-        if (to_camera.length_squared() > math::epsilonf) {
-          const auto rotation = math::quaternion::look_at(math::vector3::normalized(to_camera));
-
-          placement = math::matrix4x4::translated(math::matrix4x4::identity, position) * math::matrix_cast<math::matrix4x4>(rotation);
-        }
+        placement = camera_world_matrix;
+        placement[3] = position;
       }
 
       canvas_to_world = placement * make_pixel_to_local(root.world_scale);

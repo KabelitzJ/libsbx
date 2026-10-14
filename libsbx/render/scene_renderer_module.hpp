@@ -290,7 +290,19 @@ private:
    * @param pose Receives joint world and skinning matrices.
    * @param delta_time The time step.
    */
-  auto _evaluate_skeleton_pose(const assets::skeleton& skeleton, const scenes::mesh_renderer& renderer, scenes::animator* animator, scenes::skeleton_pose& pose, std::float_t delta_time) -> void;
+  // Scratch for _evaluate_skeleton_pose, one per parallel chunk; kept across frames for its capacity.
+  struct pose_scratch {
+    std::vector<math::vector3> translations{};
+    std::vector<math::quaternion> rotations{};
+    std::vector<math::vector3> scales{};
+    std::vector<math::vector3> target_translations{};
+    std::vector<math::quaternion> target_rotations{};
+    std::vector<math::vector3> target_scales{};
+    std::vector<math::matrix4x4> locals{};
+  }; // struct pose_scratch
+
+  // Runs on async workers: touches only its own pose, animator and scratch.
+  auto _evaluate_skeleton_pose(const assets::skeleton& skeleton, const scenes::mesh_renderer& renderer, memory::observer_ptr<scenes::animator> animator, scenes::skeleton_pose& pose, std::float_t delta_time, pose_scratch& scratch) -> void;
 
   /**
    * @brief State machine bookkeeping only: current and target state, clip time and transition progress.
@@ -332,14 +344,16 @@ private:
   bool _has_rendered{false};
   std::optional<camera_data> _camera_override{};
 
-  // Scratch buffers reused across instances and frames; _build_packet's skinned loop is serial.
-  std::vector<math::vector3> _skeleton_scratch_translations{};
-  std::vector<math::quaternion> _skeleton_scratch_rotations{};
-  std::vector<math::vector3> _skeleton_scratch_scales{};
-  std::vector<math::vector3> _skeleton_scratch_target_translations{};
-  std::vector<math::quaternion> _skeleton_scratch_target_rotations{};
-  std::vector<math::vector3> _skeleton_scratch_target_scales{};
-  std::vector<math::matrix4x4> _skeleton_scratch_locals{};
+  struct skinned_entry {
+    ecs::entity entity{};
+    memory::observer_ptr<const scenes::world_transform> world{};
+    memory::observer_ptr<scenes::mesh_renderer> renderer{};
+    memory::observer_ptr<scenes::skeleton_pose> pose{};
+    memory::observer_ptr<scenes::animator> animator{};
+  }; // struct skinned_entry
+
+  std::vector<skinned_entry> _skinned_entries{};
+  std::vector<pose_scratch> _pose_scratch{};
 
   // Reused across frames to avoid reallocating; buckets left empty by the previous build are pruned.
   std::unordered_map<mesh_key, draw_bucket, mesh_key_hash> _opaque_buckets{};

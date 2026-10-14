@@ -224,17 +224,29 @@ auto ui_system::apply_default_style() -> void {
 auto ui_system::build_frame() -> ui_draw_data {
   SBX_PROFILE_SCOPE("ui_system::build_frame");
 
-  _collect_pending_textures();
+  {
+    SBX_PROFILE_SCOPE("ui_system::collect_pending_textures");
+    _collect_pending_textures();
+  }
 
-  ImGui_ImplVulkan_NewFrame();
-  ImGui_ImplGlfw_NewFrame();
-  ImGui::NewFrame();
+  {
+    SBX_PROFILE_SCOPE("ui_system::new_frame");
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+  }
 
   for (auto layer : _layers) {
+    SBX_PROFILE_SCOPE("ui_layer::build");
+    [[maybe_unused]] const auto name = layer->name();
+    SBX_PROFILE_SET_ZONE_TEXT(name.data(), name.size());
     layer->build();
   }
 
-  ImGui::Render();
+  {
+    SBX_PROFILE_SCOPE("ImGui::Render");
+    ImGui::Render();
+  }
 
   return ui_draw_data{ImGui::GetDrawData()};
 }

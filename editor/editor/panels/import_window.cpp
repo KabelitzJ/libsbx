@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/panels/import_window.hpp>
 
+#include <libsbx/utility/profiler.hpp>
+
 #include <algorithm>
 #include <string>
 
@@ -21,6 +23,8 @@ namespace editor {
 inline constexpr auto import_popup_id = "###import_window";
 
 auto import_window::draw(editor_state& state) -> void {
+  SBX_PROFILE_SCOPE("import_window::draw");
+
   if (!_current.has_value()) {
     _advance(state);
   }

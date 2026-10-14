@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/render/scene_renderer_module.hpp>
 
+#include <libsbx/async/async_module.hpp>
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -637,7 +639,7 @@ auto scene_renderer_module::_advance_animator_state(const scenes::mesh_renderer&
   }
 }
 
-auto scene_renderer_module::_evaluate_skeleton_pose(const assets::skeleton& skeleton, const scenes::mesh_renderer& renderer, scenes::animator* animator, scenes::skeleton_pose& pose, std::float_t delta_time) -> void {
+auto scene_renderer_module::_evaluate_skeleton_pose(const assets::skeleton& skeleton, const scenes::mesh_renderer& renderer, memory::observer_ptr<scenes::animator> animator, scenes::skeleton_pose& pose, std::float_t delta_time, pose_scratch& scratch) -> void {
   const auto& joints = skeleton.joints();
   const auto joint_count = joints.size();
 
@@ -650,9 +652,9 @@ auto scene_renderer_module::_evaluate_skeleton_pose(const assets::skeleton& skel
     _advance_animator_state(renderer, *graph, *animator, delta_time);
   }
 
-  auto& translations = _skeleton_scratch_translations;
-  auto& rotations = _skeleton_scratch_rotations;
-  auto& scales = _skeleton_scratch_scales;
+  auto& translations = scratch.translations;
+  auto& rotations = scratch.rotations;
+  auto& scales = scratch.scales;
 
   translations.resize(joint_count);
   rotations.resize(joint_count);
@@ -674,9 +676,9 @@ auto scene_renderer_module::_evaluate_skeleton_pose(const assets::skeleton& skel
   if (graph != nullptr && animator->transition_target_state_id.has_value() && animator->transition_target_clip.is_valid()) {
     const auto alpha = (animator->transition_duration > 0.0f) ? std::clamp(animator->transition_time / animator->transition_duration, 0.0f, 1.0f) : 1.0f;
 
-    auto& target_translations = _skeleton_scratch_target_translations;
-    auto& target_rotations = _skeleton_scratch_target_rotations;
-    auto& target_scales = _skeleton_scratch_target_scales;
+    auto& target_translations = scratch.target_translations;
+    auto& target_rotations = scratch.target_rotations;
+    auto& target_scales = scratch.target_scales;
 
     target_translations.resize(joint_count);
     target_rotations.resize(joint_count);
@@ -698,7 +700,7 @@ auto scene_renderer_module::_evaluate_skeleton_pose(const assets::skeleton& skel
     }
   }
 
-  auto& locals = _skeleton_scratch_locals;
+  auto& locals = scratch.locals;
   locals.resize(joint_count);
 
   for (auto index = std::size_t{0u}; index < joint_count; ++index) {
@@ -994,15 +996,38 @@ auto scene_renderer_module::_build_packet() -> render_packet {
   const auto& frame_context = core::engine::get_module<graphics::graphics_module>().frame_context();
   const auto skin_scratch_address = _skin_scratch_addresses[utility::fast_mod(frame_context.frame_index(), graphics::swapchain::max_frames_in_flight)];
 
+  _skinned_entries.clear();
+
   for (const auto [entity, world, renderer, pose] : scene.query<scenes::world_transform, scenes::mesh_renderer, scenes::skeleton_pose>(ecs::exclude<scenes::inactive>).each()) {
     if (!renderer.mesh.is_valid() || !pose.skeleton.is_valid()) {
       continue;
     }
 
-    auto node = scene.node_of(entity);
-    auto animator_component = node.try_get_component<scenes::animator>();
+    _skinned_entries.push_back(skinned_entry{entity, memory::make_observer(world), memory::make_observer(renderer), memory::make_observer(pose), scene.node_of(entity).try_get_component<scenes::animator>()});
+  }
 
-    _evaluate_skeleton_pose(*pose.skeleton, renderer, animator_component.get(), pose, animation_delta_time);
+  // Poses are independent per entity, so they evaluate in parallel; the packet appends below stay serial.
+  static constexpr auto poses_per_chunk = std::size_t{4u};
+
+  _pose_scratch.resize(std::max(_pose_scratch.size(), (_skinned_entries.size() + poses_per_chunk - 1u) / poses_per_chunk));
+
+  core::engine::get_module<async::async_module>().pool().parallel_for_chunks(0u, _skinned_entries.size(), poses_per_chunk, [&](std::size_t begin, std::size_t end) {
+    SBX_PROFILE_SCOPE("Skeleton poses");
+
+    auto& scratch = _pose_scratch[begin / poses_per_chunk];
+
+    for (auto index = begin; index < end; ++index) {
+      auto& entry = _skinned_entries[index];
+
+      _evaluate_skeleton_pose(*entry.pose->skeleton, *entry.renderer, entry.animator, *entry.pose, animation_delta_time, scratch);
+    }
+  });
+
+  for (auto& entry : _skinned_entries) {
+    const auto entity = entry.entity;
+    const auto& world = *entry.world;
+    auto& renderer = *entry.renderer;
+    const auto& pose = *entry.pose;
 
     const auto instance_vertex_count = renderer.mesh->vertex_count();
 
@@ -1379,7 +1404,10 @@ auto scene_renderer_module::record(graphics::command_buffer& command_buffer, mat
     assets_module.process_uploads(frame_context.frame_index());
   }
 
-  upload_context.flush(command_buffer, frame_context.frame_index());
+  {
+    SBX_PROFILE_SCOPE("upload_context::flush");
+    upload_context.flush(command_buffer, frame_context.frame_index());
+  }
 
   auto irradiance_index = 0xFFFFFFFFu;
   auto brdf_lut_index = 0xFFFFFFFFu;
@@ -1393,8 +1421,11 @@ auto scene_renderer_module::record(graphics::command_buffer& command_buffer, mat
     prefiltered_mip_count = packet.environment->prefiltered_mip_count();
   }
 
-  _apply_sample_count();
-  _resize_targets(scene_extent);
+  {
+    SBX_PROFILE_SCOPE("scene_renderer_module::resize_targets");
+    _apply_sample_count();
+    _resize_targets(scene_extent);
+  }
 
   _has_rendered = packet.camera.is_active;
   _has_rendered_shadows = false;
@@ -1450,8 +1481,15 @@ auto scene_renderer_module::record(graphics::command_buffer& command_buffer, mat
     .jump_flood_indices = _jump_flood_indices
   };
 
-  _prepare_frame(context);
-  _graph.execute(context);
+  {
+    SBX_PROFILE_SCOPE("scene_renderer_module::prepare_frame");
+    _prepare_frame(context);
+  }
+
+  {
+    SBX_PROFILE_SCOPE("render_graph::execute");
+    _graph.execute(context);
+  }
 
   auto& registry = graphics_module.resource_registry();
   auto& final_image = registry.get<graphics::image>(context.final_image);
@@ -1979,12 +2017,16 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   if (instance_count > 0u) {
     auto& transform_buffer = registry.get<graphics::buffer>(_transform_buffer);
 
+    SBX_PROFILE_SCOPE("scene_renderer_module::write_transforms");
+
     transform_buffer.write(context.packet->transforms.data(), instance_count * sizeof(transform_data), context.slot * transform_capacity * sizeof(transform_data));
   }
 
   auto& culled_indirect_args_buffer = registry.get<graphics::buffer>(_culled_indirect_args_buffer);
 
   const auto reset_culled_indirect_args = [&](const std::vector<draw_command>& commands, std::uint32_t view) {
+    SBX_PROFILE_SCOPE("scene_renderer_module::reset_culled_indirect_args");
+
     const auto command_count = std::min(static_cast<std::uint32_t>(commands.size()), max_opaque_draw_commands);
 
     if (command_count == 0u) {

@@ -26,6 +26,8 @@ target_sources(
 
     "${PROJECT_SOURCE_DIR}/assets/audio_cooker_test.cpp"
 
+    "${PROJECT_SOURCE_DIR}/async/worker_pool_test.cpp"
+
     "${PROJECT_SOURCE_DIR}/core/project_scene_list_test.cpp"
 
     "${PROJECT_SOURCE_DIR}/graphics/sample_count_test.cpp"

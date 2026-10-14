@@ -417,7 +417,8 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
     const auto& pbr = gltf_material.pbrData;
 
     auto description = material_description{};
-    description.name = gltf_material.name.empty() ? std::string{"material"} : std::string{gltf_material.name.begin(), gltf_material.name.end()};
+    // Extraction names `.material` files after this, so unnamed materials need unique names or they all resolve to the first one extracted.
+    description.name = gltf_material.name.empty() ? fmt::format("material_{}", material_uuids.size()) : std::string{gltf_material.name.begin(), gltf_material.name.end()};
     description.base_color_factor = math::color{pbr.baseColorFactor[0], pbr.baseColorFactor[1], pbr.baseColorFactor[2], pbr.baseColorFactor[3]};
     description.emissive_factor = math::vector3{gltf_material.emissiveFactor[0], gltf_material.emissiveFactor[1], gltf_material.emissiveFactor[2]};
     description.metallic_factor = pbr.metallicFactor;

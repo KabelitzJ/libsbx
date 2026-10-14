@@ -38,7 +38,7 @@ inline constexpr auto environment_cook_version = std::uint32_t{1u};
 inline constexpr auto material_cook_version = std::uint32_t{6u};
 inline constexpr auto skeleton_cook_version = std::uint32_t{1u};
 inline constexpr auto animation_cook_version = std::uint32_t{1u};
-inline constexpr auto mesh_cook_version = std::uint32_t{10u};
+inline constexpr auto mesh_cook_version = std::uint32_t{11u};
 
 // A mesh cook also emits its materials, skeleton and animation clips, so its freshness depends on all four cookers.
 inline constexpr auto mesh_cooker_version = mesh_cook_version * 1000000u + material_cook_version * 10000u + skeleton_cook_version * 100u + animation_cook_version;

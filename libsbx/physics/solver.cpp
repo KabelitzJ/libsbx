@@ -4,6 +4,13 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
+
+#include <libsbx/utility/profiler.hpp>
+
+#include <libsbx/core/engine.hpp>
+
+#include <libsbx/async/async_module.hpp>
 
 #include <libsbx/math/angle.hpp>
 #include <libsbx/math/constants.hpp>
@@ -33,12 +40,37 @@ namespace sbx::physics {
 // Below this closing speed restitution is zero, killing micro-bounces from float noise.
 inline constexpr auto restitution_velocity_threshold = std::float_t{1.0f};
 
-auto integrate_forces(scenes::scene& scene, const math::vector3& gravity, std::float_t dt) -> void {
-  for (auto&& [entity, body, local] : scene.query<rigidbody, scenes::local_transform>(ecs::exclude<scenes::inactive>).each()) {
-    if (body.type != body_type::dynamic_body || body.is_sleeping) {
-      continue;
-    }
+// Each body only writes itself, so integration runs in parallel over a gathered list.
+struct integration_entry {
+  memory::observer_ptr<rigidbody> body;
+  memory::observer_ptr<scenes::local_transform> local;
+}; // struct integration_entry
 
+inline constexpr auto bodies_per_integration_chunk = std::size_t{256u};
+
+template<typename Predicate, typename Function>
+auto integrate_in_parallel(scenes::scene& scene, Predicate&& predicate, Function&& function) -> void {
+  auto entries = std::vector<integration_entry>{};
+
+  for (auto&& [entity, body, local] : scene.query<rigidbody, scenes::local_transform>(ecs::exclude<scenes::inactive>).each()) {
+    if (std::invoke(predicate, body)) {
+      entries.push_back(integration_entry{memory::make_observer(body), memory::make_observer(local)});
+    }
+  }
+
+  core::engine::get_module<async::async_module>().pool().parallel_for_chunks(0u, entries.size(), bodies_per_integration_chunk, [&](std::size_t begin, std::size_t end) {
+    SBX_PROFILE_SCOPE("Physics integration");
+
+    for (auto index = begin; index < end; ++index) {
+      std::invoke(function, *entries[index].body, *entries[index].local);
+    }
+  });
+}
+
+auto integrate_forces(scenes::scene& scene, const math::vector3& gravity, std::float_t dt) -> void {
+  const auto is_awake_dynamic = [](const rigidbody& body) { return body.type == body_type::dynamic_body && !body.is_sleeping; };
+
+  integrate_in_parallel(scene, is_awake_dynamic, [&gravity, dt](rigidbody& body, scenes::local_transform& local) {
     const auto rotation_matrix = math::matrix_cast<math::matrix3x3>(local.rotation);
     const auto local_inertia_matrix = math::matrix3x3{body.local_inverse_inertia.x(), body.local_inverse_inertia.y(), body.local_inverse_inertia.z()};
 
@@ -56,7 +88,7 @@ auto integrate_forces(scenes::scene& scene, const math::vector3& gravity, std::f
 
     body.force_accumulator = math::vector3::zero;
     body.torque_accumulator = math::vector3::zero;
-  }
+  });
 }
 
 auto prepare_velocity_constraints(std::span<contact_manifold> manifolds) -> std::vector<velocity_constraint> {
@@ -217,11 +249,9 @@ auto store_impulses(std::vector<velocity_constraint>& constraints) -> void {
 }
 
 auto integrate_velocities(scenes::scene& scene, std::float_t dt) -> void {
-  for (auto&& [entity, body, local] : scene.query<rigidbody, scenes::local_transform>(ecs::exclude<scenes::inactive>).each()) {
-    if (body.type == body_type::static_body || (body.type == body_type::dynamic_body && body.is_sleeping)) {
-      continue;
-    }
+  const auto is_moving = [](const rigidbody& body) { return body.type != body_type::static_body && !(body.type == body_type::dynamic_body && body.is_sleeping); };
 
+  integrate_in_parallel(scene, is_moving, [dt](rigidbody& body, scenes::local_transform& local) {
     local.position = local.position + body.linear_velocity * dt;
 
     const auto angular_speed = body.angular_velocity.length();
@@ -232,7 +262,7 @@ auto integrate_velocities(scenes::scene& scene, std::float_t dt) -> void {
 
       local.rotation = math::quaternion::normalized(delta * local.rotation);
     }
-  }
+  });
 }
 
 auto apply_positional_correction(std::span<contact_manifold> manifolds, std::float_t percent, std::float_t slop) -> void {

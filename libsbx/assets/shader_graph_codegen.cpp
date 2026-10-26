@@ -891,6 +891,7 @@ auto generate_shader_graph_source(const std::string& graph_name, const shader_gr
     "\n"
     "  float2 uv = apply_uv_transform(material, input.uv);\n"
     "  float3 n = normalize(lighting_input.normal);\n"
+    "  if (!lighting_input.is_front_face) n = -n;\n" // match evaluate_lit_surface, or back faces of double-sided materials see n facing away (Fresnel = 1)
     "  float3 view_dir = normalize(lighting_input.frame_data.camera_position.xyz - lighting_input.position);\n"
     "  float3 world_position = lighting_input.position;\n"
     "\n"

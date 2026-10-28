@@ -160,9 +160,15 @@ private:
 
   std::optional<std::filesystem::path> _pending_reveal{};
 
+  // A file waiting to be copied into the project, with where it goes (absolute).
+  struct pending_import {
+    std::filesystem::path source{};
+    std::filesystem::path destination{};
+  }; // struct pending_import
+
   sbx::render::file_dialog _import_dialog{};
   std::filesystem::path _import_destination_directory{};
-  std::vector<std::filesystem::path> _pending_asset_imports{};
+  std::vector<pending_import> _pending_asset_imports{};
 
   bool _import_conflict_unresolved{false};
   bool _show_import_conflict_dialog{false};

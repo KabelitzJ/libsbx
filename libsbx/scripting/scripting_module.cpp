@@ -629,7 +629,7 @@ auto scripting_module::seed_missing_field_defaults(scenes::node& node, scenes::s
       case scenes::script_field_type::layer_mask: default_value.layer_mask_value = scratch.get_field_value<std::uint32_t>(field_name); break;
       case scenes::script_field_type::material: default_value.material_value = math::uuid::from_value(scratch.get_field_value<std::uint64_t>(field_name)); break;
       case scenes::script_field_type::color: default_value.color_value = scratch.get_field_value<math::color>(field_name); break;
-      case scenes::script_field_type::enumeration: default_value.int_value = scratch.get_field_value<std::int32_t>(field_name); break;
+      case scenes::script_field_type::enumeration: default_value.int_value = get_enum_field_value(scratch, field_name, field.get_type()); break;
       case scenes::script_field_type::texture: default_value.texture_value = math::uuid::from_value(scratch.get_field_value<std::uint64_t>(field_name)); break;
       case scenes::script_field_type::audio_clip: default_value.audio_clip_value = math::uuid::from_value(scratch.get_field_value<std::uint64_t>(field_name)); break;
     }
@@ -672,7 +672,7 @@ auto scripting_module::_apply_field_overrides(managed::object& instance, const s
   for (const auto& field : entry.field_overrides) {
     switch (field.type) {
       case scenes::script_field_type::float32: instance.set_field_value(field.name, field.float_value); break;
-      case scenes::script_field_type::int32:   instance.set_field_value(field.name, field.int_value); break;
+      case scenes::script_field_type::int32:   instance.set_field_value(field.name, static_cast<std::int32_t>(field.int_value)); break;
       case scenes::script_field_type::boolean: instance.set_field_value(field.name, field.bool_value); break;
       case scenes::script_field_type::string:  instance.set_field_value(field.name, field.string_value); break;
       case scenes::script_field_type::vector2: instance.set_field_value(field.name, field.vector2_value); break;
@@ -682,8 +682,7 @@ auto scripting_module::_apply_field_overrides(managed::object& instance, const s
       case scenes::script_field_type::layer_mask: instance.set_field_value(field.name, field.layer_mask_value); break;
       case scenes::script_field_type::material: instance.set_field_value(field.name, field.material_value.value()); break;
       case scenes::script_field_type::color: instance.set_field_value(field.name, field.color_value); break;
-      // ponytail: enums cross as int32 -- a long-backed enum would read past it on the C# side; widen if one ever shows up.
-      case scenes::script_field_type::enumeration: instance.set_field_value(field.name, field.int_value); break;
+      case scenes::script_field_type::enumeration: set_enum_field_value(instance, field.name, field.int_value); break;
       case scenes::script_field_type::texture: instance.set_field_value(field.name, field.texture_value.value()); break;
       case scenes::script_field_type::audio_clip: instance.set_field_value(field.name, field.audio_clip_value.value()); break;
     }

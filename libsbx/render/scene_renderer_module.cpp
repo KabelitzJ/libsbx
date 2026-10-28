@@ -1385,7 +1385,7 @@ auto scene_renderer_module::_apply_sample_count() -> void {
 
   _sample_count = requested;
 
-  // ponytail: passes don't retire their per-slot draw buffers on destruction, so each MSAA change leaks a few small buffers until shutdown; add retiring destructors if this is ever switched often.
+  // The old passes retire their own per-frame buffers when the graph drops them.
   _build_graph();
 }
 

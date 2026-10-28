@@ -4,6 +4,8 @@
 #define LIBSBX_PHYSICS_MESH_COLLISION_CACHE_HPP_
 
 #include <cstdint>
+#include <memory>
+#include <shared_mutex>
 #include <vector>
 
 #include <libsbx/math/uuid.hpp>
@@ -40,7 +42,9 @@ private:
 
   [[nodiscard]] auto _build(assets::assets_module& assets_module, const math::uuid& mesh_id) -> mesh_collision_data;
 
-  containers::dense_map<math::uuid, mesh_collision_data> _cache{};
+  // Readers share the lock; a miss builds under the exclusive one. Entries are boxed, so references handed out survive later inserts.
+  std::shared_mutex _mutex{};
+  containers::dense_map<math::uuid, std::unique_ptr<const mesh_collision_data>> _cache{};
 
 }; // class mesh_collision_cache
 

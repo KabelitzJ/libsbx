@@ -54,6 +54,13 @@ public:
    * @return The entries, or empty if this isn't an enum type.
    */
   auto get_enum_entries() const -> std::vector<std::pair<std::string, std::int64_t>>;
+
+  /**
+   * @brief The full name of an enum's underlying integer type, e.g. "System.Int64".
+   *
+   * @return The name, or empty if this isn't an enum type.
+   */
+  auto get_enum_underlying_type_name() const -> std::string;
   
   auto get_base_type() -> type&;
 

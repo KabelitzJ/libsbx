@@ -27,6 +27,8 @@ public:
 
   canvas_pass();
 
+  ~canvas_pass() override;
+
   [[nodiscard]] auto name() const -> std::string_view override {
     return "Canvas";
   }

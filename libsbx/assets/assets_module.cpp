@@ -5,6 +5,7 @@
 #include <array>
 #include <fstream>
 #include <string>
+#include <system_error>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -257,7 +258,10 @@ auto assets_module::release_material(const material_handle& material) -> void {
 }
 
 auto assets_module::save_material(material_handle& material, const std::filesystem::path& path) -> math::uuid {
-  return _residency.save_material(material, path);
+  const auto id = _residency.save_material(material, path);
+  _note_own_write(path);
+
+  return id;
 }
 
 auto assets_module::load_environment_map(const math::uuid& id) -> environment_map_handle {
@@ -285,7 +289,10 @@ auto assets_module::update_particle_effect(particle_effect_handle& effect, const
 }
 
 auto assets_module::save_particle_effect(particle_effect_handle& effect, const std::filesystem::path& path) -> math::uuid {
-  return _residency.save_particle_effect(effect, path);
+  const auto id = _residency.save_particle_effect(effect, path);
+  _note_own_write(path);
+
+  return id;
 }
 
 auto assets_module::load_animation_graph(const math::uuid& id) -> animation_graph_handle {
@@ -305,15 +312,18 @@ auto assets_module::update_animation_graph(animation_graph_handle& graph, const 
 }
 
 auto assets_module::save_animation_graph(animation_graph_handle& graph, const std::filesystem::path& path) -> math::uuid {
-  return _residency.save_animation_graph(graph, path);
+  const auto id = _residency.save_animation_graph(graph, path);
+  _note_own_write(path);
+
+  return id;
 }
 
-auto assets_module::load_shader(const math::uuid& id) -> shader_handle {
-  return _residency.load_shader(id);
+auto assets_module::load_shader(const math::uuid& id, bool wait) -> shader_handle {
+  return _residency.load_shader(id, wait);
 }
 
-auto assets_module::load_shader(const std::filesystem::path& path) -> shader_handle {
-  return _residency.load_shader(path);
+auto assets_module::load_shader(const std::filesystem::path& path, bool wait) -> shader_handle {
+  return _residency.load_shader(path, wait);
 }
 
 auto assets_module::load_shader_graph(const math::uuid& id) -> shader_graph_handle {
@@ -341,7 +351,27 @@ auto assets_module::update_shader_graph_node_position(shader_graph_handle& graph
 }
 
 auto assets_module::save_shader_graph(shader_graph_handle& graph, const std::filesystem::path& path) -> math::uuid {
-  return _residency.save_shader_graph(graph, path);
+  const auto id = _residency.save_shader_graph(graph, path);
+  _note_own_write(path);
+
+  return id;
+}
+
+auto assets_module::is_own_write(const std::filesystem::path& path, std::filesystem::file_time_type write_time) const -> bool {
+  const auto entry = _own_writes.find(path.lexically_normal().generic_string());
+
+  return entry != _own_writes.end() && entry->second == write_time;
+}
+
+auto assets_module::_note_own_write(const std::filesystem::path& path) -> void {
+  const auto absolute = (core::engine::project().assets_directory() / path).lexically_normal();
+
+  auto error = std::error_code{};
+  const auto write_time = std::filesystem::last_write_time(absolute, error);
+
+  if (!error) {
+    _own_writes[absolute.generic_string()] = write_time;
+  }
 }
 
 auto assets_module::drain_loader_results() -> void {

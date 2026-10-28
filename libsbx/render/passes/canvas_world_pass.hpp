@@ -27,6 +27,8 @@ public:
 
   explicit canvas_world_pass(graphics::samples samples);
 
+  ~canvas_world_pass() override;
+
   [[nodiscard]] auto name() const -> std::string_view override {
     return "Canvas World";
   }

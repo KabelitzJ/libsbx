@@ -178,7 +178,7 @@ auto editor_ui_layer::_save() -> void {
 auto editor_ui_layer::_save_all() -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
-  auto never_saved = std::optional<std::uint32_t>{};
+  _save_all_queue.clear();
 
   for (const auto& loaded : scenes_module.loaded_scenes()) {
     if (loaded.handle == sbx::scenes::persistent_scene_handle || !_is_scene_dirty(loaded.handle)) {
@@ -186,16 +186,25 @@ auto editor_ui_layer::_save_all() -> void {
     }
 
     if (loaded.path.empty()) {
-      never_saved = never_saved.value_or(loaded.handle);
+      _save_all_queue.push_back(loaded.handle);
     } else {
       _save_scene(loaded.handle, loaded.path);
     }
   }
 
-  // ponytail: one Save As per Save All; a second never-saved scene needs another Save All.
-  if (never_saved) {
-    _open_save_as_dialog(*never_saved);
+  // Never-saved scenes each need a path: one Save As after another, see _draw_save_as_dialog().
+  _open_next_save_all_dialog();
+}
+
+auto editor_ui_layer::_open_next_save_all_dialog() -> void {
+  if (_save_all_queue.empty()) {
+    return;
   }
+
+  const auto handle = _save_all_queue.front();
+  _save_all_queue.erase(_save_all_queue.begin());
+
+  _open_save_as_dialog(handle);
 }
 
 auto editor_ui_layer::_is_scene_dirty(std::uint32_t handle) -> bool {
@@ -317,8 +326,9 @@ auto editor_ui_layer::_draw_save_as_dialog() -> void {
   }
 
   if (picked->empty()) {
-    // Cancelled: don't run the pending action on some unrelated later save.
+    // Cancelled: don't run the pending action on some unrelated later save, and stop a Save All.
     _run_pending_after_save_as = false;
+    _save_all_queue.clear();
     return;
   }
 
@@ -331,6 +341,8 @@ auto editor_ui_layer::_draw_save_as_dialog() -> void {
   const auto scene_path = (!ec && !relative.empty() && relative.begin()->string() != "..") ? relative : picked->front();
 
   _save_scene(_save_as_target, scene_path);
+
+  _open_next_save_all_dialog();
 
   if (_run_pending_after_save_as) {
     _run_pending_after_save_as = false;

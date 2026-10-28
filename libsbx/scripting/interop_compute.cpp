@@ -126,17 +126,23 @@ auto interop::compute_buffer_create(std::int32_t count, std::int32_t stride, std
   // At least one element, so an empty buffer still has a valid device address to bind.
   const auto size = static_cast<graphics::buffer::size_type>(std::max(count, 1)) * static_cast<graphics::buffer::size_type>(stride);
 
-  // Host-visible so writes go straight through the mapping; upload_context's deferred flush would land after a same-call bake.
-  // ponytail: GPU reads/writes host memory over the bus; add a device_local copy if a bake gets bandwidth-bound.
+  // The GPU works on device-local memory; the host-visible mirror carries SetData in and, for readback buffers, results out (see compute_buffer_state).
   const auto handle = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
     .size = size,
-    .usage = graphics::buffer_usage::storage | graphics::buffer_usage::device_address,
-    .memory = access == 1u ? graphics::memory_usage::host_read : graphics::memory_usage::host_write,
+    .usage = graphics::buffer_usage::storage | graphics::buffer_usage::device_address | graphics::buffer_usage::transfer_source | graphics::buffer_usage::transfer_destination,
+    .memory = graphics::memory_usage::device_local,
     .name = "Script Compute Buffer"
   });
 
+  const auto staging = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+    .size = size,
+    .usage = graphics::buffer_usage::transfer_source | graphics::buffer_usage::transfer_destination,
+    .memory = access == 1u ? graphics::memory_usage::host_read : graphics::memory_usage::host_write,
+    .name = "Script Compute Buffer Mirror"
+  });
+
   const auto id = math::uuid::create().value();
-  core::engine::get_module<scripting_module>().resources().compute_buffers.emplace(id, compute_buffer_state{handle, static_cast<std::uint32_t>(stride)});
+  core::engine::get_module<scripting_module>().resources().compute_buffers.emplace(id, compute_buffer_state{.handle = handle, .staging = staging, .stride = static_cast<std::uint32_t>(stride), .is_readback = access == 1u});
 
   return id;
 }
@@ -152,7 +158,7 @@ auto interop::compute_buffer_set_data(std::uint64_t id, const void* data, std::i
     return true;
   }
 
-  auto& buffer = core::engine::get_module<graphics::graphics_module>().resource_registry().get<graphics::buffer>(state->handle);
+  auto& buffer = core::engine::get_module<graphics::graphics_module>().resource_registry().get<graphics::buffer>(state->staging);
 
   if (static_cast<graphics::buffer::size_type>(byte_count) > buffer.size()) {
     utility::logger<"scripting">::error("compute_buffer_set_data: {} bytes exceed buffer {}'s size {}", byte_count, id, buffer.size());
@@ -160,6 +166,7 @@ auto interop::compute_buffer_set_data(std::uint64_t id, const void* data, std::i
   }
 
   buffer.write(data, static_cast<graphics::buffer::size_type>(byte_count));
+  state->is_dirty = true;
 
   return true;
 }
@@ -175,7 +182,7 @@ auto interop::compute_buffer_get_data(std::uint64_t id, void* data, std::int32_t
     return true;
   }
 
-  auto& buffer = core::engine::get_module<graphics::graphics_module>().resource_registry().get<graphics::buffer>(state->handle);
+  auto& buffer = core::engine::get_module<graphics::graphics_module>().resource_registry().get<graphics::buffer>(state->staging);
 
   if (static_cast<graphics::buffer::size_type>(byte_count) > buffer.size()) {
     utility::logger<"scripting">::error("compute_buffer_get_data: {} bytes exceed buffer {}'s size {}", byte_count, id, buffer.size());
@@ -199,6 +206,7 @@ auto interop::compute_buffer_release(std::uint64_t id) -> void {
 
   // retire() requires a non-decreasing timeline across the pool, so pass the real frame index.
   graphics_module.resource_registry().retire(entry->second.handle, graphics_module.frame_context().frame_index());
+  graphics_module.resource_registry().retire(entry->second.staging, graphics_module.frame_context().frame_index());
 
   registry.erase(entry);
 }
@@ -212,7 +220,7 @@ auto interop::compute_shader_load(managed::string path) -> std::uint64_t {
   }
 
   // Through the asset so the file is tracked by uuid like any other shader.
-  const auto asset = core::engine::get_module<assets::assets_module>().load_shader(relative);
+  const auto asset = core::engine::get_module<assets::assets_module>().load_shader(relative, true);
 
   if (!asset.is_valid() || asset->kind() != assets::shader_kind::compute) {
     utility::logger<"scripting">::error("compute_shader_load: '{}' is not a compute shader (it needs a compute_main entry point){}", relative.generic_string(), asset.is_valid() && !asset->error().empty() ? fmt::format(":\n{}", asset->error()) : std::string{});
@@ -246,6 +254,7 @@ auto interop::compute_shader_load(managed::string path) -> std::uint64_t {
 
   state.params.resize(state.layout.size);
   state.is_set.resize(state.layout.fields.size(), false);
+  state.bindings.resize(state.layout.fields.size());
 
   const auto id = math::uuid::create().value();
   core::engine::get_module<scripting_module>().resources().compute_shaders.emplace(id, std::move(state));
@@ -312,6 +321,7 @@ auto interop::compute_shader_set_texture(std::uint64_t id, managed::string name,
   }
 
   write_field(*state, *index, &texture_index);
+  state->bindings[*index] = compute_binding{.resource = texture_uuid, .is_buffer = false, .is_writable = storage};
 
   return true;
 }
@@ -342,6 +352,7 @@ auto interop::compute_shader_set_buffer(std::uint64_t id, managed::string name, 
   const auto address = buffer.address();
 
   write_field(*state, *index, &address);
+  state->bindings[*index] = compute_binding{.resource = buffer_id, .is_buffer = true, .is_writable = true};
 
   return true;
 }
@@ -419,13 +430,58 @@ auto interop::compute_commands_dispatch(std::uint64_t id, std::uint64_t shader_i
 
   auto& state = entry->second;
   auto& command_buffer = state.command_buffer;
+  auto& resource_registry = graphics_module.resource_registry();
+  auto& buffers = core::engine::get_module<scripting_module>().resources().compute_buffers;
 
-  // ponytail: full barrier between consecutive dispatches; track per-resource reads/writes like render_graph if independent dispatches ever need to overlap.
-  if (state.dispatch_count > 0u) {
+  // A dispatch only waits on earlier ones in this list when they share a resource and one of them may write it, like render_graph's hazards.
+  auto needs_barrier = false;
+  auto uploads = std::vector<std::uint64_t>{};
+
+  for (const auto& binding : shader->bindings) {
+    if (binding.resource == 0u) {
+      continue;
+    }
+
+    needs_barrier |= state.written_since_barrier.contains(binding.resource) || (binding.is_writable && state.read_since_barrier.contains(binding.resource));
+
+    if (binding.is_buffer) {
+      if (const auto buffer = buffers.find(binding.resource); buffer != buffers.end() && buffer->second.is_dirty && std::ranges::find(uploads, binding.resource) == uploads.end()) {
+        // The upload overwrites the buffer, so it waits for any earlier dispatch that used it.
+        needs_barrier |= state.read_since_barrier.contains(binding.resource);
+        uploads.push_back(binding.resource);
+      }
+    }
+  }
+
+  if (needs_barrier) {
     auto barrier = VkMemoryBarrier2{};
     barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
     barrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-    barrier.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
+    barrier.srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
+    barrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    command_buffer.memory_dependency(barrier);
+
+    state.read_since_barrier.clear();
+    state.written_since_barrier.clear();
+  }
+
+  // SetData since the buffer was last uploaded: copy the mirror over before the dispatch reads it.
+  if (!uploads.empty()) {
+    for (const auto buffer_id : uploads) {
+      auto& buffer_state = buffers.at(buffer_id);
+      const auto& staging = resource_registry.get<graphics::buffer>(buffer_state.staging);
+      const auto& device = resource_registry.get<graphics::buffer>(buffer_state.handle);
+
+      command_buffer.copy_buffer(staging.handle(), device.handle(), VkBufferCopy{.srcOffset = 0u, .dstOffset = 0u, .size = device.size()});
+
+      buffer_state.is_dirty = false;
+    }
+
+    auto barrier = VkMemoryBarrier2{};
+    barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+    barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
     barrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
     barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
     command_buffer.memory_dependency(barrier);
@@ -439,7 +495,17 @@ auto interop::compute_commands_dispatch(std::uint64_t id, std::uint64_t shader_i
 
   command_buffer.dispatch(group_count_x, group_count_y, group_count_z);
 
-  ++state.dispatch_count;
+  for (const auto& binding : shader->bindings) {
+    if (binding.resource == 0u) {
+      continue;
+    }
+
+    (binding.is_writable ? state.written_since_barrier : state.read_since_barrier).insert(binding.resource);
+
+    if (binding.is_buffer) {
+      state.used_buffers.insert(binding.resource);
+    }
+  }
 
   return true;
 }
@@ -464,6 +530,35 @@ auto interop::compute_commands_submit(std::uint64_t id, bool wait) -> managed::b
   barrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_TRANSFER_BIT | VK_PIPELINE_STAGE_2_HOST_BIT;
   barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_TRANSFER_READ_BIT | VK_ACCESS_2_HOST_READ_BIT;
   command_buffer.memory_dependency(barrier);
+
+  // Readback buffers' results go back into their mirrors, where GetData reads them.
+  auto& buffers = core::engine::get_module<scripting_module>().resources().compute_buffers;
+  auto& resource_registry = core::engine::get_module<graphics::graphics_module>().resource_registry();
+  auto copied_any = false;
+
+  for (const auto buffer_id : entry->second.used_buffers) {
+    const auto buffer = buffers.find(buffer_id);
+
+    if (buffer == buffers.end() || !buffer->second.is_readback) {
+      continue;
+    }
+
+    const auto& device = resource_registry.get<graphics::buffer>(buffer->second.handle);
+    const auto& staging = resource_registry.get<graphics::buffer>(buffer->second.staging);
+
+    command_buffer.copy_buffer(device.handle(), staging.handle(), VkBufferCopy{.srcOffset = 0u, .dstOffset = 0u, .size = device.size()});
+    copied_any = true;
+  }
+
+  if (copied_any) {
+    auto to_host = VkMemoryBarrier2{};
+    to_host.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+    to_host.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    to_host.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    to_host.dstStageMask = VK_PIPELINE_STAGE_2_HOST_BIT;
+    to_host.dstAccessMask = VK_ACCESS_2_HOST_READ_BIT;
+    command_buffer.memory_dependency(to_host);
+  }
 
   if (wait) {
     command_buffer.submit_idle();

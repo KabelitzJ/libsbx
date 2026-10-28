@@ -58,4 +58,16 @@ auto graphics_module::command_pool(const queue::type type, const std::thread::id
   return _command_pools.insert({key, std::make_shared<graphics::command_pool>(type)}).first->second;
 }
 
+auto graphics_module::submit_fence(const std::thread::id& thread_id) -> fence& {
+  auto lock = std::lock_guard{_submit_fence_mutex};
+
+  auto& entry = _submit_fences[thread_id];
+
+  if (!entry) {
+    entry = std::make_unique<graphics::fence>(false, "Submit Idle");
+  }
+
+  return *entry;
+}
+
 } // namespace sbx::graphics

@@ -88,6 +88,11 @@ canvas_world_pass::canvas_world_pass(graphics::samples samples)
   });
 }
 
+canvas_world_pass::~canvas_world_pass() {
+  retire_buffers(_buffers);
+  retire_buffers(_glyph_buffers);
+}
+
 auto canvas_world_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {
   auto group = render_attachment_group{.extent = resources.extent};
 

@@ -13,6 +13,7 @@
 #define LIBSBX_PHYSICS_CONVEX_HULL_CACHE_HPP_
 
 #include <memory>
+#include <shared_mutex>
 
 #include <libsbx/math/uuid.hpp>
 #include <libsbx/math/vector3.hpp>
@@ -49,6 +50,8 @@ private:
 
   [[nodiscard]] auto _build(assets::assets_module& assets_module, const math::uuid& mesh_id) -> convex_hull_data;
 
+  // Readers share the lock; a miss builds under the exclusive one.
+  std::shared_mutex _mutex{};
   containers::dense_map<math::uuid, std::unique_ptr<const convex_hull_data>> _cache{};
 
 }; // class convex_hull_cache

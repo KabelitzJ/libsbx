@@ -133,6 +133,9 @@ private:
   /** @brief Polls the Save As dialog, saving on confirm and running a pending scene action if one was deferred. */
   auto _draw_save_as_dialog() -> void;
 
+  // Opens Save As for the next never-saved scene a Save All still has to place, if any.
+  auto _open_next_save_all_dialog() -> void;
+
   auto _draw_unsaved_changes_dialog() -> void;
 
   /**
@@ -181,6 +184,7 @@ private:
   std::uint32_t _pending_scene_handle{0u}; // the scene a pending unload targets
   std::vector<std::uint32_t> _guarded_scenes{}; // the scenes the unsaved-changes dialog is about
   std::uint32_t _save_as_target{0u};
+  std::vector<std::uint32_t> _save_all_queue{}; // never-saved scenes a Save All prompts for after the current Save As
   bool _open_dialog_additive{false};
 
   std::uint64_t _dirty_revision{0u};

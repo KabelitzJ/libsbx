@@ -221,6 +221,24 @@ namespace Sbx.Managed
       }
     }
 
+    // The enum's underlying integer type's full name (e.g. "System.Int64"), or null if InType isn't an enum; tells native code how wide the field is and whether to sign-extend it.
+    [UnmanagedCallersOnly]
+    internal static unsafe NativeString GetEnumUnderlyingTypeName(int InType)
+    {
+      try
+      {
+        if (!_cachedTypes.TryGetValue(InType, out var type) || !type.IsEnum)
+          return NativeString.Null();
+
+        return Enum.GetUnderlyingType(type).FullName;
+      }
+      catch (Exception e)
+      {
+        HandleException(e);
+        return NativeString.Null();
+      }
+    }
+
     [UnmanagedCallersOnly]
     internal static unsafe NativeString GetAssemblyQualifiedName(int InType)
     {

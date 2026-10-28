@@ -33,7 +33,7 @@ namespace sbx::assets {
 
 inline constexpr auto texture_cook_version = std::uint32_t{1u};
 inline constexpr auto font_cook_version = std::uint32_t{1u};
-inline constexpr auto audio_clip_cook_version = std::uint32_t{1u};
+inline constexpr auto audio_clip_cook_version = std::uint32_t{2u}; // 2: surround layouts kept instead of downmixed to mono
 inline constexpr auto environment_cook_version = std::uint32_t{1u};
 inline constexpr auto material_cook_version = std::uint32_t{7u};
 inline constexpr auto skeleton_cook_version = std::uint32_t{1u};

@@ -19,6 +19,8 @@
 #include <libsbx/memory/observer_ptr.hpp>
 #include <libsbx/memory/bytes.hpp>
 
+#include <libsbx/core/engine.hpp>
+
 #include <libsbx/graphics/graphics_module.hpp>
 #include <libsbx/graphics/commands/command_buffer.hpp>
 #include <libsbx/graphics/resources/buffer.hpp>
@@ -246,6 +248,28 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
  * @param cascade_index The shadow cascade whose cull view to use, or 0xFFFFFFFF for the camera.
  */
 auto submit_draw_commands_indirect(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, const custom_pipeline_resolver& resolve_custom_pipeline = {}, std::uint32_t cascade_index = 0xFFFFFFFFu) -> void;
+
+/**
+ * @brief Retires every valid handle in @p buffers, for the destructor of a pass that grows its own per-frame buffers.
+ *
+ * The render graph is only torn down after a device wait, so retiring at the current frame is safe.
+ *
+ * @tparam Size The number of buffers.
+ *
+ * @param buffers The pass's buffers; each is reset to an invalid handle.
+ */
+template<std::size_t Size>
+auto retire_buffers(std::array<graphics::buffer_handle, Size>& buffers) -> void {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  const auto frame_index = graphics_module.frame_context().frame_index();
+
+  for (auto& buffer : buffers) {
+    if (buffer.is_valid()) {
+      graphics_module.resource_registry().retire(buffer, frame_index);
+      buffer = graphics::buffer_handle{};
+    }
+  }
+}
 
 auto bind_globals(render_context& context) -> void;
 

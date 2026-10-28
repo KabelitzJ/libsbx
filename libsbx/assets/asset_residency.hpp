@@ -391,15 +391,16 @@ public:
   /**
    * @brief Loads a hand-written `.slang` shader by uuid, or returns the existing handle.
    *
-   * Reflects its entry points synchronously; the render passes compile it on first use.
+   * Reflects its entry points on the asset loader thread, or right away when @p wait is set; the render passes compile it on first use.
    *
    * @param id The shader's uuid.
+   * @param wait Whether to reflect on the calling thread, so the shader is loaded on return (for callers that need its kind immediately).
    *
-   * @return The shader handle, loaded on return; invalid for an unknown uuid.
+   * @return The shader handle; invalid for an unknown uuid.
    */
-  auto load_shader(const math::uuid& id) -> shader_handle;
+  auto load_shader(const math::uuid& id, bool wait = false) -> shader_handle;
 
-  auto load_shader(const std::filesystem::path& path) -> shader_handle;
+  auto load_shader(const std::filesystem::path& path, bool wait = false) -> shader_handle;
 
   /**
    * @brief Finalizes up to max_uploads_per_frame loader results: resolves nested asset references and queues GPU uploads.
@@ -471,7 +472,7 @@ private:
   inline static constexpr auto max_uploads_per_frame = std::size_t{32u};
 
   struct pending_texture_upload {
-    std::uint32_t index;
+    std::shared_ptr<texture2d> record;
     std::vector<std::byte> pixels;
     std::uint32_t width;
     std::uint32_t height;
@@ -479,6 +480,14 @@ private:
     // False for data mips would corrupt, like SDF font atlases where averaging drops thin strokes.
     bool mipmapped{true};
   }; // struct pending_texture_upload
+
+  // A reimported texture's new image, uploaded into its own index while frames keep sampling the old one.
+  struct pending_texture_swap {
+    std::shared_ptr<texture2d> record;
+    std::uint32_t old_index;
+    std::uint32_t new_index;
+    std::uint64_t ready_value; // the frame that uploaded the new image
+  }; // struct pending_texture_swap
 
   struct pending_array_upload {
     std::shared_ptr<texture2d_array> record;
@@ -550,7 +559,26 @@ private:
   auto _finalize_animation_graph(asset_loader::animation_graph_result& result) -> void;
   auto _finalize_shader_graph(asset_loader::shader_graph_result& result) -> void;
 
-  auto _reflect_shader(shader& record) -> void;
+  auto _finalize_shader(asset_loader::shader_result& result) -> void;
+
+  /**
+   * @brief Points every reimported texture whose new image has finished uploading at its new index and frees the old one.
+   *
+   * @param frame_index The frame being recorded.
+   *
+   * @return Whether any texture moved, so materials need re-uploading.
+   */
+  auto _complete_texture_swaps(std::uint64_t frame_index) -> bool;
+
+  /**
+   * @brief Retires the image at a sampled index and releases the index, both once @p frame_index completes. Call with _mutex held.
+   *
+   * @param index The bindless index.
+   * @param frame_index The last frame that may still sample it.
+   */
+  auto _discard_texture_index(std::uint32_t index, std::uint64_t frame_index) -> void;
+
+  auto _apply_shader_reflection(shader& record, shader_reflection_result data) -> void;
   auto _submit_mesh(const math::uuid& id, bool force_recook) -> mesh_handle;
 
   auto _retire_mesh_buffers(const mesh& record, std::uint64_t frame_index) -> void;
@@ -586,6 +614,7 @@ private:
 
   std::vector<std::shared_ptr<material>> _materials{};
   std::deque<pending_material_upload> _pending_materials{};
+  std::vector<pending_texture_swap> _texture_swaps{};
   graphics::buffer_handle _material_buffer{};
   graphics::buffer::address_type _material_address{0u};
   std::uint32_t _material_count{0u};

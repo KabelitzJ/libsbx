@@ -25,6 +25,8 @@ public:
 
   explicit debug_draw_pass(graphics::samples samples);
 
+  ~debug_draw_pass() override;
+
   [[nodiscard]] auto name() const -> std::string_view override {
     return "Debug Draw";
   }

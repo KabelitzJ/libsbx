@@ -3,6 +3,7 @@
 #ifndef LIBSBX_ASSETS_TEXTURE2D_HPP_
 #define LIBSBX_ASSETS_TEXTURE2D_HPP_
 
+#include <atomic>
 #include <cstdint>
 #include <limits>
 
@@ -25,15 +26,16 @@ public:
   texture2d()
   : _bindless_index{invalid_index} { }
 
-  texture2d(std::uint32_t bindless_index)
+  explicit texture2d(std::uint32_t bindless_index)
   : _bindless_index{bindless_index} { }
 
   [[nodiscard]] auto is_valid() const noexcept -> bool {
-    return _bindless_index != invalid_index;
+    return index() != invalid_index;
   }
-  
+
+  /** @brief The bindless sampled-image index. A reimport moves the texture to a new index once the new image is uploaded, so read it fresh rather than caching it. */
   [[nodiscard]] auto index() const noexcept -> std::uint32_t {
-    return _bindless_index;
+    return _bindless_index.load(std::memory_order_acquire);
   }
 
   /**
@@ -65,7 +67,8 @@ public:
 
 private:
 
-  std::uint32_t _bindless_index{invalid_index};
+  // Atomic: asset_residency swaps it on the render thread while other threads read it.
+  std::atomic<std::uint32_t> _bindless_index;
   std::uint32_t _storage_index{invalid_index};
   math::uuid _id{math::uuid::nil()};
   math::uuid _handle{math::uuid::create()};

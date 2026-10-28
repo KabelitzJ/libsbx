@@ -134,8 +134,8 @@ auto command_buffer::submit_idle() -> void {
 	submit_info.commandBufferCount = 1;
 	submit_info.pCommandBuffers = &_handle;
 
-  // ponytail: one fence per call; keep a reusable per-thread fence if submit_idle ever shows up in a profile.
-  const auto done = fence{};
+  // Per-thread and reused, so concurrent submit_idle calls on different threads never share it.
+  auto& done = graphics_module.submit_fence();
 
   {
     const auto lock = selected_queue.lock();
@@ -143,6 +143,7 @@ auto command_buffer::submit_idle() -> void {
   }
 
   done.wait();
+  done.reset();
 }
 
 auto command_buffer::submit(const std::vector<wait_semaphore>& wait_semaphores, const VkSemaphore& signal_semaphore, const VkFence& fence, std::uint64_t signal_value) -> void {

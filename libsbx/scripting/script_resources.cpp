@@ -29,6 +29,7 @@ auto script_resources::clear() -> void {
 
     for (const auto& [id, state] : compute_buffers) {
       graphics_module.resource_registry().retire(state.handle, frame_index);
+      graphics_module.resource_registry().retire(state.staging, frame_index);
     }
 
     compute_buffers.clear();

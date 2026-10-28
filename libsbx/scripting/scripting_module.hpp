@@ -3,6 +3,7 @@
 #ifndef LIBSBX_SCRIPTING_SCRIPTING_MODULE_HPP_
 #define LIBSBX_SCRIPTING_SCRIPTING_MODULE_HPP_
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -77,6 +78,43 @@ struct script_runtime_error : public std::runtime_error {
   if (managed_type_full_name == "Sbx.Core.AudioClip") { return scenes::script_field_type::audio_clip; }
   if (!managed_type.get_enum_entries().empty()) { return scenes::script_field_type::enumeration; }
   return std::nullopt;
+}
+
+/**
+ * @brief Reads an enum field whatever its underlying integer type (byte through long), widened to 64 bits.
+ *
+ * @param instance The object.
+ * @param name The field's name.
+ * @param enum_type The field's enum type.
+ *
+ * @return The value, sign-extended when the underlying type is signed.
+ */
+[[nodiscard]] inline auto get_enum_field_value(const managed::object& instance, std::string_view name, const managed::type& enum_type) -> std::int64_t {
+  // The managed side writes only the underlying type's bytes, which land in the low end of the zeroed value (little-endian).
+  auto value = std::int64_t{0};
+  instance.get_field_value_raw(name, &value);
+
+  const auto underlying = enum_type.get_enum_underlying_type_name();
+  const auto bits = underlying == "System.SByte" ? 8u : underlying == "System.Int16" ? 16u : underlying == "System.Int32" ? 32u : 0u;
+
+  if (bits == 0u) {
+    return value;
+  }
+
+  const auto shift = 64u - bits;
+
+  return static_cast<std::int64_t>(static_cast<std::uint64_t>(value) << shift) >> shift;
+}
+
+/**
+ * @brief Writes an enum field whatever its underlying integer type.
+ *
+ * @param instance The object.
+ * @param name The field's name.
+ * @param value The value; the managed side reads only the underlying type's bytes, its low end (little-endian).
+ */
+inline auto set_enum_field_value(const managed::object& instance, std::string_view name, std::int64_t value) -> void {
+  instance.set_field_value(name, value);
 }
 
 class scripting_module final : public utility::noncopyable {

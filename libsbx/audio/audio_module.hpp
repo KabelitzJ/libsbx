@@ -199,6 +199,10 @@ private:
   std::unordered_map<math::uuid, std::float_t> _group_gains{};
   std::unordered_map<math::uuid, std::float_t> _group_volume_overrides{};
 
+  // _group_gains is rebuilt only when the project's mixer tree or a volume override changed.
+  std::uint64_t _group_gains_revision{0u};
+  bool _group_gains_dirty{true};
+
   math::vector3 _listener_position{0.0f, 0.0f, 0.0f};
   math::vector3 _listener_last_position{0.0f, 0.0f, 0.0f};
   bool _listener_has_last_position{false};

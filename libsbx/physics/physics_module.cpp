@@ -561,6 +561,10 @@ auto physics_module::_ensure_broadphase(scenes::scene& scene) -> void {
   _sync_broadphase(scene);
 }
 
+auto physics_module::prepare_parallel_queries(scenes::scene& scene) -> void {
+  _ensure_broadphase(scene);
+}
+
 auto physics_module::query_sphere_contacts(scenes::scene& scene, const math::vector3& center, std::float_t radius, std::vector<sphere_query_hit>& out_hits, const scenes::layer_mask& mask) -> void {
   overlap_shape(scene, convex_shape{physics::sphere{radius}}, transform{center, math::quaternion::identity, math::vector3::one}, out_hits, mask);
 }

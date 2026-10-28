@@ -346,15 +346,18 @@ public:
   auto save_animation_graph(animation_graph_handle& graph, const std::filesystem::path& path) -> math::uuid;
 
   /**
-   * @brief Loads a hand-written `.slang` shader by uuid or project-relative path, or returns the existing handle. Reflects it synchronously.
+   * @brief Loads a hand-written `.slang` shader by uuid or project-relative path, or returns the existing handle.
+   *
+   * Reflects it on the asset loader thread, or on the calling thread when @p wait is set.
    *
    * @param id The shader's uuid.
+   * @param wait Whether the shader must be loaded on return, e.g. to check its kind right away.
    *
-   * @return The shader handle, loaded on return; invalid for an unknown uuid.
+   * @return The shader handle; invalid for an unknown uuid.
    */
-  auto load_shader(const math::uuid& id) -> shader_handle;
+  auto load_shader(const math::uuid& id, bool wait = false) -> shader_handle;
 
-  auto load_shader(const std::filesystem::path& path) -> shader_handle;
+  auto load_shader(const std::filesystem::path& path, bool wait = false) -> shader_handle;
 
   auto load_shader_graph(const math::uuid& id) -> shader_graph_handle;
 
@@ -516,7 +519,24 @@ public:
    */
   [[nodiscard]] auto path_of(const math::uuid& id) const -> std::filesystem::path;
 
+  /**
+   * @brief Whether the last change to @p path was a save_* call of this module, so a file watcher can tell its own saves from outside edits.
+   *
+   * @param path The file, absolute.
+   * @param write_time Its current last write time.
+   *
+   * @return True if this module wrote the file and nothing has touched it since.
+   */
+  [[nodiscard]] auto is_own_write(const std::filesystem::path& path, std::filesystem::file_time_type write_time) const -> bool;
+
 private:
+
+  /**
+   * @brief Records @p path's write time after a save, for is_own_write().
+   *
+   * @param path The saved file, assets-relative or absolute.
+   */
+  auto _note_own_write(const std::filesystem::path& path) -> void;
 
   /**
    * @brief Rewrites `.material` files whose texture slots point at `old_relative` to `new_relative`, after move_asset moved a texture. Materials are the only assets referencing others by path.
@@ -534,6 +554,9 @@ private:
   std::unordered_map<math::uuid, prefab_handle> _prefabs{};
 
   std::unordered_map<math::uuid, scene_handle> _scenes{};
+
+  // Absolute, normalized path -> write time of this module's last save of it.
+  std::unordered_map<std::string, std::filesystem::file_time_type> _own_writes{};
 
 }; // class assets_module
 

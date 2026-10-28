@@ -40,17 +40,46 @@ worker_pool::~worker_pool() {
 auto worker_pool::wait(job_counter& counter) -> void {
   SBX_PROFILE_SCOPE("async::wait");
 
-  while (!counter.is_done()) {
-    if (auto next = _try_acquire()) {
-      next->run();
-    } else {
-      // ponytail: yield-spin while the last jobs finish elsewhere; park on the counter (atomic wait) if it burns CPU.
-      std::this_thread::yield();
-    }
-  }
+  _help_until_done(counter);
 
   if (auto exception = counter._reset()) {
     std::rethrow_exception(exception);
+  }
+}
+
+auto worker_pool::_help_until_done(job_counter& counter) -> void {
+  while (true) {
+    // Read before checking, like _worker_loop: a job finishing or arriving after this changes the epoch, so the wait below can't miss it.
+    const auto epoch = _epoch.load(std::memory_order_seq_cst);
+
+    if (counter.is_done()) {
+      return;
+    }
+
+    if (auto next = _try_acquire()) {
+      _run(*next);
+      continue;
+    }
+
+    // The batch's last jobs run elsewhere: park until one of them finishes the batch or new work shows up to help with.
+    SBX_PROFILE_SCOPE_COLORED("async::park", 0x606060);
+
+    _sleepers.fetch_add(1u, std::memory_order_seq_cst);
+    _epoch.wait(epoch, std::memory_order_seq_cst);
+    _sleepers.fetch_sub(1u, std::memory_order_seq_cst);
+  }
+}
+
+auto worker_pool::_run(job& work) -> void {
+  if (!work.run()) {
+    return;
+  }
+
+  // The batch just finished: wake anyone parked in wait() on it (and idle workers, harmlessly).
+  _epoch.fetch_add(1u, std::memory_order_seq_cst);
+
+  if (_sleepers.load(std::memory_order_seq_cst) > 0u) {
+    _epoch.notify_all();
   }
 }
 
@@ -139,7 +168,7 @@ auto worker_pool::_worker_loop(std::uint32_t index) -> void {
 
   while (true) {
     if (auto next = _try_acquire()) {
-      next->run();
+      _run(*next);
       idle_rounds = 0u;
       continue;
     }
@@ -158,7 +187,7 @@ auto worker_pool::_worker_loop(std::uint32_t index) -> void {
     const auto epoch = _epoch.load(std::memory_order_seq_cst);
 
     if (auto next = _try_acquire()) {
-      next->run();
+      _run(*next);
       continue;
     }
 
@@ -185,13 +214,7 @@ auto worker_pool::_next_steal_random() noexcept -> std::uint32_t {
 }
 
 auto worker_pool::_wait_ignoring_exceptions(job_counter& counter) noexcept -> void {
-  while (!counter.is_done()) {
-    if (auto next = _try_acquire()) {
-      next->run();
-    } else {
-      std::this_thread::yield();
-    }
-  }
+  _help_until_done(counter);
 
   static_cast<void>(counter._reset());
 }

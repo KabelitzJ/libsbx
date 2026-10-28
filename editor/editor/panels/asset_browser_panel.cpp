@@ -14,6 +14,7 @@
 #include <regex>
 #include <string>
 #include <string_view>
+#include <system_error>
 
 #include <imgui.h>
 
@@ -273,17 +274,30 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
   }
 
   if (auto picked = _import_dialog.result()) {
-    _pending_asset_imports.insert(_pending_asset_imports.end(), picked->begin(), picked->end());
+    for (const auto& source : *picked) {
+      _pending_asset_imports.push_back(pending_import{source, project.assets_directory() / _import_destination_directory / source.filename()});
+    }
   }
 
-  // OS drops land in the folder being browsed; waits while an earlier batch still needs its own destination.
-  // ponytail: dropped folders are skipped; copy them recursively if people drop whole asset packs.
-  if (!state.dropped_files.empty() && _pending_asset_imports.empty() && !_import_conflict_unresolved) {
-    _import_destination_directory = _current_directory;
+  // OS drops land in the folder being browsed; a dropped folder keeps its structure under a folder of the same name.
+  if (!state.dropped_files.empty()) {
+    const auto destination_directory = project.assets_directory() / _current_directory;
 
-    for (auto& path : state.dropped_files) {
-      if (std::filesystem::is_regular_file(path) && sbx::assets::is_manifested(sbx::assets::asset_type_of(path))) {
-        _pending_asset_imports.push_back(std::move(path));
+    for (const auto& path : state.dropped_files) {
+      auto error = std::error_code{};
+
+      if (std::filesystem::is_directory(path, error)) {
+        auto iterator = std::filesystem::recursive_directory_iterator{path, std::filesystem::directory_options::skip_permission_denied, error};
+
+        for (const auto end = std::filesystem::recursive_directory_iterator{}; !error && iterator != end; iterator.increment(error)) {
+          auto entry_error = std::error_code{};
+
+          if (iterator->is_regular_file(entry_error) && sbx::assets::is_manifested(sbx::assets::asset_type_of(iterator->path()))) {
+            _pending_asset_imports.push_back(pending_import{iterator->path(), destination_directory / path.filename() / std::filesystem::relative(iterator->path(), path)});
+          }
+        }
+      } else if (std::filesystem::is_regular_file(path, error) && sbx::assets::is_manifested(sbx::assets::asset_type_of(path))) {
+        _pending_asset_imports.push_back(pending_import{path, destination_directory / path.filename()});
       }
     }
 

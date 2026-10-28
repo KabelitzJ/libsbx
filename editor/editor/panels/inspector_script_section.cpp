@@ -197,7 +197,7 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
       commit_after(changed);
     } else if (field_type_name == "System.Int32") {
       auto value = live_instance ? live_instance->get_field_value<std::int32_t>(field_name)
-                                  : override_slot ? override_slot->int_value : 0;
+                                  : override_slot ? static_cast<std::int32_t>(override_slot->int_value) : 0;
 
       const auto changed = has_range ? ImGui::SliderInt(display_name.c_str(), &value, static_cast<std::int32_t>(clamp_min), static_cast<std::int32_t>(clamp_max))
         : has_clamp ? ImGui::DragInt(display_name.c_str(), &value, 1.0f, static_cast<std::int32_t>(clamp_min), static_cast<std::int32_t>(clamp_max))
@@ -470,10 +470,10 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
 
       commit_after(changed);
     } else if (const auto entries = field.get_type().get_enum_entries(); !entries.empty()) {
-      auto value = live_instance ? live_instance->get_field_value<std::int32_t>(field_name)
-                                  : override_slot ? override_slot->int_value : 0;
+      auto value = live_instance ? sbx::scripting::get_enum_field_value(*live_instance, field_name, field.get_type())
+                                  : override_slot ? override_slot->int_value : std::int64_t{0};
 
-      const auto current = std::ranges::find(entries, static_cast<std::int64_t>(value), [](const auto& entry) { return entry.second; });
+      const auto current = std::ranges::find(entries, value, [](const auto& entry) { return entry.second; });
       const auto preview = (current != entries.end()) ? current->first : fmt::format("{}", value);
 
       auto changed = false;
@@ -481,7 +481,7 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
       if (ImGui::BeginCombo(display_name.c_str(), preview.c_str())) {
         for (const auto& [name, entry_value] : entries) {
           if (ImGui::Selectable(name.c_str(), entry_value == value)) {
-            value = static_cast<std::int32_t>(entry_value);
+            value = entry_value;
             changed = true;
           }
         }
@@ -493,7 +493,7 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
 
       if (changed) {
         if (live_instance) {
-          live_instance->set_field_value(field_name, value);
+          sbx::scripting::set_enum_field_value(*live_instance, field_name, value);
         } else {
           auto& slot = ensure_override_slot();
           slot.type = sbx::scenes::script_field_type::enumeration;

@@ -3,6 +3,7 @@
 #ifndef LIBSBX_ASSETS_SHADER_HPP_
 #define LIBSBX_ASSETS_SHADER_HPP_
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <filesystem>
@@ -77,6 +78,10 @@ public:
 
 private:
 
+  [[nodiscard]] auto _depends_on(const std::filesystem::path& file) const -> bool {
+    return std::ranges::find(_dependencies, file) != _dependencies.end();
+  }
+
   auto _finalize_content(shader_kind kind, bool has_depth_entry_points, std::vector<shader_property> properties, std::string material_loader, std::string error) -> void {
     _kind = kind;
     _has_depth_entry_points = has_depth_entry_points;
@@ -93,6 +98,7 @@ private:
   std::vector<shader_property> _properties{};
   std::atomic<std::shared_ptr<const std::string>> _material_loader{};
   std::string _error{};
+  std::vector<std::filesystem::path> _dependencies{}; // normalized; set with each reflection, read by asset_residency on the main thread
 
 }; // class shader
 

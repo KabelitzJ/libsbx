@@ -78,8 +78,7 @@ private:
    */
   auto _trigger_sub_emitters(scenes::scene& scene, scenes::particle_emitter& runtime, const assets::particle_emitter& config, assets::sub_emitter_event event, const particles::particle& p) -> void;
 
-  std::vector<effect_entry> _parallel_effects{};
-  std::vector<effect_entry> _serial_effects{};
+  std::vector<effect_entry> _effects{};
 
   // One per parallel chunk, plus the last for the serial effects; kept across steps for their capacity.
   std::vector<std::vector<sub_emitter_request>> _chunk_requests{};

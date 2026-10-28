@@ -19,13 +19,9 @@ namespace editor {
 
 // Drains the import dialog's result into the queue, then works through it until done or a name clash needs a decision.
 auto asset_browser_panel::_process_pending_asset_imports(editor_state& state) -> void {
-  auto& project = sbx::core::engine::project();
-
   while (!_pending_asset_imports.empty() && !_import_conflict_unresolved) {
-    const auto source = _pending_asset_imports.front();
+    const auto [source, destination] = _pending_asset_imports.front();
     _pending_asset_imports.erase(_pending_asset_imports.begin());
-
-    const auto destination = project.assets_directory() / _import_destination_directory / source.filename();
 
     if (std::filesystem::exists(destination)) {
       _import_conflict_source = source;

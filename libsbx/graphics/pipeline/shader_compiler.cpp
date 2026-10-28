@@ -322,6 +322,12 @@ auto shader_compiler::reflect_module(const std::filesystem::path& path, std::spa
 
   auto result = module_reflection{};
 
+  for (auto index = SlangInt32{0}; index < module->getDependencyFileCount(); ++index) {
+    if (const auto* dependency_path = module->getDependencyFilePath(index); dependency_path != nullptr) {
+      result.dependencies.emplace_back(dependency_path);
+    }
+  }
+
   for (const auto name : entry_points) {
     auto entry_point = Slang::ComPtr<slang::IEntryPoint>{};
 

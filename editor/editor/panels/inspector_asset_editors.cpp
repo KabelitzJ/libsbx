@@ -144,6 +144,8 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
     if (is_shader_code) {
       if (!code->is_valid()) {
         ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " Shader not found.");
+      } else if (!(*code)->is_loaded()) {
+        ImGui::TextDisabled("Loading shader...");
       } else if (!(*code)->error().empty()) {
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{1.0f, 0.6f, 0.2f, 1.0f});
         ImGui::TextWrapped(ICON_MDI_ALERT " %s", (*code)->error().c_str());

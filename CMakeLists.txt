@@ -319,6 +319,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/platform/input.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/platform/platform_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/platform/process.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/platform/directory_watcher.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/platform/window.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/reflection/reflection.cpp"

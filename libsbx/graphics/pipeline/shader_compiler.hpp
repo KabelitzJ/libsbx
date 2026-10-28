@@ -108,6 +108,7 @@ public:
   struct module_reflection {
     std::vector<std::string> entry_points;
     std::unordered_map<std::string, std::vector<reflected_field>> structs;
+    std::vector<std::filesystem::path> dependencies; // every file the module parsed: itself and its transitive #includes
   }; // struct module_reflection
 
   shader_compiler();
@@ -141,7 +142,7 @@ public:
    * @param entry_points The entry point names to look for.
    * @param structs The struct names to reflect.
    *
-   * @return The entry points that exist, in the order given, and the fields of each struct that exists.
+   * @return The entry points that exist, in the order given, the fields of each struct that exists, and the files it depends on.
    *
    * @throws utility::runtime_error If the file can't be read or doesn't parse; the message carries Slang's diagnostics.
    */

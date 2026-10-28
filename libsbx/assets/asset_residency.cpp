@@ -139,7 +139,7 @@ auto asset_residency::load_texture(const math::uuid& id, graphics::format format
 
   const auto index = bindless_table.reserve_sampled_image();
 
-  auto record = std::make_shared<texture2d>(texture2d{index});
+  auto record = std::make_shared<texture2d>(index);
   record->_id = id;
 
   {
@@ -203,7 +203,7 @@ auto asset_residency::create_storage_image(std::uint32_t width, std::uint32_t he
   // Descriptor writes are normally flushed once per frame, too late for a ComputeCommands.Submit right after this returns.
   bindless_table.flush_writes();
 
-  auto record = std::make_shared<texture2d>(texture2d{sampled_index});
+  auto record = std::make_shared<texture2d>(sampled_index);
   record->_storage_index = storage_index;
 
   const auto id = math::uuid::create();
@@ -243,6 +243,16 @@ auto asset_residency::release_texture(const texture2d_handle& texture) -> void {
 
   // The sampled index is recycled, and emplace never overwrites, so a stale entry would mark the next texture resident too early.
   _resident_frame.erase(texture->index());
+
+  // A reimport still waiting to swap in owns an index and image of its own.
+  std::erase_if(_texture_swaps, [&](const auto& swap) {
+    if (swap.record.get() != texture.get()) {
+      return false;
+    }
+
+    _discard_texture_index(swap.new_index, graphics_module.frame_context().frame_index());
+    return true;
+  });
 
   bindless_table.unregister_sampled_image(texture->index());
 
@@ -431,7 +441,7 @@ auto asset_residency::load_font(const math::uuid& id) -> font_handle {
   const auto index = bindless_table.reserve_sampled_image();
 
   auto record = std::make_shared<font>();
-  record->_atlas = texture2d_handle{std::make_shared<texture2d>(texture2d{index})};
+  record->_atlas = texture2d_handle{std::make_shared<texture2d>(index)};
   record->_id = id;
 
   {
@@ -744,24 +754,17 @@ auto asset_residency::reimport(const math::uuid& id) -> void {
       break;
     }
     case asset_type::shader: {
-      // An edited include changes every shader that includes it, and nothing loads a library itself, so anything but a loaded surface or compute shader re-reflects them all.
-      // ponytail: that bumps every shader's generation, so each recompiles (a disk-cache hit when unchanged) and gets a new pipeline; track include dependencies if this stalls.
-      auto records = std::vector<std::shared_ptr<shader>>{};
+      // The edited file itself if it's loaded, plus every loaded shader whose last reflection #included it, directly or not.
+      auto error = std::error_code{};
+      const auto canonical = std::filesystem::weakly_canonical(source, error);
+      const auto edited = error ? source.lexically_normal() : canonical;
 
-      {
-        auto lock = std::lock_guard{_mutex};
+      auto lock = std::lock_guard{_mutex};
 
-        if (const auto entry = _shaders.find(id); entry != _shaders.end() && entry->second->kind() != shader_kind::library) {
-          records.push_back(entry->second);
-        } else {
-          for (const auto& [shader_id, record] : _shaders) {
-            records.push_back(record);
-          }
+      for (const auto& [shader_id, record] : _shaders) {
+        if (shader_id == id || record->_depends_on(edited)) {
+          _loader.submit(asset_loader::shader_request{shader_id, record->path(), true});
         }
-      }
-
-      for (const auto& record : records) {
-        _reflect_shader(*record);
       }
 
       break;
@@ -1524,17 +1527,28 @@ auto asset_residency::load_shader_graph(const std::filesystem::path& path) -> sh
   return load_shader_graph(_manifest.import(assets_directory / path));
 }
 
-auto asset_residency::load_shader(const math::uuid& id) -> shader_handle {
+auto asset_residency::load_shader(const math::uuid& id, bool wait) -> shader_handle {
   if (id == math::uuid::nil()) {
     return shader_handle{};
   }
+
+  auto existing = std::shared_ptr<shader>{};
 
   {
     auto lock = std::lock_guard{_mutex};
 
     if (const auto entry = _shaders.find(id); entry != _shaders.end()) {
-      return shader_handle{entry->second};
+      existing = entry->second;
     }
+  }
+
+  if (existing) {
+    // Requested before its reflection came back: do it now; the loader's result is dropped (see asset_loader::shader_request).
+    if (wait && !existing->is_loaded()) {
+      _apply_shader_reflection(*existing, reflect_shader(existing->path()));
+    }
+
+    return shader_handle{existing};
   }
 
   const auto source = _manifest.path_of(id);
@@ -1548,53 +1562,49 @@ auto asset_residency::load_shader(const math::uuid& id) -> shader_handle {
   record->_id = id;
   record->_path = source;
 
-  // ponytail: reflection parses the file on the calling thread; move it to asset_loader if loading a scene full of code shaders hitches.
-  _reflect_shader(*record);
-
   {
     auto lock = std::lock_guard{_mutex};
     _shaders.emplace(id, record);
   }
 
+  if (wait) {
+    _apply_shader_reflection(*record, reflect_shader(source));
+  } else {
+    _loader.submit(asset_loader::shader_request{id, source, false});
+  }
+
   return shader_handle{record};
 }
 
-auto asset_residency::load_shader(const std::filesystem::path& path) -> shader_handle {
+auto asset_residency::load_shader(const std::filesystem::path& path, bool wait) -> shader_handle {
   const auto& project = core::engine::project();
 
   const auto assets_directory = project.assets_directory();
 
-  return load_shader(_manifest.import(assets_directory / path));
+  return load_shader(_manifest.import(assets_directory / path), wait);
 }
 
-auto asset_residency::_reflect_shader(shader& record) -> void {
-  static constexpr auto entry_point_names = std::array<std::string_view, 5u>{"vertex_main", "fragment_main", "depth_vertex_main", "depth_fragment_main", "compute_main"};
-  static constexpr auto struct_names = std::array<std::string_view, 1u>{"properties"};
+auto asset_residency::_finalize_shader(asset_loader::shader_result& result) -> void {
+  auto record = std::shared_ptr<shader>{};
 
-  auto& shader_compiler = core::engine::get_module<graphics::graphics_module>().shader_compiler();
+  {
+    auto lock = std::lock_guard{_mutex};
 
-  try {
-    const auto reflection = shader_compiler.reflect_module(record.path(), entry_point_names, struct_names);
-
-    const auto has = [&](std::string_view name) {
-      return std::ranges::find(reflection.entry_points, name) != reflection.entry_points.end();
-    };
-
-    auto properties = shader_properties_from_reflection(reflection);
-
-    if (!properties) {
-      utility::logger<"assets">::warn("Shader '{}': {}", record.path().generic_string(), properties.error());
-      record._finalize_content(shader_kind::library, false, {}, std::string{}, std::move(properties.error()));
-      return;
+    if (const auto entry = _shaders.find(result.request.id); entry != _shaders.end()) {
+      record = entry->second;
     }
-
-    const auto kind = (has("vertex_main") && has("fragment_main")) ? shader_kind::surface : has("compute_main") ? shader_kind::compute : shader_kind::library;
-
-    record._finalize_content(kind, has("depth_vertex_main") && has("depth_fragment_main"), std::move(properties->properties), std::move(properties->material_loader), std::string{});
-  } catch (const std::exception& exception) {
-    utility::logger<"assets">::warn("Shader '{}' doesn't parse: {}", record.path().generic_string(), exception.what());
-    record._finalize_content(shader_kind::library, false, {}, std::string{}, exception.what());
   }
+
+  if (!record || (!result.request.is_reload && record->is_loaded())) {
+    return;
+  }
+
+  _apply_shader_reflection(*record, std::move(result.data));
+}
+
+auto asset_residency::_apply_shader_reflection(shader& record, shader_reflection_result data) -> void {
+  record._dependencies = std::move(data.dependencies);
+  record._finalize_content(data.kind, data.has_depth_entry_points, std::move(data.properties), std::move(data.material_loader), std::move(data.error));
 }
 
 auto asset_residency::create_shader_graph(const shader_graph::create_info& create_info) -> shader_graph_handle {
@@ -1610,6 +1620,15 @@ auto asset_residency::update_shader_graph_data(shader_graph_handle& graph, const
   graph->_properties = create_info.properties;
   graph->_nodes = create_info.nodes;
   graph->_edges = create_info.edges;
+
+  // Materials using the graph fill its inline Sample Texture slots at upload (see _material_data_of), so they re-upload with every change.
+  auto lock = std::lock_guard{_mutex};
+
+  for (const auto& record : _materials) {
+    if (record && record->shader_graph().get() == graph.get()) {
+      _pending_materials.push_back(pending_material_upload{record->index(), _material_data_of(*record)});
+    }
+  }
 }
 
 auto asset_residency::update_shader_graph(shader_graph_handle& graph, const shader_graph::create_info& create_info) -> void {
@@ -1952,6 +1971,17 @@ auto asset_residency::drain_loader_results() -> void {
     return;
   }
 
+  auto shaders = _loader.take_resolved_shaders(remaining);
+  remaining -= shaders.size();
+
+  for (auto& result : shaders) {
+    _finalize_shader(result);
+  }
+
+  if (remaining == 0u) {
+    return;
+  }
+
   auto skeletons = _loader.take_resolved_skeletons(remaining);
   remaining -= skeletons.size();
 
@@ -1992,7 +2022,7 @@ auto asset_residency::_finalize_texture(asset_loader::texture_result& result) ->
     return;
   }
 
-  _pending_textures.push_back(pending_texture_upload{entry->second->index(), std::move(result.data->pixels), result.data->width, result.data->height, request.format, request.settings.generate_mipmaps});
+  _pending_textures.push_back(pending_texture_upload{entry->second, std::move(result.data->pixels), result.data->width, result.data->height, request.format, request.settings.generate_mipmaps});
 
   // Means decoded and queued, not uploaded; that's is_resident().
   entry->second->_bump_generation();
@@ -2126,7 +2156,7 @@ auto asset_residency::_finalize_font(asset_loader::font_result& result) -> void 
 
   record._finalize_content(std::move(data.glyphs), data.first_codepoint, data.line_height, data.ascent, data.descent);
 
-  _pending_textures.push_back(pending_texture_upload{record.atlas()->index(), std::move(data.atlas.pixels), data.atlas.width, data.atlas.height, graphics::format::r8_unorm, false});
+  _pending_textures.push_back(pending_texture_upload{record.atlas().shared(), std::move(data.atlas.pixels), data.atlas.width, data.atlas.height, graphics::format::r8_unorm, false});
 }
 
 auto asset_residency::_finalize_audio_clip(asset_loader::audio_clip_result& result) -> void {
@@ -2493,24 +2523,25 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
     }
   }
 
-  if (pending_textures.empty() && pending_meshes.empty() && pending_materials.empty() && pending_arrays.empty()) {
-    return;
-  }
-
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& registry = graphics_module.resource_registry();
   auto& upload_context = graphics_module.upload_context();
   auto& bindless_table = graphics_module.bindless_table();
 
-  // A reimport re-uploads into a bindless index frames in flight may still sample; descriptors can't change under them.
-  // ponytail: full device wait per batch with a replacement, fine for editor reimports; double-buffer the index if runtime hot reload ever needs it.
-  {
+  // Reimported textures whose new image has finished uploading take over from the old one now; every material re-uploads with the new index.
+  if (_complete_texture_swaps(frame_index)) {
     auto lock = std::lock_guard{_mutex};
 
-    if (std::ranges::any_of(pending_textures, [this](const auto& request) { return _images.contains(request.index); })) {
-      graphics_module.logical_device().wait_idle();
+    for (const auto& record : _materials) {
+      if (record) {
+        pending_materials.push_back(pending_material_upload{record->index(), _material_data_of(*record)});
+      }
     }
+  }
+
+  if (pending_textures.empty() && pending_meshes.empty() && pending_materials.empty() && pending_arrays.empty()) {
+    return;
   }
 
   for (auto& request : pending_textures) {
@@ -2528,17 +2559,39 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
 
     upload_context.stage_image(handle, bytes, graphics::image_layout::shader_read_only_optimal);
 
-    bindless_table.write_sampled_image(request.index, registry.get<graphics::image>(handle).view());
-
     // Main-thread readers look these up under _mutex.
     auto lock = std::lock_guard{_mutex};
 
-    if (const auto previous = _images.find(request.index); previous != _images.end()) {
-      registry.retire(previous->second, frame_index);
+    const auto current_index = request.record->index();
+
+    // First upload: the image goes into the texture's own index.
+    if (!_images.contains(current_index)) {
+      bindless_table.write_sampled_image(current_index, registry.get<graphics::image>(handle).view());
+
+      _images.insert_or_assign(current_index, handle);
+      _resident_frame.insert_or_assign(current_index, frame_index);
+
+      continue;
     }
 
-    _images.insert_or_assign(request.index, handle);
-    _resident_frame.emplace(request.index, frame_index);
+    // A reimport: frames in flight still sample the current index, so the new image goes into a fresh one and swaps in once uploaded (_complete_texture_swaps).
+    // An earlier swap for the same texture that never completed is superseded.
+    std::erase_if(_texture_swaps, [&](const auto& swap) {
+      if (swap.record != request.record) {
+        return false;
+      }
+
+      _discard_texture_index(swap.new_index, frame_index);
+      return true;
+    });
+
+    const auto new_index = bindless_table.reserve_sampled_image();
+    bindless_table.write_sampled_image(new_index, registry.get<graphics::image>(handle).view());
+
+    _images.insert_or_assign(new_index, handle);
+    _resident_frame.insert_or_assign(new_index, frame_index);
+
+    _texture_swaps.push_back(pending_texture_swap{request.record, current_index, new_index, frame_index});
   }
 
   for (auto& request : pending_arrays) {
@@ -2615,6 +2668,43 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
   for (const auto& request : pending_materials) {
     buffer.write(&request.data, sizeof(material_data), request.index * memory::stride_v<material_data>);
   }
+}
+
+auto asset_residency::_complete_texture_swaps(std::uint64_t frame_index) -> bool {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  const auto completed_value = graphics_module.frame_context().timeline_value();
+
+  auto lock = std::lock_guard{_mutex};
+
+  // The new image's upload ran in frame ready_value; once that completed, its descriptor write has been flushed too.
+  const auto completed = std::ranges::partition(_texture_swaps, [completed_value](const auto& swap) { return completed_value < swap.ready_value; });
+
+  if (completed.empty()) {
+    return false;
+  }
+
+  for (const auto& swap : completed) {
+    swap.record->_bindless_index.store(swap.new_index, std::memory_order_release);
+
+    // Frames up to this one may still sample the old index; both are only reused after this frame completes.
+    _discard_texture_index(swap.old_index, frame_index);
+  }
+
+  _texture_swaps.erase(completed.begin(), completed.end());
+
+  return true;
+}
+
+auto asset_residency::_discard_texture_index(std::uint32_t index, std::uint64_t frame_index) -> void {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  if (const auto image = _images.find(index); image != _images.end()) {
+    graphics_module.resource_registry().retire(image->second, frame_index);
+    _images.erase(image);
+  }
+
+  _resident_frame.erase(index);
+  graphics_module.bindless_table().unregister_sampled_image(index);
 }
 
 auto asset_residency::is_resident(const texture2d_handle& texture) const -> bool {
@@ -2729,7 +2819,7 @@ auto asset_residency::_create_default_texture(std::array<std::uint8_t, 4u> color
 
   const auto index = bindless_table.reserve_sampled_image();
 
-  auto record = std::make_shared<texture2d>(texture2d{index});
+  auto record = std::make_shared<texture2d>(index);
 
   auto pixels = std::vector<std::byte>{
     std::byte{color[0]}, std::byte{color[1]}, std::byte{color[2]}, std::byte{color[3]}
@@ -2737,7 +2827,7 @@ auto asset_residency::_create_default_texture(std::array<std::uint8_t, 4u> color
 
   {
     auto lock = std::lock_guard{_mutex};
-    _pending_textures.push_back(pending_texture_upload{index, std::move(pixels), 1u, 1u, graphics::format::r8g8b8a8_unorm});
+    _pending_textures.push_back(pending_texture_upload{record, std::move(pixels), 1u, 1u, graphics::format::r8g8b8a8_unorm});
   }
 
   return texture2d_handle{record};
@@ -2779,8 +2869,7 @@ auto asset_residency::_material_data_of(const material& material) const -> mater
     data.generic_textures[i] = generic_texture_arrays[i].is_valid() ? generic_texture_arrays[i]->index() : resolve(generic_textures[i], _white);
   }
 
-  // Unconnected Sample Texture nodes read hidden slots that always hold the graph's own inline texture.
-  // ponytail: refreshed only when the material re-uploads; editing a graph's inline texture doesn't reach materials already resident until then.
+  // Unconnected Sample Texture nodes read hidden slots that always hold the graph's own inline texture; update_shader_graph_data re-uploads materials when it changes.
   if (const auto& graph = material.shader_graph(); graph.is_valid()) {
     for (const auto& parameter : graph->parameters()) {
       if (parameter.property_id == shader_property_invalid_id && parameter.slot < generic_textures.size()) {

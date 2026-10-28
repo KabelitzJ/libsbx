@@ -43,44 +43,42 @@ auto particles_module::fixed_update() -> void {
   auto& scene = scenes_module.active_scene();
   const auto dt = core::engine::fixed_delta_time().value();
 
-  _parallel_effects.clear();
-  _serial_effects.clear();
+  _effects.clear();
+
+  auto queries_physics = false;
 
   for (auto&& [entity, world, effect] : scene.query<scenes::world_transform, scenes::particle_effect>(ecs::exclude<scenes::inactive>).each()) {
-    // World collision queries physics_module, whose shape caches fill lazily and aren't thread-safe.
-    // ponytail: such effects simulate on this thread; parallelize them once the physics caches are (async plan Phase 3).
-    const auto queries_physics = effect.effect.is_valid() && std::ranges::any_of(effect.effect->emitters(), [](const auto& config) {
+    queries_physics |= effect.effect.is_valid() && std::ranges::any_of(effect.effect->emitters(), [](const auto& config) {
       return config.collision.mode == assets::particle_collision_mode::world;
     });
 
-    (queries_physics ? _serial_effects : _parallel_effects).push_back(effect_entry{entity, memory::make_observer(effect), memory::make_observer(world)});
+    _effects.push_back(effect_entry{entity, memory::make_observer(effect), memory::make_observer(world)});
+  }
+
+  // World collision queries physics from every worker at once.
+  if (queries_physics) {
+    core::engine::get_module<physics::physics_module>().prepare_parallel_queries(scene);
   }
 
   static constexpr auto effects_per_chunk = std::size_t{2u};
 
-  const auto chunk_count = (_parallel_effects.size() + effects_per_chunk - 1u) / effects_per_chunk;
+  const auto chunk_count = (_effects.size() + effects_per_chunk - 1u) / effects_per_chunk;
 
-  _chunk_requests.resize(std::max(_chunk_requests.size(), chunk_count + 1u));
+  _chunk_requests.resize(std::max(_chunk_requests.size(), chunk_count));
 
   for (auto& requests : _chunk_requests) {
     requests.clear();
   }
 
-  core::engine::get_module<async::async_module>().pool().parallel_for_chunks(0u, _parallel_effects.size(), effects_per_chunk, [&](std::size_t begin, std::size_t end) {
+  core::engine::get_module<async::async_module>().pool().parallel_for_chunks(0u, _effects.size(), effects_per_chunk, [&](std::size_t begin, std::size_t end) {
     SBX_PROFILE_SCOPE("Particle effects");
 
     auto& requests = _chunk_requests[begin / effects_per_chunk];
 
     for (auto index = begin; index < end; ++index) {
-      _simulate_effect(scene, _parallel_effects[index], dt, requests);
+      _simulate_effect(scene, _effects[index], dt, requests);
     }
   });
-
-  auto& serial_requests = _chunk_requests.back();
-
-  for (const auto& entry : _serial_effects) {
-    _simulate_effect(scene, entry, dt, serial_requests);
-  }
 
   for (const auto& requests : _chunk_requests) {
     _apply_sub_emitter_requests(scene, requests);

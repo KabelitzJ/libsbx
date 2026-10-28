@@ -29,6 +29,10 @@ auto type::get_enum_entries() const -> std::vector<std::pair<std::string, std::i
   return entries;
 }
 
+auto type::get_enum_underlying_type_name() const -> std::string {
+  return string::take(std::invoke(detail::backend.get_enum_underlying_type_name, _id));
+}
+
 auto type::get_base_type() -> type& {
   if (!_base_type) {
     auto base_type = managed::type{};

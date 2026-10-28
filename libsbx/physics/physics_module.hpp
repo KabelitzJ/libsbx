@@ -126,6 +126,15 @@ public:
   }
 
   /**
+   * @brief Makes the queries safe to call from several threads at once until the next fixed_update: builds the broadphase if simulation just started.
+   *
+   * The shape caches lock themselves, the trees are only read, and each query composes poses into its own cache.
+   *
+   * @param scene The scene the queries will run against.
+   */
+  auto prepare_parallel_queries(scenes::scene& scene) -> void;
+
+  /**
    * @brief Every collider overlapping a sphere; overlap_shape() with a sphere, triggers included.
    *
    * @param scene The scene.

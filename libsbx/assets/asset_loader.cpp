@@ -120,6 +120,19 @@ auto asset_loader::submit(animation_graph_request request) -> void {
   _request_condition.notify_one();
 }
 
+auto asset_loader::submit(shader_request request) -> void {
+  if (_aborted.load(std::memory_order_relaxed)) {
+    return;
+  }
+
+  {
+    auto lock = std::lock_guard{_request_mutex};
+    _requests.push_back(std::move(request));
+  }
+
+  _request_condition.notify_one();
+}
+
 auto asset_loader::submit(skeleton_request request) -> void {
   if (_aborted.load(std::memory_order_relaxed)) {
     return;
@@ -300,6 +313,19 @@ auto asset_loader::_resolve(const shader_graph_request& request) -> void {
   _resolved_shader_graphs.push_back(shader_graph_result{request, std::move(data)});
 }
 
+auto asset_loader::_resolve(const shader_request& request) -> void {
+  SBX_PROFILE_SCOPE("asset_loader::_resolve shader");
+
+  auto data = reflect_shader(request.source);
+
+  if (_aborted.load(std::memory_order_relaxed)) {
+    return;
+  }
+
+  auto lock = std::lock_guard{_result_mutex};
+  _resolved_shaders.push_back(shader_result{request, std::move(data)});
+}
+
 auto asset_loader::_resolve(const skeleton_request& request) -> void {
   SBX_PROFILE_SCOPE("asset_loader::_resolve skeleton");
 
@@ -448,6 +474,22 @@ auto asset_loader::take_resolved_shader_graphs(std::size_t max_count) -> std::ve
   while (max_count > 0u && !_resolved_shader_graphs.empty()) {
     result.push_back(std::move(_resolved_shader_graphs.front()));
     _resolved_shader_graphs.pop_front();
+    --max_count;
+  }
+
+  return result;
+}
+
+auto asset_loader::take_resolved_shaders(std::size_t max_count) -> std::vector<shader_result> {
+  SBX_PROFILE_SCOPE("asset_loader::take_resolved_shaders");
+
+  auto result = std::vector<shader_result>{};
+
+  auto lock = std::lock_guard{_result_mutex};
+
+  while (max_count > 0u && !_resolved_shaders.empty()) {
+    result.push_back(std::move(_resolved_shaders.front()));
+    _resolved_shaders.pop_front();
     --max_count;
   }
 

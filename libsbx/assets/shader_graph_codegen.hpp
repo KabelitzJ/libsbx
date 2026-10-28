@@ -29,7 +29,7 @@ namespace sbx::assets {
  * Doesn't include geometry_common.slang or lighting.slang, which need a full frame_data; only frame_data.slang's struct shapes are reused.
  * Its `push_data`/`material_data` must stay byte-identical to editor/panels/shader_graph_preview.hpp.
  *
- * ponytail: shading is flat ambient plus Lambert on Albedo/Normal/Emission only; add a small Blinn-Phong term if the preview needs to show Metallic/Roughness.
+ * Lit graphs get ambient, Lambert diffuse and normalized Blinn-Phong specular with Schlick Fresnel, driven by every Fragment (Lit) socket; Alpha is written out, and clips like the real shader.
  *
  * @param graph_name Part of the generated names; must already be a valid Slang identifier fragment.
  * @param graph The graph to translate.

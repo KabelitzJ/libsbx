@@ -94,14 +94,26 @@ auto write_disk_cache(const math::uuid& mesh_id, const mesh_collision_data& data
 }
 
 auto mesh_collision_cache::get_or_build(assets::assets_module& assets_module, const math::uuid& mesh_id) -> const mesh_collision_data& {
-  if (!_cache.contains(mesh_id)) {
-    _cache.emplace(mesh_id, _build(assets_module, mesh_id));
+  {
+    auto lock = std::shared_lock{_mutex};
+
+    if (const auto entry = _cache.find(mesh_id); entry != _cache.end()) {
+      return *entry->second;
+    }
   }
 
-  return _cache.at(mesh_id);
+  auto lock = std::unique_lock{_mutex};
+
+  // Another thread may have built it between the two locks.
+  if (const auto entry = _cache.find(mesh_id); entry != _cache.end()) {
+    return *entry->second;
+  }
+
+  return *_cache.emplace(mesh_id, std::make_unique<const mesh_collision_data>(_build(assets_module, mesh_id))).first->second;
 }
 
 auto mesh_collision_cache::clear() -> void {
+  auto lock = std::unique_lock{_mutex};
   _cache.clear();
 }
 

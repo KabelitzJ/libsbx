@@ -211,6 +211,12 @@ particle_pass::particle_pass(graphics::samples samples)
   _gpu_particle_pipelines[additive_group] = pipeline_cache.get(gpu_additive_info);
 }
 
+particle_pass::~particle_pass() {
+  retire_buffers(_billboard_buffers);
+  retire_buffers(_mesh_buffers);
+  retire_buffers(_trail_buffers);
+}
+
 auto particle_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {
   auto oit_group = render_attachment_group{.extent = resources.extent};
 

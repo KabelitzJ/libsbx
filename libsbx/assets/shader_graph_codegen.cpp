@@ -954,15 +954,30 @@ auto generate_shader_graph_preview_source(const std::string& graph_name, const s
   if (has_lit) {
     const auto id = lit_it->id;
 
-    // ponytail: only Albedo/Normal/Emission are shaded; the rest need a BRDF and full frame_data the preview doesn't have. Add a small Blinn-Phong term if the flat look matters.
+    // The preview has no full frame_data for the engine's BRDF, so a light stand-in: Lambert plus normalized Blinn-Phong with Schlick Fresnel, enough to read Metallic and Roughness.
     const auto albedo = labeled(emit_fragment_socket(id, 0u, fragment_walker, "float3", "float3(1.0, 1.0, 1.0)"), "Fragment (Lit) Albedo");
     if (!albedo) return std::unexpected{albedo.error()};
 
     const auto normal = labeled(emit_fragment_socket(id, 1u, fragment_walker, "float3", "float3(0.0, 0.0, 1.0)"), "Fragment (Lit) Normal");
     if (!normal) return std::unexpected{normal.error()};
 
+    const auto metallic = labeled(emit_fragment_socket(id, 2u, fragment_walker, "float", "0.0"), "Fragment (Lit) Metallic");
+    if (!metallic) return std::unexpected{metallic.error()};
+
+    const auto roughness = labeled(emit_fragment_socket(id, 3u, fragment_walker, "float", "0.5"), "Fragment (Lit) Roughness");
+    if (!roughness) return std::unexpected{roughness.error()};
+
     const auto emission = labeled(emit_fragment_socket(id, 4u, fragment_walker, "float3", "float3(0.0, 0.0, 0.0)"), "Fragment (Lit) Emission");
     if (!emission) return std::unexpected{emission.error()};
+
+    const auto occlusion = labeled(emit_fragment_socket(id, 5u, fragment_walker, "float", "1.0"), "Fragment (Lit) Occlusion");
+    if (!occlusion) return std::unexpected{occlusion.error()};
+
+    const auto alpha = labeled(emit_fragment_socket(id, 6u, fragment_walker, "float", "1.0"), "Fragment (Lit) Alpha");
+    if (!alpha) return std::unexpected{alpha.error()};
+
+    const auto alpha_clip_threshold = labeled(emit_fragment_socket(id, 7u, fragment_walker, "float", "material.alpha_cutoff"), "Fragment (Lit) Alpha Clip Threshold");
+    if (!alpha_clip_threshold) return std::unexpected{alpha_clip_threshold.error()};
 
     fragment_body = join_statements(fragment_walker.statements()) + fmt::format(
       "  float3 tangent_space_normal = {0};\n"
@@ -970,11 +985,29 @@ auto generate_shader_graph_preview_source(const std::string& graph_name, const s
       "  float3 world_normal = normalize(mul(tangent_space_normal, float3x3(input.tangent.xyz, bitangent, n)));\n"
       "\n"
       "  float3 light_dir = normalize(-push.light_direction.xyz);\n"
+      "  float3 half_dir = normalize(light_dir + view_dir);\n"
       "  float n_dot_l = max(dot(world_normal, light_dir), 0.0);\n"
+      "  float n_dot_h = max(dot(world_normal, half_dir), 0.0);\n"
+      "  float3 light = push.light_color.rgb * push.light_color.a;\n"
       "\n"
       "  float3 albedo = {1};\n"
-      "  float3 color = albedo * 0.15 + albedo * push.light_color.rgb * push.light_color.a * n_dot_l + {2};\n",
-      *normal, *albedo, *emission
+      "  float metallic = saturate({2});\n"
+      "  float roughness = clamp({3}, 0.045, 1.0);\n"
+      "  float occlusion = saturate({5});\n"
+      "\n"
+      // Roughness to a Blinn-Phong exponent (alpha^2 mapping), energy-normalized so rough highlights spread instead of just dimming.
+      "  float shininess = max(2.0 / (roughness * roughness * roughness * roughness) - 2.0, 1.0);\n"
+      "  float3 f0 = lerp(float3(0.04, 0.04, 0.04), albedo, metallic);\n"
+      "  float3 fresnel = f0 + (1.0 - f0) * pow(1.0 - max(dot(half_dir, view_dir), 0.0), 5.0);\n"
+      "  float3 specular = fresnel * pow(n_dot_h, shininess) * (shininess + 8.0) / (8.0 * 3.14159265);\n"
+      "  float3 diffuse = albedo * (1.0 - metallic) * (1.0 - fresnel);\n"
+      "\n"
+      "  float3 color = (albedo * (1.0 - metallic) + f0 * metallic) * 0.15 * occlusion + (diffuse + specular) * light * n_dot_l + {4};\n"
+      "  float alpha = {6};\n"
+      "\n"
+      "  uint is_alpha_masked = (material.flags & material_flags::alpha_masked) != 0u;\n"
+      "  clip(is_alpha_masked * (alpha - {7}));\n",
+      *normal, *albedo, *metallic, *roughness, *emission, *occlusion, *alpha, *alpha_clip_threshold
     );
   } else {
     const auto id = unlit_it->id;
@@ -982,8 +1015,20 @@ auto generate_shader_graph_preview_source(const std::string& graph_name, const s
     const auto color = labeled(emit_fragment_socket(id, 0u, fragment_walker, "float3", ""), "Fragment (Unlit) Color");
     if (!color) return std::unexpected{color.error()};
 
-    // ponytail: Alpha isn't evaluated; the preview sphere is always opaque.
-    fragment_body = join_statements(fragment_walker.statements()) + fmt::format("  float3 color = {0};\n", *color);
+    const auto alpha = labeled(emit_fragment_socket(id, 1u, fragment_walker, "float", "1.0"), "Fragment (Unlit) Alpha");
+    if (!alpha) return std::unexpected{alpha.error()};
+
+    const auto alpha_clip_threshold = labeled(emit_fragment_socket(id, 2u, fragment_walker, "float", "material.alpha_cutoff"), "Fragment (Unlit) Alpha Clip Threshold");
+    if (!alpha_clip_threshold) return std::unexpected{alpha_clip_threshold.error()};
+
+    fragment_body = join_statements(fragment_walker.statements()) + fmt::format(
+      "  float3 color = {0};\n"
+      "  float alpha = {1};\n"
+      "\n"
+      "  uint is_alpha_masked = (material.flags & material_flags::alpha_masked) != 0u;\n"
+      "  clip(is_alpha_masked * (alpha - {2}));\n",
+      *color, *alpha, *alpha_clip_threshold
+    );
   }
 
   auto source = fmt::format(
@@ -1058,7 +1103,8 @@ auto generate_shader_graph_preview_source(const std::string& graph_name, const s
     "\n"
     "{4}"
     "\n"
-    "  return float4(color, 1.0);\n"
+    // The panel draws the image alpha-blended, so a transparent graph shows the panel through it.
+    "  return float4(color, saturate(alpha));\n"
     "}}\n",
     graph_name, *vertex_position_fn, *vertex_normal_fn, *vertex_tangent_fn, fragment_body, noise_helper_source_for(graph)
   );

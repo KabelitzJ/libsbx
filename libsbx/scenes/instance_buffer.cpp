@@ -16,18 +16,17 @@ instance_buffer::instance_buffer(std::span<const instance_data> instances)
     return;
   }
 
-  auto& registry = core::engine::get_module<graphics::graphics_module>().resource_registry();
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
-  // ponytail: host-visible, read straight over the bus by the cull pass each frame; a device-local
-  // copy via upload_context if instance counts ever make that read show up in GPU time.
-  _buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+  // Device-local, since the cull pass reads every instance every frame; the data arrives through a staging copy the next frame records before any pass.
+  _buffer = graphics_module.resource_registry().emplace<graphics::buffer>(graphics::buffer::create_info{
     .size = instances.size_bytes(),
-    .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
-    .memory = graphics::memory_usage::host_write,
+    .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage | graphics::buffer_usage::transfer_destination,
+    .memory = graphics::memory_usage::device_local,
     .name = "Instances"
   });
 
-  registry.get<graphics::buffer>(_buffer).write(instances.data(), instances.size_bytes());
+  graphics_module.upload_context().stage_buffer(_buffer, std::as_bytes(instances));
 }
 
 instance_buffer::~instance_buffer() {

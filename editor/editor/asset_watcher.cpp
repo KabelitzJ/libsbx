@@ -23,14 +23,20 @@ auto asset_watcher::update(editor_state& state) -> void {
 
   _last_scan = now;
 
-  auto current = _scan();
-
   // The first scan only records: startup's import_directory already registered everything on disk.
+  // The watch starts before it, so nothing changing during the scan is missed.
   if (!_has_snapshot) {
-    _files = std::move(current);
+    _directory_watcher.emplace(sbx::core::engine::project().assets_directory());
+    _files = _scan();
     _has_snapshot = true;
     return;
   }
+
+  if (!_directory_watcher->poll()) {
+    return;
+  }
+
+  auto current = _scan();
 
   auto& project = sbx::core::engine::project();
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
@@ -96,8 +102,11 @@ auto asset_watcher::update(editor_state& state) -> void {
       continue;
     }
 
-    // ponytail: only sources with an importer hot-reload; editor-native YAML assets (materials, graphs, prefabs, scenes) are rewritten by the editor's own saves, so reloading them here would need self-write suppression first.
-    if (sbx::assets::has_import_settings(type)) {
+    // Editor-native YAML assets reload too, unless the change is the editor's own save; reimport only touches ones that are loaded.
+    // Prefabs and scenes aren't reloaded: an open scene would lose its unsaved state, so they only refresh the browser.
+    const auto is_editor_native = type == sbx::assets::asset_type::material || type == sbx::assets::asset_type::particle_effect || type == sbx::assets::asset_type::animation_graph || type == sbx::assets::asset_type::shader_graph;
+
+    if (sbx::assets::has_import_settings(type) || (is_editor_native && !assets_module.is_own_write(path, write_time))) {
       if (const auto id = assets_module.find(path); id != sbx::math::uuid::nil()) {
         assets_module.reimport(id);
       }
@@ -111,7 +120,6 @@ auto asset_watcher::update(editor_state& state) -> void {
   }
 }
 
-// ponytail: a full recursive stat every interval is O(files); switch to inotify/ReadDirectoryChangesW if large projects stall here.
 auto asset_watcher::_scan() -> snapshot {
   auto& project = sbx::core::engine::project();
 

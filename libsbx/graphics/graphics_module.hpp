@@ -5,6 +5,8 @@
 
 #include <memory>
 #include <mutex>
+#include <thread>
+#include <unordered_map>
 
 #include <libsbx/utility/hash.hpp>
 #include <libsbx/utility/noncopyable.hpp>
@@ -14,6 +16,7 @@
 #include <libsbx/platform/platform_module.hpp>
 
 #include <libsbx/graphics/commands/command_pool.hpp>
+#include <libsbx/graphics/commands/fence.hpp>
 
 #include <libsbx/graphics/devices/instance.hpp>
 #include <libsbx/graphics/devices/physical_device.hpp>
@@ -117,6 +120,17 @@ public:
 
   auto command_pool(const queue::type type, const std::thread::id& thread_id = std::this_thread::get_id()) -> const std::shared_ptr<command_pool>&;
 
+  /**
+   * @brief The calling thread's fence for blocking submits (command_buffer::submit_idle), reused instead of creating one per submit.
+   *
+   * Unsignaled whenever no submit_idle is in progress on that thread.
+   *
+   * @param thread_id The thread; defaults to the calling one.
+   *
+   * @return The fence.
+   */
+  auto submit_fence(const std::thread::id& thread_id = std::this_thread::get_id()) -> fence&;
+
 private:
 
   struct command_pool_key {
@@ -148,6 +162,10 @@ private:
 
   std::mutex _command_pool_mutex{};
   std::unordered_map<command_pool_key, std::shared_ptr<graphics::command_pool>, command_pool_key_hash, command_pool_key_equality> _command_pools;
+
+  // unique_ptr: references handed out by submit_fence() must survive rehashing.
+  std::mutex _submit_fence_mutex{};
+  std::unordered_map<std::thread::id, std::unique_ptr<graphics::fence>> _submit_fences;
 
   graphics::resource_registry _resource_registry;
   graphics::bindless_table _bindless_table;

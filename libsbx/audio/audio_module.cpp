@@ -20,8 +20,61 @@ inline constexpr auto one_shot_priority = std::uint8_t{128u};
 inline constexpr auto one_shot_min_distance = 1.0f;
 inline constexpr auto one_shot_max_distance = 50.0f;
 
-static auto al_format(std::uint32_t channels) -> ALenum {
-  return channels == 1u ? AL_FORMAT_MONO16 : AL_FORMAT_STEREO16;
+// Surround layouts need AL_EXT_MCFORMATS; nullopt when the device can't play @p channels.
+static auto al_format(std::uint32_t channels) -> std::optional<ALenum> {
+  const auto surround_name = [channels]() -> const char* {
+    switch (channels) {
+      case 4u: return "AL_FORMAT_QUAD16";
+      case 6u: return "AL_FORMAT_51CHN16";
+      case 7u: return "AL_FORMAT_61CHN16";
+      case 8u: return "AL_FORMAT_71CHN16";
+      default: return nullptr;
+    }
+  }();
+
+  if (channels == 1u) {
+    return AL_FORMAT_MONO16;
+  }
+
+  if (channels == 2u || surround_name == nullptr) {
+    return channels == 2u ? std::optional<ALenum>{AL_FORMAT_STEREO16} : std::nullopt;
+  }
+
+  if (alIsExtensionPresent("AL_EXT_MCFORMATS") != AL_TRUE) {
+    return std::nullopt;
+  }
+
+  const auto format = alGetEnumValue(surround_name);
+
+  return (format != 0 && format != -1) ? std::optional<ALenum>{format} : std::nullopt;
+}
+
+// What a clip actually plays as: its own layout when the device supports it, otherwise stereo.
+static auto playable_channels(std::uint32_t channels) -> std::uint32_t {
+  return al_format(channels) ? channels : 2u;
+}
+
+// Same weighting as the cooker's stereo downmix: front left and right on their side, the rest shared equally.
+static auto downmix_to_stereo(std::span<const std::int16_t> samples, std::uint32_t channels) -> std::vector<std::int16_t> {
+  const auto frame_count = samples.size() / channels;
+  const auto weight = 1.0f + 0.5f * static_cast<std::float_t>(channels - 2u);
+
+  auto stereo = std::vector<std::int16_t>(frame_count * 2u);
+
+  for (auto frame = std::size_t{0u}; frame < frame_count; ++frame) {
+    const auto frame_samples = samples.subspan(frame * channels, channels);
+
+    auto shared = 0.0f;
+
+    for (auto channel = std::size_t{2u}; channel < channels; ++channel) {
+      shared += 0.5f * static_cast<std::float_t>(frame_samples[channel]);
+    }
+
+    stereo[frame * 2u] = static_cast<std::int16_t>((static_cast<std::float_t>(frame_samples[0]) + shared) / weight);
+    stereo[frame * 2u + 1u] = static_cast<std::int16_t>((static_cast<std::float_t>(frame_samples[1]) + shared) / weight);
+  }
+
+  return stereo;
 }
 
 static auto column(const math::matrix4x4& matrix, std::size_t index) -> math::vector3 {
@@ -77,7 +130,7 @@ audio_module::audio_module() {
 
   std::erase_if(_voices, [](const voice& target) { return target.source == 0u; });
 
-  _stream_scratch.resize(stream_buffer_frames * 2u);
+  _stream_scratch.resize(stream_buffer_frames * 8u); // up to 7.1
 
   utility::logger<"audio">::info("Opened audio device '{}' with {} voices", alcGetString(device.get(), ALC_DEVICE_SPECIFIER), _voices.size());
 
@@ -182,10 +235,12 @@ auto audio_module::is_previewing() const -> bool {
 
 auto audio_module::set_mixer_group_volume(const math::uuid& group, std::float_t volume) -> void {
   _group_volume_overrides[group] = volume;
+  _group_gains_dirty = true;
 }
 
 auto audio_module::reset_mixer_group_volume(const math::uuid& group) -> void {
   _group_volume_overrides.erase(group);
+  _group_gains_dirty = true;
 }
 
 auto audio_module::mixer_group_volume(const math::uuid& group) const -> std::float_t {
@@ -201,27 +256,41 @@ auto audio_module::mixer_group_volume(const math::uuid& group) const -> std::flo
 }
 
 auto audio_module::_update_mixer_gains() -> void {
-  const auto& groups = core::engine::project().mixer_groups();
+  const auto& project = core::engine::project();
+
+  if (!_group_gains_dirty && _group_gains_revision == project.mixer_groups_revision()) {
+    return;
+  }
+
+  _group_gains_dirty = false;
+  _group_gains_revision = project.mixer_groups_revision();
+
+  const auto& groups = project.mixer_groups();
 
   _group_gains.clear();
 
-  // ponytail: O(groups * depth) every frame; cache on a project change signal if mixers grow to hundreds of groups.
-  for (const auto& group : groups) {
-    auto gain = 1.0f;
-    auto current = groups.begin() + (&group - groups.data());
+  // Each group's gain is its own times its parent's, resolved once per group and reused by its children.
+  const auto resolve = [&](this const auto& self, const core::mixer_group& group, std::size_t depth) -> std::float_t {
+    if (const auto known = _group_gains.find(group.id); known != _group_gains.end()) {
+      return known->second;
+    }
 
-    // project::set_mixer_groups guarantees every chain reaches Master; the step limit is only a backstop.
-    for (auto steps = std::size_t{0u}; steps <= groups.size() && current != groups.end(); ++steps) {
-      gain *= current->muted ? 0.0f : mixer_group_volume(current->id);
+    auto gain = group.muted ? 0.0f : mixer_group_volume(group.id);
 
-      if (current->parent == math::uuid::nil()) {
-        break;
+    // project::set_mixer_groups guarantees every chain reaches Master; the depth limit is only a backstop against a cycle.
+    if (group.parent != math::uuid::nil() && depth < groups.size()) {
+      if (const auto parent = std::ranges::find(groups, group.parent, &core::mixer_group::id); parent != groups.end()) {
+        gain *= self(*parent, depth + 1u);
       }
-
-      current = std::ranges::find(groups, current->parent, &core::mixer_group::id);
     }
 
     _group_gains[group.id] = gain;
+
+    return gain;
+  };
+
+  for (const auto& group : groups) {
+    resolve(group, 0u);
   }
 }
 
@@ -674,9 +743,14 @@ auto audio_module::_buffer_for(const assets::audio_clip_handle& clip) -> ALuint 
 
   const auto samples = data.samples();
 
+  // A surround clip on a device without AL_EXT_MCFORMATS plays downmixed to stereo.
+  const auto channels = playable_channels(data.channels());
+  const auto downmixed = channels != data.channels() ? downmix_to_stereo(samples, data.channels()) : std::vector<std::int16_t>{};
+  const auto upload = downmixed.empty() ? samples : std::span<const std::int16_t>{downmixed};
+
   alGetError();
   alGenBuffers(1, &entry.buffer);
-  alBufferData(entry.buffer, al_format(data.channels()), samples.data(), static_cast<ALsizei>(samples.size_bytes()), static_cast<ALsizei>(data.sample_rate()));
+  alBufferData(entry.buffer, *al_format(channels), upload.data(), static_cast<ALsizei>(upload.size_bytes()), static_cast<ALsizei>(data.sample_rate()));
 
   if (alGetError() != AL_NO_ERROR) {
     utility::logger<"audio">::warn("Could not upload audio clip {}", data.id());
@@ -694,14 +768,15 @@ auto audio_module::_buffer_for(const assets::audio_clip_handle& clip) -> ALuint 
 
 auto audio_module::_fill_stream_buffer(voice& target, ALuint buffer) -> bool {
   const auto& data = *target.clip;
-  const auto channels = static_cast<int>(data.channels());
+  const auto output_channels = playable_channels(data.channels());
+  const auto channels = static_cast<int>(output_channels);
   const auto capacity = static_cast<int>(stream_buffer_frames);
 
   auto frames = 0;
   auto looped_without_progress = false;
 
   while (frames < capacity) {
-    // Decodes and, for a mono clip from a stereo source, downmixes to the requested channel count.
+    // Decodes and, for a mono clip or a surround stream the device can't play, downmixes to the requested channel count.
     const auto decoded = stb_vorbis_get_samples_short_interleaved(target.stream.decoder.get(), channels, _stream_scratch.data() + frames * channels, (capacity - frames) * channels);
 
     if (decoded > 0) {
@@ -723,7 +798,7 @@ auto audio_module::_fill_stream_buffer(voice& target, ALuint buffer) -> bool {
     return false;
   }
 
-  alBufferData(buffer, al_format(data.channels()), _stream_scratch.data(), static_cast<ALsizei>(static_cast<std::size_t>(frames * channels) * sizeof(std::int16_t)), static_cast<ALsizei>(data.sample_rate()));
+  alBufferData(buffer, *al_format(output_channels), _stream_scratch.data(), static_cast<ALsizei>(static_cast<std::size_t>(frames * channels) * sizeof(std::int16_t)), static_cast<ALsizei>(data.sample_rate()));
 
   target.stream.queued_frames.push_back(static_cast<std::uint32_t>(frames));
 

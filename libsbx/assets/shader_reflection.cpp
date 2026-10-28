@@ -3,13 +3,21 @@
 #include <libsbx/assets/shader_reflection.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
+
+#include <libsbx/utility/logger.hpp>
+
+#include <libsbx/core/engine.hpp>
+
+#include <libsbx/graphics/graphics_module.hpp>
 
 #include <libsbx/assets/texture2d.hpp>
 
@@ -170,6 +178,47 @@ auto shader_properties_from_reflection(const graphics::shader_compiler::module_r
 
   loader += "  return result;\n}\n";
   result.material_loader = std::move(loader);
+
+  return result;
+}
+
+auto reflect_shader(const std::filesystem::path& path) -> shader_reflection_result {
+  static constexpr auto entry_point_names = std::array<std::string_view, 5u>{"vertex_main", "fragment_main", "depth_vertex_main", "depth_fragment_main", "compute_main"};
+  static constexpr auto struct_names = std::array<std::string_view, 1u>{"properties"};
+
+  auto& shader_compiler = core::engine::get_module<graphics::graphics_module>().shader_compiler();
+
+  auto result = shader_reflection_result{};
+
+  try {
+    const auto reflection = shader_compiler.reflect_module(path, entry_point_names, struct_names);
+
+    for (const auto& dependency : reflection.dependencies) {
+      auto error = std::error_code{};
+      const auto normalized = std::filesystem::weakly_canonical(dependency, error);
+      result.dependencies.push_back(error ? dependency.lexically_normal() : normalized);
+    }
+
+    const auto has = [&](std::string_view name) {
+      return std::ranges::find(reflection.entry_points, name) != reflection.entry_points.end();
+    };
+
+    auto properties = shader_properties_from_reflection(reflection);
+
+    if (!properties) {
+      utility::logger<"assets">::warn("Shader '{}': {}", path.generic_string(), properties.error());
+      result.error = std::move(properties.error());
+      return result;
+    }
+
+    result.kind = (has("vertex_main") && has("fragment_main")) ? shader_kind::surface : has("compute_main") ? shader_kind::compute : shader_kind::library;
+    result.has_depth_entry_points = has("depth_vertex_main") && has("depth_fragment_main");
+    result.properties = std::move(properties->properties);
+    result.material_loader = std::move(properties->material_loader);
+  } catch (const std::exception& exception) {
+    utility::logger<"assets">::warn("Shader '{}' doesn't parse: {}", path.generic_string(), exception.what());
+    result.error = exception.what();
+  }
 
   return result;
 }

@@ -128,6 +128,12 @@ private:
 
   auto _wait_ignoring_exceptions(job_counter& counter) noexcept -> void;
 
+  // Runs other jobs while @p counter has pending ones, parking on _epoch when there's nothing to help with.
+  auto _help_until_done(job_counter& counter) -> void;
+
+  // Runs @p work and, if it finished its batch, wakes parked waiters.
+  auto _run(job& work) -> void;
+
   // xorshift32 over _steal_random_state, seeded per thread on first use.
   [[nodiscard]] static auto _next_steal_random() noexcept -> std::uint32_t;
 
@@ -143,7 +149,7 @@ private:
   std::deque<memory::observer_ptr<job>> _injection{};
   std::atomic<std::uint32_t> _injection_size{0u};
 
-  // Bumped on every submit; idle workers sleep on it (C++20 atomic wait), and only get a notify when one is asleep.
+  // Bumped on every submit and every finished batch; idle workers and parked waiters sleep on it (C++20 atomic wait), and only get a notify when one is asleep.
   std::atomic<std::uint32_t> _epoch{0u};
   std::atomic<std::uint32_t> _sleepers{0u};
   std::atomic<bool> _is_stopping{false};

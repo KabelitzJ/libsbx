@@ -199,6 +199,7 @@ auto project::set_mixer_groups(std::vector<mixer_group> groups) -> void {
   }
 
   _mixer_groups = std::move(groups);
+  _mixer_groups_revision = _next_mixer_groups_revision();
 }
 
 auto project::open_or_create(const std::filesystem::path& root, std::string name) -> project {

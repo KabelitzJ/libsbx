@@ -71,6 +71,10 @@ debug_draw_pass::debug_draw_pass(graphics::samples samples)
   _pipeline = pipeline_cache.get(info);
 }
 
+debug_draw_pass::~debug_draw_pass() {
+  retire_buffers(_buffers);
+}
+
 auto debug_draw_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {
   auto group = render_attachment_group{.extent = resources.extent};
 

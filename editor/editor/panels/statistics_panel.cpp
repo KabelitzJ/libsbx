@@ -308,45 +308,63 @@ auto statistics_panel::_draw_performance_tab() -> void {
 auto statistics_panel::_sample_memory() -> void {
   const auto now = static_cast<float>(ImGui::GetTime());
 
-  if (!_memory_times.empty() && now - _memory_times.back() < memory_sample_interval) {
+  if (_memory_count > 0u && now - _memory_samples[(_memory_first + _memory_count - 1u) % memory_sample_capacity].time < memory_sample_interval) {
     return;
   }
 
   constexpr auto bytes_per_mb = 1024.0f * 1024.0f;
 
-  _memory_times.push_back(now);
-  _process_memory_mb.push_back(static_cast<float>(memory_stats::process_memory_usage()) / bytes_per_mb);
-  _tracked_memory_mb.push_back(static_cast<float>(memory_stats::current_usage()) / bytes_per_mb);
+  const auto sample = memory_sample{
+    .time = now,
+    .process_mb = static_cast<float>(memory_stats::process_memory_usage()) / bytes_per_mb,
+    .tracked_mb = static_cast<float>(memory_stats::current_usage()) / bytes_per_mb
+  };
 
-  // ponytail: front erase is O(n) on ~600 floats ten times a second -- a ring buffer only if the window grows a lot.
-  const auto expired = std::ranges::find_if(_memory_times, [&](const auto time) { return time >= now - memory_history_seconds; }) - _memory_times.begin();
+  _memory_samples[(_memory_first + _memory_count) % memory_sample_capacity] = sample;
 
-  _memory_times.erase(_memory_times.begin(), _memory_times.begin() + expired);
-  _process_memory_mb.erase(_process_memory_mb.begin(), _process_memory_mb.begin() + expired);
-  _tracked_memory_mb.erase(_tracked_memory_mb.begin(), _tracked_memory_mb.begin() + expired);
+  if (_memory_count < memory_sample_capacity) {
+    ++_memory_count;
+  } else {
+    _memory_first = (_memory_first + 1u) % memory_sample_capacity;
+  }
+
+  while (_memory_count > 0u && _memory_samples[_memory_first].time < now - memory_history_seconds) {
+    _memory_first = (_memory_first + 1u) % memory_sample_capacity;
+    --_memory_count;
+  }
 }
 
 auto statistics_panel::_draw_memory_graph() -> void {
-  if (_memory_times.empty()) {
+  if (_memory_count == 0u) {
     return;
   }
 
   const auto is_tracking = memory_stats::is_tracking_enabled();
-  const auto now = _memory_times.back();
-  const auto count = static_cast<int>(_memory_times.size());
+  const auto count = static_cast<int>(_memory_count);
 
-  // Seconds before now, so the axis reads -60 s to 0 s.
-  auto seconds_ago = std::vector<float>(_memory_times.size());
-  std::ranges::transform(_memory_times, seconds_ago.begin(), [&](const auto time) { return time - now; });
+  // ImPlot wants contiguous arrays, so the ring is unrolled oldest-first; x is seconds before now, so the axis reads -60 s to 0 s.
+  auto seconds_ago = std::vector<float>(_memory_count);
+  auto process_mb = std::vector<float>(_memory_count);
+  auto tracked_mb = std::vector<float>(_memory_count);
 
-  const auto span = now - _memory_times.front();
-  const auto growth = (span > 0.0f) ? (_process_memory_mb.back() - _process_memory_mb.front()) / span : 0.0f;
+  const auto now = _memory_samples[(_memory_first + _memory_count - 1u) % memory_sample_capacity].time;
 
-  ImGui::Text("Process: %.1f MB", _process_memory_mb.back());
+  for (auto index = std::size_t{0u}; index < _memory_count; ++index) {
+    const auto& sample = _memory_samples[(_memory_first + index) % memory_sample_capacity];
+
+    seconds_ago[index] = sample.time - now;
+    process_mb[index] = sample.process_mb;
+    tracked_mb[index] = sample.tracked_mb;
+  }
+
+  const auto span = -seconds_ago.front();
+  const auto growth = (span > 0.0f) ? (process_mb.back() - process_mb.front()) / span : 0.0f;
+
+  ImGui::Text("Process: %.1f MB", process_mb.back());
 
   if (is_tracking) {
     ImGui::SameLine(0.0f, 24.0f);
-    ImGui::Text("Tracked: %.1f MB", _tracked_memory_mb.back());
+    ImGui::Text("Tracked: %.1f MB", tracked_mb.back());
   }
 
   ImGui::SameLine(0.0f, 24.0f);
@@ -357,10 +375,10 @@ auto statistics_panel::_draw_memory_graph() -> void {
   }
 
   // 15% headroom above the peak.
-  auto peak = std::ranges::max(_process_memory_mb);
+  auto peak = std::ranges::max(process_mb);
 
   if (is_tracking) {
-    peak = std::max(peak, std::ranges::max(_tracked_memory_mb));
+    peak = std::max(peak, std::ranges::max(tracked_mb));
   }
 
   ImPlot::SetupAxes(nullptr, "MB");
@@ -370,13 +388,13 @@ auto statistics_panel::_draw_memory_graph() -> void {
   ImPlot::SetupLegend(ImPlotLocation_NorthWest);
 
   ImPlot::SetNextFillStyle(IMPLOT_AUTO_COL, 0.25f);
-  ImPlot::PlotShaded("Process", seconds_ago.data(), _process_memory_mb.data(), count);
-  ImPlot::PlotLine("Process", seconds_ago.data(), _process_memory_mb.data(), count);
+  ImPlot::PlotShaded("Process", seconds_ago.data(), process_mb.data(), count);
+  ImPlot::PlotLine("Process", seconds_ago.data(), process_mb.data(), count);
 
   if (is_tracking) {
     ImPlot::SetNextFillStyle(IMPLOT_AUTO_COL, 0.25f);
-    ImPlot::PlotShaded("Tracked (operator new)", seconds_ago.data(), _tracked_memory_mb.data(), count);
-    ImPlot::PlotLine("Tracked (operator new)", seconds_ago.data(), _tracked_memory_mb.data(), count);
+    ImPlot::PlotShaded("Tracked (operator new)", seconds_ago.data(), tracked_mb.data(), count);
+    ImPlot::PlotLine("Tracked (operator new)", seconds_ago.data(), tracked_mb.data(), count);
   }
 
   ImPlot::EndPlot();

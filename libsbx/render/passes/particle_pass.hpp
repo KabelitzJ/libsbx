@@ -33,6 +33,8 @@ public:
 
   explicit particle_pass(graphics::samples samples);
 
+  ~particle_pass() override;
+
   [[nodiscard]] auto name() const -> std::string_view override {
     return "Particles";
   }

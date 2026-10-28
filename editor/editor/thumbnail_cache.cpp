@@ -4,6 +4,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <string>
+#include <unordered_map>
+#include <utility>
 #include <string_view>
 
 #include <vulkan/vulkan.h>
@@ -33,6 +37,8 @@
 
 #include <libsbx/assets/assets_module.hpp>
 #include <libsbx/assets/primitive_meshes.hpp>
+
+#include <libsbx/scenes/components.hpp>
 
 namespace editor {
 
@@ -132,20 +138,21 @@ auto thumbnail_cache::get(const sbx::math::uuid& id, sbx::assets::asset_type typ
 
   if (is_new) {
     if (type == sbx::assets::asset_type::mesh) {
-      entry.mesh = assets_module.load_mesh(id);
+      entry.parts.push_back(part{.mesh = assets_module.load_mesh(id)});
     } else if (type == sbx::assets::asset_type::material) {
       sbx::assets::ensure_primitive_mesh_cooked(sbx::assets::primitive_mesh_kind::sphere);
-      entry.mesh = assets_module.load_mesh(sbx::assets::primitive_mesh_uuid(sbx::assets::primitive_mesh_kind::sphere));
+      entry.parts.push_back(part{.mesh = assets_module.load_mesh(sbx::assets::primitive_mesh_uuid(sbx::assets::primitive_mesh_kind::sphere))});
       entry.material_override = assets_module.load_material(id);
-    } else if (const auto prefab = assets_module.load_prefab(id); prefab.is_valid()) {
-      // ponytail: shows the prefab's first mesh with that mesh's own materials; compose every mesh_renderer with its transform if multi-part prefabs read badly.
-      if (const auto meshes = prefab->snapshot()["assets"]["static_meshes"]; meshes && meshes.IsSequence() && meshes.size() > 0u) {
-        entry.mesh = assets_module.load_mesh(sbx::math::uuid::from_value(meshes[0]["uuid"].as<std::uint64_t>()));
-      }
+    } else {
+      entry.parts = _prefab_parts(id);
     }
+
+    std::erase_if(entry.parts, [](const auto& part) { return !part.mesh.is_valid(); });
   }
 
-  if (!entry.is_queued && entry.mesh.is_valid() && _content_key(entry) != entry.rendered_key) {
+  entry.last_used = ++_use_counter;
+
+  if (!entry.is_queued && !entry.parts.empty() && _content_key(entry) != entry.rendered_key) {
     entry.is_queued = true;
     _queue.push_back(id);
   }
@@ -160,16 +167,128 @@ auto thumbnail_cache::get(const sbx::math::uuid& id, sbx::assets::asset_type typ
   return ui_module.texture_id(graphics_module.resource_registry().get<sbx::graphics::image>(entry.image).view(), ui_module.thumbnail_sampler());
 }
 
-// Changes whenever the mesh or any material it's drawn with reloads, so reimports and material edits re-render.
-auto thumbnail_cache::_content_key(const entry& entry) const -> std::uint64_t {
-  auto seed = std::size_t{entry.mesh.generation()};
+auto thumbnail_cache::_prefab_parts(const sbx::math::uuid& id) -> std::vector<part> {
+  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
+  const auto prefab = assets_module.load_prefab(id);
+
+  if (!prefab.is_valid()) {
+    return {};
+  }
+
+  const auto& snapshot = prefab->snapshot();
+
+  // The snapshot names assets by short keys; its assets table maps them to uuids.
+  auto key_to_uuid = std::unordered_map<std::string, sbx::math::uuid>{};
+
+  for (const auto category : {std::string{"static_meshes"}, std::string{"materials"}}) {
+    if (const auto table = snapshot["assets"][category]; table && table.IsSequence()) {
+      for (const auto asset : table) {
+        key_to_uuid.emplace(asset["key"].as<std::string>(), sbx::math::uuid::from_value(asset["uuid"].as<std::uint64_t>()));
+      }
+    }
+  }
+
+  const auto uuid_of = [&key_to_uuid](const YAML::Node& key) {
+    const auto entry = key_to_uuid.find(key.as<std::string>());
+    return entry != key_to_uuid.end() ? entry->second : sbx::math::uuid::nil();
+  };
+
+  struct node_info {
+    std::uint64_t parent{0u};
+    bool has_parent{false};
+    sbx::math::matrix4x4 local{sbx::math::matrix4x4::identity};
+  }; // struct node_info
+
+  auto nodes = std::unordered_map<std::uint64_t, node_info>{};
+  auto parts = std::vector<std::pair<std::uint64_t, part>>{};
+
+  for (const auto node_yaml : snapshot["nodes"]) {
+    const auto node_id = node_yaml["id"].as<std::uint64_t>();
+    auto& info = nodes[node_id];
+
+    if (const auto parent = node_yaml["parent"]) {
+      info.parent = parent.as<std::uint64_t>();
+      info.has_parent = true;
+    }
+
+    for (const auto component : node_yaml["components"]) {
+      const auto type = component["type"].as<std::string>();
+
+      if (type == "transform") {
+        info.local = sbx::scenes::local_transform{
+          .position = component["position"].as<sbx::math::vector3>(),
+          .rotation = component["rotation"].as<sbx::math::quaternion>(),
+          .scale = component["scale"].as<sbx::math::vector3>()
+        }.matrix();
+      } else if (type == "static_mesh") {
+        auto mesh_part = part{.mesh = assets_module.load_mesh(uuid_of(component["mesh"]))};
+
+        if (const auto submeshes = component["submeshes"]) {
+          for (const auto submesh : submeshes) {
+            const auto index = submesh["index"].as<std::size_t>();
+
+            if (mesh_part.materials.size() <= index) {
+              mesh_part.materials.resize(index + 1u);
+            }
+
+            mesh_part.materials[index] = assets_module.load_material(uuid_of(submesh["material"]));
+          }
+        }
+
+        parts.emplace_back(node_id, std::move(mesh_part));
+      }
+    }
+  }
+
+  // Relative to the prefab root: the root's own transform is where the prefab was placed when it was made, not part of its look.
+  const auto world_of = [&nodes](std::uint64_t node_id) {
+    auto matrix = sbx::math::matrix4x4::identity;
+
+    for (auto current = nodes.find(node_id); current != nodes.end() && current->second.has_parent; current = nodes.find(current->second.parent)) {
+      matrix = current->second.local * matrix;
+    }
+
+    return matrix;
+  };
+
+  auto result = std::vector<part>{};
+  result.reserve(parts.size());
+
+  for (auto& [node_id, mesh_part] : parts) {
+    mesh_part.model = world_of(node_id);
+    result.push_back(std::move(mesh_part));
+  }
+
+  return result;
+}
+
+auto thumbnail_cache::_material_of(const entry& entry, const part& part, std::size_t submesh) -> sbx::assets::material_handle {
   if (entry.material_override.is_valid()) {
-    sbx::utility::hash_combine(seed, entry.material_override.generation());
-  } else if (entry.mesh->is_loaded()) {
-    for (const auto& submesh : entry.mesh->submeshes()) {
-      if (submesh.material.is_valid()) {
-        sbx::utility::hash_combine(seed, submesh.material.generation());
+    return entry.material_override;
+  }
+
+  if (submesh < part.materials.size() && part.materials[submesh].is_valid()) {
+    return part.materials[submesh];
+  }
+
+  return part.mesh->submeshes()[submesh].material;
+}
+
+// Changes whenever a mesh or any material it's drawn with reloads, so reimports and material edits re-render.
+auto thumbnail_cache::_content_key(const entry& entry) const -> std::uint64_t {
+  auto seed = std::size_t{0u};
+
+  for (const auto& part : entry.parts) {
+    sbx::utility::hash_combine(seed, part.mesh.generation());
+
+    if (!part.mesh->is_loaded()) {
+      continue;
+    }
+
+    for (auto submesh = std::size_t{0u}; submesh < part.mesh->submeshes().size(); ++submesh) {
+      if (const auto material = _material_of(entry, part, submesh); material.is_valid()) {
+        sbx::utility::hash_combine(seed, material.generation());
       }
     }
   }
@@ -181,19 +300,65 @@ auto thumbnail_cache::_content_key(const entry& entry) const -> std::uint64_t {
 auto thumbnail_cache::_is_ready(const entry& entry) const -> bool {
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
-  if (!entry.mesh->is_loaded() || entry.mesh->vertex_address() == 0u || entry.mesh->submeshes().empty()) {
-    return false;
-  }
-
   const auto is_material_ready = [&](const sbx::assets::material_handle& material) {
     return !material.is_valid() || (material->is_loaded() && (!material->albedo().is_valid() || assets_module.is_resident(material->albedo())));
   };
 
-  if (entry.material_override.is_valid()) {
-    return is_material_ready(entry.material_override);
+  return std::ranges::all_of(entry.parts, [&](const auto& part) {
+    if (!part.mesh->is_loaded() || part.mesh->vertex_address() == 0u || part.mesh->submeshes().empty()) {
+      return false;
+    }
+
+    for (auto submesh = std::size_t{0u}; submesh < part.mesh->submeshes().size(); ++submesh) {
+      if (!is_material_ready(_material_of(entry, part, submesh))) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+}
+
+auto thumbnail_cache::_release_image(entry& entry) -> void {
+  if (!entry.image.is_valid()) {
+    return;
   }
 
-  return std::ranges::all_of(entry.mesh->submeshes(), [&](const auto& submesh) { return is_material_ready(submesh.material); });
+  auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
+  auto& registry = graphics_module.resource_registry();
+
+  sbx::core::engine::get_module<sbx::render::ui_module>().release_texture_id(registry.get<sbx::graphics::image>(entry.image).view());
+  registry.retire(entry.image, graphics_module.frame_context().frame_index());
+
+  entry.image = sbx::graphics::image_handle{};
+}
+
+auto thumbnail_cache::_evict_images(const sbx::math::uuid& keep) -> void {
+  auto with_image = std::size_t{0u};
+
+  for (const auto& [id, entry] : _entries) {
+    with_image += entry.image.is_valid() ? 1u : 0u;
+  }
+
+  while (with_image > max_images) {
+    auto oldest = _entries.end();
+
+    for (auto iterator = _entries.begin(); iterator != _entries.end(); ++iterator) {
+      if (iterator->first != keep && iterator->second.image.is_valid() && (oldest == _entries.end() || iterator->second.last_used < oldest->second.last_used)) {
+        oldest = iterator;
+      }
+    }
+
+    if (oldest == _entries.end()) {
+      return;
+    }
+
+    _release_image(oldest->second);
+
+    // Re-renders the next time it's shown.
+    oldest->second.rendered_key = 0u;
+    --with_image;
+  }
 }
 
 auto thumbnail_cache::update() -> void {
@@ -220,7 +385,7 @@ auto thumbnail_cache::update() -> void {
     }
 
     entry.is_queued = false;
-    _render(entry);
+    _render(id, entry);
 
     return;
   }
@@ -282,18 +447,14 @@ auto thumbnail_cache::_ensure_pipeline() -> bool {
   return _pipeline != nullptr;
 }
 
-auto thumbnail_cache::_render(entry& entry) -> void {
+auto thumbnail_cache::_render(const sbx::math::uuid& id, entry& entry) -> void {
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
   auto& registry = graphics_module.resource_registry();
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
   // A fresh image per render: frames still in flight may be sampling the previous one in ImGui.
-  if (entry.image.is_valid()) {
-    sbx::core::engine::get_module<sbx::render::ui_module>().release_texture_id(registry.get<sbx::graphics::image>(entry.image).view());
-    registry.retire(entry.image, graphics_module.frame_context().frame_index());
-  }
+  _release_image(entry);
 
-  // ponytail: one 64 KiB image per thumbnail, never evicted; add an LRU cap if huge projects run out of memory.
   entry.image = registry.emplace<sbx::graphics::image>(sbx::graphics::image::create_info{
     .extent = {_extent, _extent, 1u},
     .format = sbx::graphics::format::r8g8b8a8_srgb,
@@ -303,23 +464,45 @@ auto thumbnail_cache::_render(entry& entry) -> void {
 
   entry.rendered_key = _content_key(entry);
 
-  const auto& mesh = *entry.mesh;
+  _evict_images(id);
+
   const auto& target = registry.get<sbx::graphics::image>(entry.image);
   const auto& depth = registry.get<sbx::graphics::image>(_depth);
 
+  // Every part's bounds, transformed corner by corner into the thumbnail's space.
+  auto bounds_min = sbx::math::vector3{std::numeric_limits<std::float_t>::max()};
+  auto bounds_max = sbx::math::vector3{std::numeric_limits<std::float_t>::lowest()};
+
+  for (const auto& part : entry.parts) {
+    const auto& local = part.mesh->bounds();
+
+    for (auto corner = 0u; corner < 8u; ++corner) {
+      const auto point = sbx::math::vector3{
+        (corner & 1u) != 0u ? local.max().x() : local.min().x(),
+        (corner & 2u) != 0u ? local.max().y() : local.min().y(),
+        (corner & 4u) != 0u ? local.max().z() : local.min().z()
+      };
+
+      const auto homogeneous = part.model * sbx::math::vector4{point, 1.0f};
+      const auto transformed = sbx::math::vector3{homogeneous.x(), homogeneous.y(), homogeneous.z()};
+
+      bounds_min = sbx::math::vector3::min(bounds_min, transformed);
+      bounds_max = sbx::math::vector3::max(bounds_max, transformed);
+    }
+  }
+
   // Frames the bounds from a three-quarter view, like a Unity preview.
-  const auto& bounds = mesh.bounds();
-  const auto center = bounds.center();
-  const auto radius = std::max((bounds.max() - bounds.min()).length() * 0.5f, 0.001f);
+  const auto center = (bounds_min + bounds_max) * 0.5f;
+  const auto radius = std::max((bounds_max - bounds_min).length() * 0.5f, 0.001f);
   const auto eye = center + sbx::math::vector3::normalized(sbx::math::vector3{1.0f, 0.8f, 1.2f}) * (radius * 2.8f);
 
   const auto view = sbx::math::matrix4x4::look_at(eye, center, sbx::math::vector3{0.0f, 1.0f, 0.0f});
   const auto projection = sbx::math::matrix4x4::perspective(sbx::math::degree{40.0f}, 1.0f, radius * 0.05f, radius * 8.0f);
 
+  const auto view_projection = projection * view;
+  const auto light_direction = sbx::math::vector4{-0.4f, -0.8f, -0.5f, 0.0f};
+
   auto push = thumbnail_push_constants{};
-  push.view_projection = projection * view;
-  push.light_direction = sbx::math::vector4{-0.4f, -0.8f, -0.5f, 0.0f};
-  push.vertex_address = mesh.vertex_address();
   push.materials_address = assets_module.material_buffer_address();
   push.sampler_index = _sampler_index;
 
@@ -379,21 +562,32 @@ auto thumbnail_cache::_render(entry& entry) -> void {
 
   command_buffer.bind_pipeline(*_pipeline);
 
-  command_buffer.bind_index_buffer(registry.get<sbx::graphics::buffer>(mesh.index_buffer()), 0u, VK_INDEX_TYPE_UINT32);
-
   const auto& bindless_table = graphics_module.bindless_table();
   const auto descriptor_set = bindless_table.descriptor_set();
   vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bindless_table.pipeline_layout(), 0u, 1u, &descriptor_set, 0u, nullptr);
 
   const auto fallback_material = assets_module.load_material(sbx::assets::default_material_uuid());
 
-  for (const auto& submesh : mesh.submeshes()) {
-    const auto& material = entry.material_override.is_valid() ? entry.material_override : (submesh.material.is_valid() ? submesh.material : fallback_material);
+  for (const auto& part : entry.parts) {
+    const auto& mesh = *part.mesh;
 
-    push.material_index = material.is_valid() ? material->index() : 0u;
+    // The shader has no model matrix: it's folded into the view-projection, and the light is moved into the part's space instead of the normals into the world.
+    push.view_projection = view_projection * part.model;
+    push.light_direction = sbx::math::matrix4x4::inverted(part.model) * light_direction;
+    push.vertex_address = mesh.vertex_address();
 
-    command_buffer.push_constants(bindless_table.pipeline_layout(), sbx::graphics::bindless_table::push_constant_stages, 0u, sbx::memory::as_bytes(push));
-    command_buffer.draw_indexed(submesh.index_count, 1u, submesh.index_offset, 0, 0u);
+    command_buffer.bind_index_buffer(registry.get<sbx::graphics::buffer>(mesh.index_buffer()), 0u, VK_INDEX_TYPE_UINT32);
+
+    for (auto index = std::size_t{0u}; index < mesh.submeshes().size(); ++index) {
+      const auto& submesh = mesh.submeshes()[index];
+      const auto material = _material_of(entry, part, index);
+      const auto& resolved = material.is_valid() ? material : fallback_material;
+
+      push.material_index = resolved.is_valid() ? resolved->index() : 0u;
+
+      command_buffer.push_constants(bindless_table.pipeline_layout(), sbx::graphics::bindless_table::push_constant_stages, 0u, sbx::memory::as_bytes(push));
+      command_buffer.draw_indexed(submesh.index_count, 1u, submesh.index_offset, 0, 0u);
+    }
   }
 
   command_buffer.end_rendering();

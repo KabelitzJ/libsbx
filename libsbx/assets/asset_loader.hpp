@@ -21,6 +21,7 @@
 #include <libsbx/graphics/types.hpp>
 
 #include <libsbx/assets/asset_cooker.hpp>
+#include <libsbx/assets/shader_reflection.hpp>
 
 namespace sbx::assets {
 
@@ -81,6 +82,12 @@ public:
     std::filesystem::path source;
   }; // struct shader_graph_request
 
+  struct shader_request {
+    math::uuid id;
+    std::filesystem::path source;
+    bool is_reload{false}; // a first load's result is dropped if a synchronous load already reflected the shader
+  }; // struct shader_request
+
   struct skeleton_request { 
     math::uuid id; 
   }; // struct skeleton_request
@@ -133,6 +140,11 @@ public:
     std::optional<shader_graph_description> data;
   }; // struct shader_graph_result
 
+  struct shader_result {
+    shader_request request;
+    shader_reflection_result data;
+  }; // struct shader_result
+
   struct skeleton_result {
     skeleton_request request;
     std::optional<std::vector<skeleton::joint>> data;
@@ -163,6 +175,8 @@ public:
 
   auto submit(shader_graph_request request) -> void;
 
+  auto submit(shader_request request) -> void;
+
   auto submit(skeleton_request request) -> void;
 
   auto submit(animation_clip_request request) -> void;
@@ -185,13 +199,15 @@ public:
 
   [[nodiscard]] auto take_resolved_shader_graphs(std::size_t max_count) -> std::vector<shader_graph_result>;
 
+  [[nodiscard]] auto take_resolved_shaders(std::size_t max_count) -> std::vector<shader_result>;
+
   [[nodiscard]] auto take_resolved_skeletons(std::size_t max_count) -> std::vector<skeleton_result>;
 
   [[nodiscard]] auto take_resolved_animation_clips(std::size_t max_count) -> std::vector<animation_clip_result>;
 
 private:
 
-  using request = std::variant<texture_request, mesh_request, font_request, audio_clip_request, material_request, particle_effect_request, animation_graph_request, shader_graph_request, skeleton_request, animation_clip_request>;
+  using request = std::variant<texture_request, mesh_request, font_request, audio_clip_request, material_request, particle_effect_request, animation_graph_request, shader_graph_request, shader_request, skeleton_request, animation_clip_request>;
 
   auto _worker_loop() -> void;
 
@@ -210,6 +226,8 @@ private:
   auto _resolve(const animation_graph_request& request) -> void;
 
   auto _resolve(const shader_graph_request& request) -> void;
+
+  auto _resolve(const shader_request& request) -> void;
 
   auto _resolve(const skeleton_request& request) -> void;
 
@@ -230,6 +248,7 @@ private:
   std::deque<particle_effect_result> _resolved_particle_effects{};
   std::deque<animation_graph_result> _resolved_animation_graphs{};
   std::deque<shader_graph_result> _resolved_shader_graphs{};
+  std::deque<shader_result> _resolved_shaders{};
   std::deque<skeleton_result> _resolved_skeletons{};
   std::deque<animation_clip_result> _resolved_animation_clips{};
 

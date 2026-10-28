@@ -478,7 +478,7 @@ struct script_field_override {
   std::string name;
   script_field_type type{script_field_type::float32};
   std::float_t float_value{0.0f};
-  std::int32_t int_value{0};
+  std::int64_t int_value{0}; // 64 bits so any enum's underlying type fits
   bool bool_value{false};
   std::string string_value{};
   math::vector2 vector2_value{0.0f, 0.0f};

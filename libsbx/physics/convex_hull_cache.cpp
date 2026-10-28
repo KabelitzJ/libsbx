@@ -182,6 +182,17 @@ auto write_disk_cache(const math::uuid& mesh_id, const convex_hull_data& data, s
 }
 
 auto convex_hull_cache::get_or_build(assets::assets_module& assets_module, const math::uuid& mesh_id) -> const convex_hull_data& {
+  {
+    auto lock = std::shared_lock{_mutex};
+
+    if (const auto entry = _cache.find(mesh_id); entry != _cache.end()) {
+      return *entry->second;
+    }
+  }
+
+  auto lock = std::unique_lock{_mutex};
+
+  // Another thread may have built it between the two locks.
   if (const auto entry = _cache.find(mesh_id); entry != _cache.end()) {
     return *entry->second;
   }
@@ -190,6 +201,7 @@ auto convex_hull_cache::get_or_build(assets::assets_module& assets_module, const
 }
 
 auto convex_hull_cache::clear() -> void {
+  auto lock = std::unique_lock{_mutex};
   _cache.clear();
 }
 

@@ -8,13 +8,13 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
-#include <deque>
 #include <exception>
 #include <functional>
 #include <memory>
 #include <new>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 #include <libsbx/utility/noncopyable.hpp>
 #include <libsbx/utility/assert.hpp>
@@ -66,8 +66,12 @@ public:
     std::invoke(_destroy, memory::make_observer(_storage.data()));
   }
 
-  /** @brief Runs the callable and marks it done. The job must not be touched afterwards: its owner may destroy it right away. */
-  auto run() -> void {
+  /**
+   * @brief Runs the callable and marks it done. The job must not be touched afterwards: its owner may destroy it right away.
+   *
+   * @return Whether this was the batch's last pending job, so its waiters can be woken.
+   */
+  auto run() -> bool {
     SBX_PROFILE_SCOPE("async::job");
 
     try {
@@ -78,7 +82,7 @@ public:
       }
     }
 
-    _sync->pending.fetch_sub(1u, std::memory_order_release);
+    return _sync->pending.fetch_sub(1u, std::memory_order_release) == 1u;
   }
 
 private:
@@ -107,6 +111,8 @@ public:
 
   ~job_counter() {
     utility::assert_that(is_done(), "A job_counter was destroyed with jobs still pending; wait on it first.");
+
+    _destroy_jobs();
   }
 
   [[nodiscard]] auto is_done() const noexcept -> bool {
@@ -115,16 +121,46 @@ public:
 
 private:
 
+  inline static constexpr auto jobs_per_block = std::size_t{64u};
+
+  // Raw storage for jobs_per_block jobs; jobs are constructed in place and never move.
+  struct job_block {
+    alignas(job) std::array<std::byte, sizeof(job) * jobs_per_block> storage;
+  }; // struct job_block
+
   template<typename Callable>
   auto _emplace(Callable&& callable) -> job& {
     _sync.pending.fetch_add(1u, std::memory_order_relaxed);
 
-    return _jobs.emplace_back(std::forward<Callable>(callable), _sync);
+    const auto block = _job_count / jobs_per_block;
+
+    // Blocks are kept across resets, so a counter reused every frame stops allocating once it has seen its largest batch.
+    if (block == _blocks.size()) {
+      _blocks.push_back(std::make_unique<job_block>());
+    }
+
+    auto& created = *std::construct_at(reinterpret_cast<job*>(_blocks[block]->storage.data() + (_job_count % jobs_per_block) * sizeof(job)), std::forward<Callable>(callable), _sync);
+
+    ++_job_count;
+
+    return created;
+  }
+
+  [[nodiscard]] auto _job_at(std::size_t index) -> job& {
+    return *std::launder(reinterpret_cast<job*>(_blocks[index / jobs_per_block]->storage.data() + (index % jobs_per_block) * sizeof(job)));
+  }
+
+  auto _destroy_jobs() -> void {
+    for (auto index = std::size_t{0u}; index < _job_count; ++index) {
+      std::destroy_at(&_job_at(index));
+    }
+
+    _job_count = 0u;
   }
 
   // Only after every job is done; returns the first exception and resets for reuse.
   auto _reset() -> std::exception_ptr {
-    _jobs.clear();
+    _destroy_jobs();
 
     auto exception = std::exchange(_sync.exception, nullptr);
     _sync.has_exception.store(false, std::memory_order_relaxed);
@@ -134,9 +170,9 @@ private:
 
   job_sync _sync{};
 
-  // Stable addresses while workers hold them.
-  // ponytail: std::deque allocates a block per few jobs; swap for a block arena if Tracy shows allocator time.
-  std::deque<job> _jobs{};
+  // Stable addresses while workers hold them: blocks never move, and jobs never move within one.
+  std::vector<std::unique_ptr<job_block>> _blocks{};
+  std::size_t _job_count{0u};
 
 }; // class job_counter
 

@@ -4,6 +4,7 @@
 #define LIBSBX_CORE_PROJECT_HPP_
 
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <filesystem>
 #include <optional>
@@ -229,6 +230,11 @@ public:
   /** @brief Replaces the mixer tree, repairing it: Master is restored if missing and orphans are reparented to it. */
   auto set_mixer_groups(std::vector<mixer_group> groups) -> void;
 
+  /** @brief Changes whenever the mixer tree does, and differs between project objects, so a cache of it can tell it's stale. */
+  [[nodiscard]] auto mixer_groups_revision() const noexcept -> std::uint64_t {
+    return _mixer_groups_revision;
+  }
+
   /** @brief How many sounds can be audible at once; beyond it, the least important are virtualized. */
   [[nodiscard]] auto max_voices() const noexcept -> std::uint32_t {
     return _max_voices;
@@ -252,6 +258,12 @@ private:
   std::filesystem::path _root{};
   std::string _name{"Untitled"};
   std::filesystem::path _assets{"assets"};
+  // A process-wide counter, so two projects never share a revision.
+  [[nodiscard]] static auto _next_mixer_groups_revision() noexcept -> std::uint64_t {
+    static auto counter = std::atomic<std::uint64_t>{0u};
+    return counter.fetch_add(1u, std::memory_order_relaxed) + 1u;
+  }
+
   std::filesystem::path _library{".sbx/library"};
   std::filesystem::path _logs{"logs"};
   std::vector<scene_list_entry> _scene_list{};
@@ -270,6 +282,8 @@ private:
     mixer_group{math::uuid::from_value(4u), "UI", master_mixer_group_id},
     mixer_group{math::uuid::from_value(5u), "Voice", master_mixer_group_id}
   };
+  std::uint64_t _mixer_groups_revision{_next_mixer_groups_revision()};
+
   std::uint32_t _max_voices{default_max_voices};
 
   std::uint32_t _msaa_samples{default_msaa_samples};

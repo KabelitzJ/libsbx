@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <iterator>
+#include <span>
 #include <string>
 #include <system_error>
 
@@ -149,18 +150,49 @@ static auto downmix_to_mono(decoded_audio& audio) -> void {
   audio.channels = 1u;
 }
 
-// ponytail: >2 channels (5.1, 7.1) collapse to mono; add AL_EXT_MCFORMATS output if surround clips are needed.
+// Front left and right stay on their side; every other channel is shared equally between both.
+static auto downmix_to_stereo(decoded_audio& audio) -> void {
+  if (audio.channels <= 2u) {
+    return;
+  }
+
+  auto stereo = std::vector<std::int16_t>(audio.frame_count * 2u);
+  const auto weight = 1.0f + 0.5f * static_cast<std::float_t>(audio.channels - 2u);
+
+  for (auto frame = std::uint64_t{0u}; frame < audio.frame_count; ++frame) {
+    const auto samples = std::span<const std::int16_t>{audio.samples}.subspan(frame * audio.channels, audio.channels);
+
+    auto shared = 0.0f;
+
+    for (auto channel = std::uint32_t{2u}; channel < audio.channels; ++channel) {
+      shared += 0.5f * static_cast<std::float_t>(samples[channel]);
+    }
+
+    stereo[frame * 2u] = static_cast<std::int16_t>((static_cast<std::float_t>(samples[0]) + shared) / weight);
+    stereo[frame * 2u + 1u] = static_cast<std::int16_t>((static_cast<std::float_t>(samples[1]) + shared) / weight);
+  }
+
+  audio.samples = std::move(stereo);
+  audio.channels = 2u;
+}
+
+// The layouts AL_EXT_MCFORMATS plays: quad, 5.1, 6.1 and 7.1. audio_module falls back to stereo on a device without it.
+[[nodiscard]] static auto is_surround_layout(std::uint32_t channels) -> bool {
+  return channels == 4u || channels == 6u || channels == 7u || channels == 8u;
+}
+
 static auto output_channels(std::uint32_t source_channels, bool force_mono, const std::filesystem::path& source) -> std::uint32_t {
   if (force_mono || source_channels == 1u) {
     return 1u;
   }
 
-  if (source_channels > 2u) {
-    utility::logger<"assets">::warn("Cook: '{}' has {} channels; only mono and stereo are supported, downmixing to mono", source.generic_string(), source_channels);
-    return 1u;
+  if (source_channels == 2u || is_surround_layout(source_channels)) {
+    return source_channels;
   }
 
-  return source_channels;
+  utility::logger<"assets">::warn("Cook: '{}' has {} channels, which no OpenAL format plays; downmixing to stereo", source.generic_string(), source_channels);
+
+  return 2u;
 }
 
 static auto write_cooked_audio_clip(const std::filesystem::path& cooked, const audio_clip_header& header, const void* payload) -> bool {
@@ -259,8 +291,10 @@ auto asset_cooker::_cook_audio_clip(const std::filesystem::path& source, const s
     return false;
   }
 
-  if (output_channels(audio->channels, settings.force_mono, source) == 1u) {
+  if (const auto channels = output_channels(audio->channels, settings.force_mono, source); channels == 1u) {
     downmix_to_mono(*audio);
+  } else if (channels == 2u) {
+    downmix_to_stereo(*audio);
   }
 
   const auto header = audio_clip_header{

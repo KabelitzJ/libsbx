@@ -1477,7 +1477,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
             field.float_value = field_yaml["value"].as<std::float_t>();
           } else if (kind == "int") {
             field.type = script_field_type::int32;
-            field.int_value = field_yaml["value"].as<std::int32_t>();
+            field.int_value = field_yaml["value"].as<std::int64_t>();
           } else if (kind == "bool") {
             field.type = script_field_type::boolean;
             field.bool_value = field_yaml["value"].as<bool>();
@@ -1504,7 +1504,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
             field.color_value = field_yaml["value"].as<math::color>();
           } else if (kind == "enum") {
             field.type = script_field_type::enumeration;
-            field.int_value = field_yaml["value"].as<std::int32_t>();
+            field.int_value = field_yaml["value"].as<std::int64_t>();
           } else if (kind == "texture") {
             field.type = script_field_type::texture;
             field.texture_value = field_yaml["value"].as<math::uuid>();

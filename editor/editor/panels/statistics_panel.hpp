@@ -3,6 +3,7 @@
 #ifndef EDITOR_PANELS_STATISTICS_PANEL_HPP_
 #define EDITOR_PANELS_STATISTICS_PANEL_HPP_
 
+#include <array>
 #include <cstddef>
 #include <vector>
 
@@ -47,10 +48,19 @@ private:
   std::size_t _prev_alloc_count{0u};
   std::size_t _prev_dealloc_count{0u};
 
-  // Parallel arrays for ImPlot: sample time and usage in MB.
-  std::vector<float> _memory_times{};
-  std::vector<float> _process_memory_mb{};
-  std::vector<float> _tracked_memory_mb{};
+  struct memory_sample {
+    float time{0.0f};
+    float process_mb{0.0f};
+    float tracked_mb{0.0f};
+  }; // struct memory_sample
+
+  // A full window of samples plus slack; the oldest is overwritten once it's full.
+  inline static constexpr auto memory_sample_capacity = static_cast<std::size_t>(memory_history_seconds / memory_sample_interval) + 2u;
+
+  // Ring buffer of the last memory_history_seconds of samples, oldest at _memory_first.
+  std::array<memory_sample, memory_sample_capacity> _memory_samples{};
+  std::size_t _memory_first{0u};
+  std::size_t _memory_count{0u};
 
 }; // class statistics_panel
 

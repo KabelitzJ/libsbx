@@ -5,9 +5,10 @@
 
 #include <array>
 #include <cstdint>
-#include <filesystem>
 #include <limits>
+#include <span>
 #include <string>
+#include <variant>
 
 #include <libsbx/math/color.hpp>
 #include <libsbx/math/vector2.hpp>
@@ -18,7 +19,9 @@
 #include <libsbx/assets/loadable.hpp>
 #include <libsbx/assets/texture2d.hpp>
 #include <libsbx/assets/texture2d_array.hpp>
+#include <libsbx/assets/shader_property.hpp>
 #include <libsbx/assets/shader_graph.hpp>
+#include <libsbx/assets/shader.hpp>
 
 namespace sbx::assets {
 
@@ -28,13 +31,15 @@ enum class alpha_mode : std::uint8_t {
   blend   // order-dependent transparency, transparent pass
 }; // enum class alpha_mode
 
-// A material's type. For shader_graph and shader_code the shader provides the look and reads only the fields it wants; without a graph or file assigned the material is invalid and skipped.
+// A material's type. For custom the material's shader provides the look and reads only the fields it wants; without a usable shader assigned the material is skipped.
 enum class shading_model : std::uint8_t {
   pbr,
   unlit,
-  shader_graph,
-  shader_code
+  custom
 }; // enum class shading_model
+
+/** @brief A custom material's shader: a shader graph, a hand-written `.slang` surface shader, or none. */
+using material_shader = std::variant<std::monostate, shader_graph_handle, shader_handle>;
 
 class material final : public loadable {
 
@@ -68,15 +73,12 @@ public:
     texture2d_handle occlusion{};
     texture2d_handle emissive{};
 
-    // Non-nil renders with this graph's generated shader; generic_params/generic_textures hold values for its exposed parameters in slot order.
-    shader_graph_handle shader_graph{};
-    std::array<math::vector4, shader_graph_max_params> generic_params{};
-    std::array<texture2d_handle, shader_graph_max_textures> generic_textures{};
+    // Used when shading is custom; generic_params/generic_textures hold values for its parameters in slot order.
+    material_shader shader{};
+    std::array<math::vector4, material_max_params> generic_params{};
+    std::array<texture2d_handle, material_max_textures> generic_textures{};
     // A texture array in generic slot i, overriding generic_textures[i]. Runtime only, never saved.
-    std::array<texture2d_array_handle, shader_graph_max_textures> generic_texture_arrays{};
-
-    // Absolute path of the .slang file a shader_code material renders with.
-    std::filesystem::path shader_code{};
+    std::array<texture2d_array_handle, material_max_textures> generic_texture_arrays{};
   }; // struct create_info
 
   material() = default;
@@ -103,11 +105,10 @@ public:
     _metallic_roughness{create_info.metallic_roughness},
     _occlusion{create_info.occlusion},
     _emissive{create_info.emissive},
-    _shader_graph{create_info.shader_graph},
+    _shader{create_info.shader},
     _generic_params{create_info.generic_params},
     _generic_textures{create_info.generic_textures},
     _generic_texture_arrays{create_info.generic_texture_arrays},
-    _shader_code{create_info.shader_code},
     _name{create_info.name} { }
 
   [[nodiscard]] auto is_valid() const noexcept -> bool {
@@ -202,24 +203,26 @@ public:
     return _emissive;
   }
 
-  [[nodiscard]] auto shader_graph() const noexcept -> const shader_graph_handle& {
-    return _shader_graph;
+  [[nodiscard]] auto shader() const noexcept -> const material_shader& {
+    return _shader;
   }
 
-  [[nodiscard]] auto generic_params() const noexcept -> const std::array<math::vector4, shader_graph_max_params>& {
+  /** @brief The assigned shader graph, or an invalid handle for a code shader or none. */
+  [[nodiscard]] auto shader_graph() const -> shader_graph_handle {
+    const auto* graph = std::get_if<shader_graph_handle>(&_shader);
+    return graph != nullptr ? *graph : shader_graph_handle{};
+  }
+
+  [[nodiscard]] auto generic_params() const noexcept -> const std::array<math::vector4, material_max_params>& {
     return _generic_params;
   }
 
-  [[nodiscard]] auto generic_textures() const noexcept -> const std::array<texture2d_handle, shader_graph_max_textures>& {
+  [[nodiscard]] auto generic_textures() const noexcept -> const std::array<texture2d_handle, material_max_textures>& {
     return _generic_textures;
   }
 
-  [[nodiscard]] auto generic_texture_arrays() const noexcept -> const std::array<texture2d_array_handle, shader_graph_max_textures>& {
+  [[nodiscard]] auto generic_texture_arrays() const noexcept -> const std::array<texture2d_array_handle, material_max_textures>& {
     return _generic_texture_arrays;
-  }
-
-  [[nodiscard]] auto shader_code() const noexcept -> const std::filesystem::path& {
-    return _shader_code;
   }
 
   /**
@@ -251,11 +254,10 @@ public:
     result.metallic_roughness = _metallic_roughness;
     result.occlusion = _occlusion;
     result.emissive = _emissive;
-    result.shader_graph = _shader_graph;
+    result.shader = _shader;
     result.generic_params = _generic_params;
     result.generic_textures = _generic_textures;
     result.generic_texture_arrays = _generic_texture_arrays;
-    result.shader_code = _shader_code;
     return result;
   }
 
@@ -290,11 +292,10 @@ private:
   texture2d_handle _metallic_roughness{};
   texture2d_handle _occlusion{};
   texture2d_handle _emissive{};
-  shader_graph_handle _shader_graph{};
-  std::array<math::vector4, shader_graph_max_params> _generic_params{};
-  std::array<texture2d_handle, shader_graph_max_textures> _generic_textures{};
-  std::array<texture2d_array_handle, shader_graph_max_textures> _generic_texture_arrays{};
-  std::filesystem::path _shader_code{};
+  material_shader _shader{};
+  std::array<math::vector4, material_max_params> _generic_params{};
+  std::array<texture2d_handle, material_max_textures> _generic_textures{};
+  std::array<texture2d_array_handle, material_max_textures> _generic_texture_arrays{};
   std::uint32_t _index{invalid_index};
   math::uuid _id{math::uuid::nil()};
   std::string _name{"material"};
@@ -302,6 +303,29 @@ private:
 }; // class material
 
 using material_handle = asset_handle<material>;
+
+/**
+ * @brief The properties of a custom material's shader, graph or code alike; what the inspector and C#'s SetFloat/SetColor/SetTexture address by reference.
+ *
+ * @param material The material.
+ *
+ * @return The properties, or empty for a built-in material, no shader, or a shader that hasn't loaded.
+ */
+[[nodiscard]] inline auto material_properties(const material& material) -> std::span<const shader_property> {
+  if (material.shading() != shading_model::custom) {
+    return {};
+  }
+
+  if (const auto* graph = std::get_if<shader_graph_handle>(&material.shader()); graph != nullptr && graph->is_valid()) {
+    return (*graph)->properties();
+  }
+
+  if (const auto* code = std::get_if<shader_handle>(&material.shader()); code != nullptr && code->is_valid()) {
+    return (*code)->properties();
+  }
+
+  return {};
+}
 
 } // namespace sbx::assets
 

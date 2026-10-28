@@ -308,6 +308,14 @@ auto assets_module::save_animation_graph(animation_graph_handle& graph, const st
   return _residency.save_animation_graph(graph, path);
 }
 
+auto assets_module::load_shader(const math::uuid& id) -> shader_handle {
+  return _residency.load_shader(id);
+}
+
+auto assets_module::load_shader(const std::filesystem::path& path) -> shader_handle {
+  return _residency.load_shader(path);
+}
+
 auto assets_module::load_shader_graph(const math::uuid& id) -> shader_graph_handle {
   return _residency.load_shader_graph(id);
 }

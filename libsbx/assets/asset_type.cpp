@@ -9,7 +9,7 @@
 
 namespace sbx::assets {
 
-static constexpr auto extension_table = std::array<std::pair<std::string_view, asset_type>, 18u>{{
+static constexpr auto extension_table = std::array<std::pair<std::string_view, asset_type>, 19u>{{
   {".png", asset_type::texture},
   {".jpg", asset_type::texture},
   {".jpeg", asset_type::texture},
@@ -28,6 +28,7 @@ static constexpr auto extension_table = std::array<std::pair<std::string_view, a
   {".prefab", asset_type::prefab},
   {".scene", asset_type::scene},
   {".cs", asset_type::script},
+  {".slang", asset_type::shader},
 }};
 
 auto asset_type_of(const std::filesystem::path& path) -> asset_type {
@@ -66,6 +67,7 @@ auto display_name(asset_type type) -> std::string_view {
     case asset_type::prefab: return "Prefab";
     case asset_type::scene: return "Scene";
     case asset_type::script: return "Script";
+    case asset_type::shader: return "Shader";
     case asset_type::unknown: return "Unknown";
   }
 

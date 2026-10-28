@@ -164,8 +164,13 @@ auto shader_compiler::_create_session(const std::filesystem::path& path, std::sp
   return session;
 }
 
-auto shader_compiler::_load_module(slang::ISession& session, const std::filesystem::path& path) -> slang::IModule* {
-  const auto source = _read_file(path);
+auto shader_compiler::_load_module(slang::ISession& session, const std::filesystem::path& path, std::string_view material_loader) -> slang::IModule* {
+  auto source = _read_file(path);
+
+  // #line 1 keeps diagnostics on the user's line numbers; Slang resolves the user's calls against the loader defined after their code.
+  if (!material_loader.empty()) {
+    source = fmt::format("#define SBX_GENERATED_MATERIAL_LOADER\n#line 1\n{}\n{}", source, material_loader);
+  }
 
   auto diagnostics = Slang::ComPtr<ISlangBlob>{};
 
@@ -176,7 +181,8 @@ auto shader_compiler::_load_module(slang::ISession& session, const std::filesyst
   }
 
   if (module == nullptr) {
-    throw utility::runtime_error{"Failed to load shader module '{}'", path.string()};
+    const auto message = diagnostics ? std::string_view{static_cast<const char*>(diagnostics->getBufferPointer())} : std::string_view{};
+    throw utility::runtime_error{"Failed to load shader module '{}'\n{}", path.string(), message};
   }
 
   return module;
@@ -184,6 +190,8 @@ auto shader_compiler::_load_module(slang::ISession& session, const std::filesyst
 
 auto shader_compiler::reflect_push_constants(const std::filesystem::path& path, const std::string& entry_point_name) -> push_constant_layout {
   using kind = push_constant_field::kind;
+
+  auto lock = std::lock_guard{_mutex};
 
   auto session = _create_session(path, _default_options());
   auto* module = _load_module(*session, path);
@@ -301,11 +309,119 @@ auto shader_compiler::reflect_push_constants(const std::filesystem::path& path, 
   return result;
 }
 
-auto shader_compiler::compile(const std::filesystem::path& path, std::span<const entry_point_request> entry_points) -> std::vector<compiled_entry_point> {
-  const auto options = _default_options();
+auto shader_compiler::reflect_module(const std::filesystem::path& path, std::span<const std::string_view> entry_points, std::span<const std::string_view> structs) -> module_reflection {
+  // The stub load_properties in material_properties.slang returns an uninitialized struct; compile() replaces it, so its warning is noise here.
+  const auto defaults = _default_options();
+  auto options = std::vector<slang::CompilerOptionEntry>{defaults.begin(), defaults.end()};
+  options.push_back(slang::CompilerOptionEntry{slang::CompilerOptionName::DisableWarning, {slang::CompilerOptionValueKind::String, 0, 0, "41016", nullptr}});
+
+  auto lock = std::lock_guard{_mutex};
 
   auto session = _create_session(path, options);
   auto* module = _load_module(*session, path);
+
+  auto result = module_reflection{};
+
+  for (const auto name : entry_points) {
+    auto entry_point = Slang::ComPtr<slang::IEntryPoint>{};
+
+    if (SLANG_SUCCEEDED(module->findEntryPointByName(std::string{name}.c_str(), entry_point.writeRef())) && entry_point) {
+      result.entry_points.emplace_back(name);
+    }
+  }
+
+  auto* layout = module->getLayout();
+
+  for (const auto name : structs) {
+    auto* type = layout != nullptr ? layout->findTypeByName(std::string{name}.c_str()) : nullptr;
+
+    if (type == nullptr || type->getKind() != slang::TypeReflection::Kind::Struct) {
+      continue;
+    }
+
+    auto& fields = result.structs[std::string{name}];
+
+    for (auto index = 0u; index < type->getFieldCount(); ++index) {
+      auto* field = type->getFieldByIndex(index);
+      auto* field_type = field->getType();
+
+      auto entry = reflected_field{
+        .name = field->getName() ? field->getName() : "",
+        .type_name = field_type->getName() ? field_type->getName() : ""
+      };
+
+      const auto is_float = [](slang::TypeReflection* scalar) {
+        return scalar != nullptr && scalar->getScalarType() == slang::TypeReflection::Float32;
+      };
+
+      switch (field_type->getKind()) {
+        case slang::TypeReflection::Kind::Scalar: {
+          if (is_float(field_type)) {
+            entry.type = reflected_field::kind::float_vector;
+            entry.component_count = 1u;
+          }
+          break;
+        }
+        case slang::TypeReflection::Kind::Vector: {
+          if (is_float(field_type->getElementType())) {
+            entry.type = reflected_field::kind::float_vector;
+            entry.component_count = static_cast<std::uint32_t>(field_type->getElementCount());
+          }
+          break;
+        }
+        case slang::TypeReflection::Kind::Resource: {
+          const auto shape = field_type->getResourceShape();
+
+          if ((shape & SLANG_RESOURCE_BASE_SHAPE_MASK) == SLANG_TEXTURE_2D && field_type->getResourceAccess() == SLANG_RESOURCE_ACCESS_READ) {
+            entry.type = (shape & SLANG_TEXTURE_ARRAY_FLAG) != 0u ? reflected_field::kind::texture2d_array : reflected_field::kind::texture2d;
+          }
+          break;
+        }
+        case slang::TypeReflection::Kind::Struct: {
+          entry.type = reflected_field::kind::structure;
+          break;
+        }
+        default: {
+          break;
+        }
+      }
+
+      for (auto attribute_index = 0u; attribute_index < field->getUserAttributeCount(); ++attribute_index) {
+        auto* attribute = field->getUserAttributeByIndex(attribute_index);
+
+        auto reflected = reflected_attribute{.name = attribute->getName() ? attribute->getName() : ""};
+
+        for (auto argument = 0u; argument < attribute->getArgumentCount(); ++argument) {
+          auto size = std::size_t{0u};
+          auto float_value = 0.0f;
+          auto int_value = 0;
+
+          if (const auto* string_value = attribute->getArgumentValueString(argument, &size); string_value != nullptr) {
+            reflected.arguments.emplace_back(std::string{string_value, size});
+          } else if (SLANG_SUCCEEDED(attribute->getArgumentValueFloat(argument, &float_value))) {
+            reflected.arguments.emplace_back(float_value);
+          } else if (SLANG_SUCCEEDED(attribute->getArgumentValueInt(argument, &int_value))) {
+            reflected.arguments.emplace_back(static_cast<std::float_t>(int_value));
+          }
+        }
+
+        entry.attributes.push_back(std::move(reflected));
+      }
+
+      fields.push_back(std::move(entry));
+    }
+  }
+
+  return result;
+}
+
+auto shader_compiler::compile(const std::filesystem::path& path, std::span<const entry_point_request> entry_points, std::string_view material_loader) -> std::vector<compiled_entry_point> {
+  const auto options = _default_options();
+
+  auto lock = std::lock_guard{_mutex};
+
+  auto session = _create_session(path, options);
+  auto* module = _load_module(*session, path, material_loader);
 
   // Every file the module actually parsed — the entry file itself plus every #include it
   // transitively pulled in — so the cache key below tracks the full dependency set, not just the
@@ -325,6 +441,11 @@ auto shader_compiler::compile(const std::filesystem::path& path, std::span<const
     blob.append(_read_file(dependency_path));
 
     dependencies.push_back(std::move(blob));
+  }
+
+  // Not a file, but source all the same: a changed loader has to miss the cache.
+  if (!material_loader.empty()) {
+    dependencies.emplace_back(material_loader);
   }
 
   const auto key = _cache_key(dependencies, entry_points, options, "spirv_1_5");

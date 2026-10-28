@@ -297,6 +297,7 @@ auto statistics_panel::_draw_performance_tab() -> void {
     _table_row({"Particle effects", fmt::format("{}", counts.particle_effects)});
     _table_row({"Animation graphs", fmt::format("{}", counts.animation_graphs)});
     _table_row({"Shader graphs", fmt::format("{}", counts.shader_graphs)});
+    _table_row({"Shaders", fmt::format("{}", counts.shaders)});
     _table_row({"Skeletons", fmt::format("{}", counts.skeletons)});
     _table_row({"Animation clips", fmt::format("{}", counts.animation_clips)});
 

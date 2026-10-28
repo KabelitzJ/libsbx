@@ -6,6 +6,8 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -190,34 +192,47 @@ public:
 
 }; // class render_pass
 
+/** @brief What a custom material compiles: a shader graph's generated file or a hand-written surface shader. */
+struct material_shader_source {
+  std::string path;
+  // Part of the shader_cache key, so an edited code shader compiles anew. 0 for graphs, whose path already changes per generation.
+  std::uint64_t generation{0u};
+  // Without depth_vertex_main/depth_fragment_main, the depth pre-pass and shadow pass draw the material with their built-in pipeline instead.
+  bool has_depth_entry_points{true};
+  // A code shader's generated load_properties, appended to its source when it compiles; null for graphs and code shaders without a `properties` struct.
+  std::shared_ptr<const std::string> material_loader{};
+}; // struct material_shader_source
+
 /**
- * @brief Resolves a shader graph or shader_code material's pipeline on demand, swapping its shader and cull mode into the pass's own pipeline template.
+ * @brief Resolves a custom material's pipeline on demand, swapping its shader and cull mode into the pass's own pipeline template.
  *
  * Returns null when the shader has no usable pipeline (codegen or compilation failed); the caller skips the draw.
  * Every depth or color writing pass supplies one, since a custom vertex stage can displace the mesh.
  */
-using custom_pipeline_resolver = std::function<memory::observer_ptr<graphics::graphics_pipeline>(const std::string& shader_path, bool is_double_sided)>;
+using custom_pipeline_resolver = std::function<memory::observer_ptr<graphics::graphics_pipeline>(const material_shader_source& source, bool is_double_sided)>;
 
 /**
- * @brief The shader_cache path a shader graph or shader_code material renders with.
+ * @brief The shader a custom material renders with.
+ *
+ * Reads only fields of the shader the main thread doesn't rewrite on reload — callable from the render thread.
  *
  * @param material The material.
  *
- * @return The path, or empty for other materials or when nothing is assigned.
+ * @return The source, or nullopt for built-in materials, when nothing is assigned, or when the code shader isn't a surface shader.
  */
-[[nodiscard]] auto custom_shader_path(const assets::material& material) -> std::string;
+[[nodiscard]] auto shader_source_of(const assets::material& material) -> std::optional<material_shader_source>;
 
 /**
  * @brief Shared body of every pass's custom pipeline resolver: compiles the shader on first use, fills it into @p pipeline_template and fetches the pipeline from pipeline_cache.
  *
- * @param shader_path The shader to use.
+ * @param source The shader to use.
  * @param entry_points The entry points to request.
  * @param pipeline_template The pass's pipeline state, already set up.
  * @param pass_label Used for the pipeline name and warnings.
  *
- * @return The pipeline, or null (after a warning) if @p shader_path is empty or fails to compile.
+ * @return The pipeline, or null (after a warning) if @p source fails to compile.
  */
-[[nodiscard]] auto resolve_custom_pipeline(const std::string& shader_path, std::span<const graphics::shader_compiler::entry_point_request> entry_points, graphics::graphics_pipeline::create_info pipeline_template, std::string_view pass_label) -> memory::observer_ptr<graphics::graphics_pipeline>;
+[[nodiscard]] auto resolve_custom_pipeline(const material_shader_source& source, std::span<const graphics::shader_compiler::entry_point_request> entry_points, graphics::graphics_pipeline::create_info pipeline_template, std::string_view pass_label) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
 auto submit_draw_commands(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, std::uint32_t cascade_index = 0xFFFFFFFFu, const custom_pipeline_resolver& resolve_custom_pipeline = {}) -> void;
 

@@ -3,7 +3,10 @@
 #include <libsbx/assets/asset_residency.hpp>
 
 #include <algorithm>
+#include <array>
+#include <exception>
 #include <fstream>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -28,6 +31,7 @@
 #include <libsbx/graphics/commands/command_buffer.hpp>
 
 #include <libsbx/assets/primitive_meshes.hpp>
+#include <libsbx/assets/shader_reflection.hpp>
 
 namespace sbx::assets {
 
@@ -739,6 +743,29 @@ auto asset_residency::reimport(const math::uuid& id) -> void {
 
       break;
     }
+    case asset_type::shader: {
+      // An edited include changes every shader that includes it, and nothing loads a library itself, so anything but a loaded surface or compute shader re-reflects them all.
+      // ponytail: that bumps every shader's generation, so each recompiles (a disk-cache hit when unchanged) and gets a new pipeline; track include dependencies if this stalls.
+      auto records = std::vector<std::shared_ptr<shader>>{};
+
+      {
+        auto lock = std::lock_guard{_mutex};
+
+        if (const auto entry = _shaders.find(id); entry != _shaders.end() && entry->second->kind() != shader_kind::library) {
+          records.push_back(entry->second);
+        } else {
+          for (const auto& [shader_id, record] : _shaders) {
+            records.push_back(record);
+          }
+        }
+      }
+
+      for (const auto& record : records) {
+        _reflect_shader(*record);
+      }
+
+      break;
+    }
     default: {
       break;
     }
@@ -863,11 +890,10 @@ auto asset_residency::update_material(material_handle& material, const material:
   material->_metallic_roughness = create_info.metallic_roughness;
   material->_occlusion = create_info.occlusion;
   material->_emissive = create_info.emissive;
-  material->_shader_graph = create_info.shader_graph;
+  material->_shader = create_info.shader;
   material->_generic_params = create_info.generic_params;
   material->_generic_textures = create_info.generic_textures;
   material->_generic_texture_arrays = create_info.generic_texture_arrays;
-  material->_shader_code = create_info.shader_code;
   material->_name = create_info.name;
 
   material->_bump_generation();
@@ -933,7 +959,7 @@ auto asset_residency::save_material(material_handle& material, const std::filesy
   node["metallic_factor"] = material->metallic_factor();
   node["roughness_factor"] = material->roughness_factor();
   node["alpha_mode"] = (material->alpha() == alpha_mode::blend) ? "blend" : (material->alpha() == alpha_mode::mask) ? "mask" : "opaque";
-  node["shading_model"] = (material->shading() == shading_model::unlit) ? "unlit" : (material->shading() == shading_model::shader_graph) ? "shader_graph" : (material->shading() == shading_model::shader_code) ? "shader_code" : "pbr";
+  node["shading_model"] = (material->shading() == shading_model::unlit) ? "unlit" : (material->shading() == shading_model::custom) ? "custom" : "pbr";
   node["alpha_cutoff"] = material->alpha_cutoff();
   node["is_double_sided"] = material->is_double_sided();
   node["casts_shadow"] = material->casts_shadow();
@@ -965,16 +991,16 @@ auto asset_residency::save_material(material_handle& material, const std::filesy
     node["emissive"] = *slot;
   }
 
-  if (material->shader_graph().is_valid()) {
-    const auto absolute = _manifest.path_of(material->shader_graph()->id());
+  auto shader_id = math::uuid::nil();
 
-    if (!absolute.empty()) {
-      node["shader_graph"] = _manifest.relative(absolute).generic_string();
-    }
+  if (const auto* graph = std::get_if<shader_graph_handle>(&material->shader()); graph != nullptr && graph->is_valid()) {
+    shader_id = (*graph)->id();
+  } else if (const auto* code = std::get_if<shader_handle>(&material->shader()); code != nullptr && code->is_valid()) {
+    shader_id = (*code)->id();
   }
 
-  if (!material->shader_code().empty()) {
-    node["shader_code"] = _manifest.relative(material->shader_code()).generic_string();
+  if (const auto absolute = shader_id != math::uuid::nil() ? _manifest.path_of(shader_id) : std::filesystem::path{}; !absolute.empty()) {
+    node["shader"] = _manifest.relative(absolute).generic_string();
   }
 
   auto generic_params_node = YAML::Node{YAML::NodeType::Sequence};
@@ -1498,6 +1524,79 @@ auto asset_residency::load_shader_graph(const std::filesystem::path& path) -> sh
   return load_shader_graph(_manifest.import(assets_directory / path));
 }
 
+auto asset_residency::load_shader(const math::uuid& id) -> shader_handle {
+  if (id == math::uuid::nil()) {
+    return shader_handle{};
+  }
+
+  {
+    auto lock = std::lock_guard{_mutex};
+
+    if (const auto entry = _shaders.find(id); entry != _shaders.end()) {
+      return shader_handle{entry->second};
+    }
+  }
+
+  const auto source = _manifest.path_of(id);
+
+  if (source.empty()) {
+    utility::logger<"assets">::warn("Unknown shader uuid {}", id);
+    return shader_handle{};
+  }
+
+  auto record = std::make_shared<shader>();
+  record->_id = id;
+  record->_path = source;
+
+  // ponytail: reflection parses the file on the calling thread; move it to asset_loader if loading a scene full of code shaders hitches.
+  _reflect_shader(*record);
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    _shaders.emplace(id, record);
+  }
+
+  return shader_handle{record};
+}
+
+auto asset_residency::load_shader(const std::filesystem::path& path) -> shader_handle {
+  const auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  return load_shader(_manifest.import(assets_directory / path));
+}
+
+auto asset_residency::_reflect_shader(shader& record) -> void {
+  static constexpr auto entry_point_names = std::array<std::string_view, 5u>{"vertex_main", "fragment_main", "depth_vertex_main", "depth_fragment_main", "compute_main"};
+  static constexpr auto struct_names = std::array<std::string_view, 1u>{"properties"};
+
+  auto& shader_compiler = core::engine::get_module<graphics::graphics_module>().shader_compiler();
+
+  try {
+    const auto reflection = shader_compiler.reflect_module(record.path(), entry_point_names, struct_names);
+
+    const auto has = [&](std::string_view name) {
+      return std::ranges::find(reflection.entry_points, name) != reflection.entry_points.end();
+    };
+
+    auto properties = shader_properties_from_reflection(reflection);
+
+    if (!properties) {
+      utility::logger<"assets">::warn("Shader '{}': {}", record.path().generic_string(), properties.error());
+      record._finalize_content(shader_kind::library, false, {}, std::string{}, std::move(properties.error()));
+      return;
+    }
+
+    const auto kind = (has("vertex_main") && has("fragment_main")) ? shader_kind::surface : has("compute_main") ? shader_kind::compute : shader_kind::library;
+
+    record._finalize_content(kind, has("depth_vertex_main") && has("depth_fragment_main"), std::move(properties->properties), std::move(properties->material_loader), std::string{});
+  } catch (const std::exception& exception) {
+    utility::logger<"assets">::warn("Shader '{}' doesn't parse: {}", record.path().generic_string(), exception.what());
+    record._finalize_content(shader_kind::library, false, {}, std::string{}, exception.what());
+  }
+}
+
 auto asset_residency::create_shader_graph(const shader_graph::create_info& create_info) -> shader_graph_handle {
   return shader_graph_handle{std::make_shared<shader_graph>(create_info)};
 }
@@ -1628,11 +1727,11 @@ auto asset_residency::save_shader_graph(shader_graph_handle& graph, const std::f
     property_yaml["id"] = property.id;
     property_yaml["name"] = property.name;
     property_yaml["reference"] = property.reference;
-    property_yaml["type"] = shader_graph_parameter_type_to_string(property.type);
+    property_yaml["type"] = shader_property_type_to_string(property.type);
     property_yaml["exposed"] = property.exposed;
-    property_yaml[property.type == shader_graph_parameter_type::texture_value ? "slot" : "offset"] = property.slot;
+    property_yaml[property.type == shader_property_type::texture_value ? "slot" : "offset"] = property.slot;
 
-    if (property.type == shader_graph_parameter_type::texture_value) {
+    if (property.type == shader_property_type::texture_value) {
       property_yaml["linear"] = property.is_linear;
 
       if (const auto* texture = std::get_if<texture2d_handle>(&property.value)) {
@@ -1642,7 +1741,7 @@ auto asset_residency::save_shader_graph(shader_graph_handle& graph, const std::f
       }
     } else if (const auto* value = std::get_if<std::float_t>(&property.value)) {
       property_yaml["value"] = *value;
-      property_yaml["slider"] = property.float_mode == shader_graph_float_mode::slider;
+      property_yaml["slider"] = property.float_mode == shader_property_float_mode::slider;
       property_yaml["range"] = property.slider_range;
     } else if (const auto* value = std::get_if<math::vector2>(&property.value)) {
       property_yaml["value"] = *value;
@@ -2094,8 +2193,15 @@ auto asset_residency::_finalize_material(asset_loader::material_result& result) 
   info.occlusion = load_slot(description.occlusion, graphics::format::r8g8b8a8_unorm);
   info.emissive = load_slot(description.emissive, graphics::format::r8g8b8a8_srgb);
 
-  info.shader_graph = description.shader_graph.empty() ? shader_graph_handle{} : load_shader_graph(std::filesystem::path{description.shader_graph});
-  info.shader_code = description.shader_code.empty() ? std::filesystem::path{} : core::engine::project().assets_directory() / description.shader_code;
+  if (!description.shader.empty()) {
+    const auto shader_path = std::filesystem::path{description.shader};
+
+    if (asset_type_of(shader_path) == asset_type::shader_graph) {
+      info.shader = load_shader_graph(shader_path);
+    } else {
+      info.shader = load_shader(shader_path);
+    }
+  }
   info.generic_params = description.generic_params;
 
   for (auto i = std::size_t{0u}; i < description.generic_texture_paths.size(); ++i) {
@@ -2256,7 +2362,7 @@ auto asset_residency::_finalize_shader_graph(asset_loader::shader_graph_result& 
   for (const auto& property_description : description.properties) {
     auto property = property_description.property;
 
-    if (property.type == shader_graph_parameter_type::texture_value && !property_description.texture_path.empty()) {
+    if (property.type == shader_property_type::texture_value && !property_description.texture_path.empty()) {
       property.value = load_texture(std::filesystem::path{property_description.texture_path}, property.is_linear ? graphics::format::r8g8b8a8_unorm : graphics::format::r8g8b8a8_srgb);
     }
 
@@ -2590,6 +2696,7 @@ auto asset_residency::resident_asset_counts() const -> assets::resident_asset_co
   counts.particle_effects = _particle_effect_files.size();
   counts.animation_graphs = _animation_graph_files.size();
   counts.shader_graphs = _shader_graph_files.size();
+  counts.shaders = _shaders.size();
   counts.skeletons = _skeletons.size();
   counts.animation_clips = _animation_clips.size();
 
@@ -2676,7 +2783,7 @@ auto asset_residency::_material_data_of(const material& material) const -> mater
   // ponytail: refreshed only when the material re-uploads; editing a graph's inline texture doesn't reach materials already resident until then.
   if (const auto& graph = material.shader_graph(); graph.is_valid()) {
     for (const auto& parameter : graph->parameters()) {
-      if (parameter.property_id == shader_graph_invalid_property_id && parameter.slot < generic_textures.size()) {
+      if (parameter.property_id == shader_property_invalid_id && parameter.slot < generic_textures.size()) {
         const auto* texture = std::get_if<texture2d_handle>(&parameter.default_value);
         data.generic_textures[parameter.slot] = resolve(texture != nullptr ? *texture : texture2d_handle{}, _white);
       }

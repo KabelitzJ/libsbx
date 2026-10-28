@@ -63,9 +63,9 @@ private:
   auto _draw_selection_inspector(editor_state& state) -> void;
 
   auto _draw_blackboard() -> void;
-  auto _draw_property_inspector(editor_state& state, sbx::assets::shader_graph_property& property) -> void;
+  auto _draw_property_inspector(editor_state& state, sbx::assets::shader_property& property) -> void;
 
-  auto _add_property(sbx::assets::shader_graph_parameter_type type) -> std::uint32_t;
+  auto _add_property(sbx::assets::shader_property_type type) -> std::uint32_t;
   auto _rename_property(std::uint32_t id, const std::string& name) -> void;
 
   // Removes the property, its nodes and their edges.

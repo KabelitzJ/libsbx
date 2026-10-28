@@ -211,6 +211,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker_animation_graph.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker_shader_graph.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/shader_graph_codegen.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/assets/shader_reflection.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_loader.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_manifest.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_type.cpp"

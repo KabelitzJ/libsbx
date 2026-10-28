@@ -43,7 +43,7 @@ private:
 
   auto _make_pipeline(memory::observer_ptr<const graphics::shader> shader, graphics::cull_mode cull, const std::string& name) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
-  auto _resolve_custom_pipeline(const std::string& shader_path, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
+  auto _resolve_custom_pipeline(const material_shader_source& source, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u> _pipelines{};
 

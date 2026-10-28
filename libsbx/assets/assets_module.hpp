@@ -36,6 +36,7 @@
 #include <libsbx/assets/particle_effect.hpp>
 #include <libsbx/assets/animation_graph.hpp>
 #include <libsbx/assets/shader_graph.hpp>
+#include <libsbx/assets/shader.hpp>
 #include <libsbx/assets/prefab.hpp>
 #include <libsbx/assets/scene.hpp>
 #include <libsbx/assets/asset_cooker.hpp>
@@ -343,6 +344,17 @@ public:
   auto update_animation_graph(animation_graph_handle& graph, const animation_graph::create_info& create_info) -> void;
 
   auto save_animation_graph(animation_graph_handle& graph, const std::filesystem::path& path) -> math::uuid;
+
+  /**
+   * @brief Loads a hand-written `.slang` shader by uuid or project-relative path, or returns the existing handle. Reflects it synchronously.
+   *
+   * @param id The shader's uuid.
+   *
+   * @return The shader handle, loaded on return; invalid for an unknown uuid.
+   */
+  auto load_shader(const math::uuid& id) -> shader_handle;
+
+  auto load_shader(const std::filesystem::path& path) -> shader_handle;
 
   auto load_shader_graph(const math::uuid& id) -> shader_graph_handle;
 

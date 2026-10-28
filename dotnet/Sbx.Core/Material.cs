@@ -91,9 +91,9 @@ namespace Sbx.Core
     }
 
     /**
-     * Overwrites one of this material's generic texture slots (0-15) in place -- what a shader
-     * graph's texture parameters or a shader_code material's `material.generic_textures[index]`
-     * read. Same sharing caveat as SetTexture.
+     * Overwrites one of this material's generic texture slots (0-15) in place -- what a code shader
+     * without a `properties` struct reads as `material.generic_textures[index]`. Prefer
+     * SetTexture(reference, ...) for shaders that declare properties. Same sharing caveat as SetTexture.
      */
     public void SetGenericTexture(int index, Texture2D texture)
     {
@@ -101,10 +101,10 @@ namespace Sbx.Core
     }
 
     /**
-     * Overwrites one whole generic parameter float4 (0-7) in place: a shader_code material's
-     * `material.generic_params[index]`. Shader graphs pack small properties together, so for them
-     * use SetFloat/SetVector/SetColor by reference; this refuses (and logs) a float4 holding more
-     * than one graph property. Same sharing caveat as SetTexture.
+     * Overwrites one whole generic parameter float4 (0-7) in place: what a code shader without
+     * a `properties` struct reads as `material.generic_params[index]`. Shaders with properties pack
+     * small values together, so for them use SetFloat/SetVector/SetColor by reference; this
+     * refuses (and logs) a float4 holding more than one property. Same sharing caveat as SetTexture.
      */
     public void SetGenericParam(int index, float x, float y = 0.0f, float z = 0.0f, float w = 0.0f)
     {
@@ -123,7 +123,7 @@ namespace Sbx.Core
       unsafe { InternalCalls.Material_SetGenericTextureFont(_uuid, (uint)index, font.UUID); }
     }
 
-    /** Whether this material's shader graph has a property with this reference (e.g. "_BaseColor"). False until the graph has loaded. */
+    /** Whether this material's shader (graph or code) has a property with this reference (e.g. "_BaseColor"). False until the shader has loaded. */
     public bool HasProperty(string reference)
     {
       using (NativeString nativeReference = reference)
@@ -133,9 +133,9 @@ namespace Sbx.Core
     }
 
     /**
-     * Shader graph property setters, by the property's reference as shown in the graph's blackboard.
-     * Each writes only its own property's floats, even when the graph packs several properties into one generic param.
-     * Returns false for an unknown reference (or before the graph has loaded) or a value/texture mismatch. Same sharing caveat as SetTexture.
+     * Shader property setters, by the property's reference: as shown in a graph's blackboard, or a code shader's [Property("_Reference", ...)] (else "_<field>").
+     * Each writes only its own property's floats, even when several properties share one generic param.
+     * Returns false for an unknown reference (or before the shader has loaded) or a value/texture mismatch. Same sharing caveat as SetTexture.
      */
     public bool SetFloat(string reference, float value) => SetValue(reference, value, 0.0f, 0.0f, 0.0f);
 
@@ -152,6 +152,24 @@ namespace Sbx.Core
       using (NativeString nativeReference = reference)
       {
         unsafe { return InternalCalls.Material_SetPropertyTexture(_uuid, nativeReference, texture.UUID); }
+      }
+    }
+
+    /** A texture array in a texture property's slot, for a code shader's Texture2DArray field. Set it once the array IsResident. */
+    public bool SetTexture(string reference, Texture2DArray array)
+    {
+      using (NativeString nativeReference = reference)
+      {
+        unsafe { return InternalCalls.Material_SetPropertyTextureArray(_uuid, nativeReference, array.UUID); }
+      }
+    }
+
+    /** A font's SDF atlas (single channel, 0.5 = glyph edge) in a texture property's slot, for text a shader draws itself. */
+    public bool SetTexture(string reference, Font font)
+    {
+      using (NativeString nativeReference = reference)
+      {
+        unsafe { return InternalCalls.Material_SetPropertyFont(_uuid, nativeReference, font.UUID); }
       }
     }
 

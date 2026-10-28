@@ -260,6 +260,8 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_HasProperty", reinterpret_cast<void*>(&interop::material_has_property));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_SetProperty", reinterpret_cast<void*>(&interop::material_set_property));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_SetPropertyTexture", reinterpret_cast<void*>(&interop::material_set_property_texture));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_SetPropertyTextureArray", reinterpret_cast<void*>(&interop::material_set_property_texture_array));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_SetPropertyFont", reinterpret_cast<void*>(&interop::material_set_property_font));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_Release", reinterpret_cast<void*>(&interop::material_release));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_IsLoaded", reinterpret_cast<void*>(&interop::material_is_loaded));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Project_GetAssetsDirectory", reinterpret_cast<void*>(&interop::project_get_assets_directory));

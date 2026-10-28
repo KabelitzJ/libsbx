@@ -34,13 +34,13 @@ static auto migrate_to_properties(shader_graph_description& description) -> void
   std::iota(order.begin(), order.end(), std::size_t{0u});
   std::ranges::sort(order, {}, [&description](std::size_t index) { return description.nodes[index].id; });
 
-  auto properties = std::vector<shader_graph_property>{};
+  auto properties = std::vector<shader_property>{};
   auto float_slot = std::uint32_t{0u};
   auto texture_slot = std::uint32_t{0u};
   auto new_nodes = std::vector<shader_graph_node_description>{};
 
-  const auto add_property = [&](const std::string& name, const std::string& fallback_name, shader_graph_parameter_type type, std::uint32_t slot) -> shader_graph_property& {
-    auto property = shader_graph_property{};
+  const auto add_property = [&](const std::string& name, const std::string& fallback_name, shader_property_type type, std::uint32_t slot) -> shader_property& {
+    auto property = shader_property{};
     property.id = shader_graph_next_property_id(properties);
     property.name = name.empty() ? fmt::format("{} {}", fallback_name, property.id) : name;
     property.reference = shader_graph_make_reference(property.name, properties);
@@ -54,7 +54,7 @@ static auto migrate_to_properties(shader_graph_description& description) -> void
     auto& node = description.nodes[index];
 
     if (node.type == shader_node_type::texture_sample) {
-      auto& property = add_property(node.name, "Texture", shader_graph_parameter_type::texture_value, texture_slot++);
+      auto& property = add_property(node.name, "Texture", shader_property_type::texture_value, texture_slot++);
 
       auto texture_path = std::holds_alternative<std::string>(node.value) ? std::get<std::string>(node.value) : std::string{};
       description.properties.push_back(shader_graph_property_description{property, std::move(texture_path)});
@@ -75,13 +75,13 @@ static auto migrate_to_properties(shader_graph_description& description) -> void
       continue;
     }
 
-    const auto type = [&node]() -> std::optional<shader_graph_parameter_type> {
+    const auto type = [&node]() -> std::optional<shader_property_type> {
       switch (node.type) {
-        case shader_node_type::constant_float: return shader_graph_parameter_type::float_value;
-        case shader_node_type::constant_vector2: return shader_graph_parameter_type::vector2_value;
-        case shader_node_type::constant_vector3: return shader_graph_parameter_type::vector3_value;
-        case shader_node_type::constant_vector4: return shader_graph_parameter_type::vector4_value;
-        case shader_node_type::constant_color: return shader_graph_parameter_type::color_value;
+        case shader_node_type::constant_float: return shader_property_type::float_value;
+        case shader_node_type::constant_vector2: return shader_property_type::vector2_value;
+        case shader_node_type::constant_vector3: return shader_property_type::vector3_value;
+        case shader_node_type::constant_vector4: return shader_property_type::vector4_value;
+        case shader_node_type::constant_color: return shader_property_type::color_value;
         default: return std::nullopt;
       }
     }();
@@ -109,18 +109,18 @@ static auto migrate_to_properties(shader_graph_description& description) -> void
   std::ranges::move(new_nodes, std::back_inserter(description.nodes));
 }
 
-static auto parse_property_value(const YAML::Node& node, shader_graph_parameter_type type) -> shader_graph_node_value {
+static auto parse_property_value(const YAML::Node& node, shader_property_type type) -> shader_property_value {
   if (!node) {
-    return type == shader_graph_parameter_type::color_value ? shader_graph_node_value{math::color{1.0f, 1.0f, 1.0f, 1.0f}} : shader_graph_node_value{};
+    return type == shader_property_type::color_value ? shader_property_value{math::color{1.0f, 1.0f, 1.0f, 1.0f}} : shader_property_value{};
   }
 
   switch (type) {
-    case shader_graph_parameter_type::float_value: return node.as<std::float_t>();
-    case shader_graph_parameter_type::vector2_value: return node.as<math::vector2>();
-    case shader_graph_parameter_type::vector3_value: return node.as<math::vector3>();
-    case shader_graph_parameter_type::vector4_value: return node.as<math::vector4>();
-    case shader_graph_parameter_type::color_value: return node.as<math::color>();
-    case shader_graph_parameter_type::texture_value: return std::monostate{};
+    case shader_property_type::float_value: return node.as<std::float_t>();
+    case shader_property_type::vector2_value: return node.as<math::vector2>();
+    case shader_property_type::vector3_value: return node.as<math::vector3>();
+    case shader_property_type::vector4_value: return node.as<math::vector4>();
+    case shader_property_type::color_value: return node.as<math::color>();
+    case shader_property_type::texture_value: return std::monostate{};
   }
 
   return std::monostate{};
@@ -215,15 +215,15 @@ auto asset_cooker::parse_shader_graph_file(const std::filesystem::path& source) 
       if (property_yaml["id"]) property.id = property_yaml["id"].as<std::uint32_t>();
       if (property_yaml["name"]) property.name = property_yaml["name"].as<std::string>();
       if (property_yaml["reference"]) property.reference = property_yaml["reference"].as<std::string>();
-      if (property_yaml["type"]) property.type = shader_graph_parameter_type_from_string(property_yaml["type"].as<std::string>());
+      if (property_yaml["type"]) property.type = shader_property_type_from_string(property_yaml["type"].as<std::string>());
       if (property_yaml["exposed"]) property.exposed = property_yaml["exposed"].as<bool>();
       if (property_yaml["slot"]) property.slot = property_yaml["slot"].as<std::uint32_t>();
 
       // Value properties are saved as a packed float offset; files from before packing have a float4 index under "slot" instead.
-      if (property.type != shader_graph_parameter_type::texture_value) {
+      if (property.type != shader_property_type::texture_value) {
         property.slot = property_yaml["offset"] ? property_yaml["offset"].as<std::uint32_t>() : property.slot * 4u;
       }
-      if (property_yaml["slider"]) property.float_mode = property_yaml["slider"].as<bool>() ? shader_graph_float_mode::slider : shader_graph_float_mode::plain;
+      if (property_yaml["slider"]) property.float_mode = property_yaml["slider"].as<bool>() ? shader_property_float_mode::slider : shader_property_float_mode::plain;
       if (property_yaml["range"]) property.slider_range = property_yaml["range"].as<math::vector2>();
       if (property_yaml["hdr"]) property.is_hdr = property_yaml["hdr"].as<bool>();
       if (property_yaml["linear"]) property.is_linear = property_yaml["linear"].as<bool>();

@@ -4,9 +4,11 @@
 #define LIBSBX_GRAPHICS_PIPELINE_SHADER_CACHE_HPP_
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -31,6 +33,10 @@ public:
   struct request {
     std::filesystem::path path;
     std::vector<shader_compiler::entry_point_request> entry_points;
+    // Part of the key only: a new generation of an edited file compiles anew instead of hitting the stale entry.
+    std::uint64_t generation{0u};
+    // Passed to shader_compiler::compile on a miss; not part of the key, since the loader only changes with the generation.
+    std::string_view material_loader{};
   }; // struct request
 
   explicit shader_cache();
@@ -44,6 +50,7 @@ private:
   struct key {
     std::string path;
     std::vector<shader_compiler::entry_point_request> entry_points;
+    std::uint64_t generation;
 
     auto operator==(const key&) const -> bool = default;
   }; // struct key

@@ -28,6 +28,7 @@ struct asset_picker_item {
 
 struct asset_picker_options {
   assets::asset_type kind{assets::asset_type::texture};
+  assets::asset_type alternate_kind{assets::asset_type::unknown}; // also lists and accepts this kind, e.g. code shaders beside shader graphs
   bool allow_none{false};         // offers a "(None)" entry that clears the slot
   bool show_edit_button{false};   // a second button next to the picker that sets edit_requested
   bool show_reveal_button{false}; // a button that sets reveal_requested ("show in Asset Browser")

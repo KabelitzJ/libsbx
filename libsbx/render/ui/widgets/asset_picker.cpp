@@ -7,6 +7,7 @@
 #include <cctype>
 #include <cstring>
 #include <filesystem>
+#include <initializer_list>
 #include <string>
 #include <string_view>
 
@@ -63,7 +64,7 @@ auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, c
   const auto is_large = preview_size >= frame_height * 2.0f + style.ItemSpacing.y;
 
   auto button_tile = asset_tile_desc{};
-  button_tile.icon_glyph = icon_for(options.kind);
+  button_tile.icon_glyph = icon_for(has_current && options.alternate_kind != assets::asset_type::unknown ? assets::asset_type_of(current.path) : options.kind);
   button_tile.size = ImVec2{preview_size, preview_size};
 
   if (options.kind == assets::asset_type::texture && has_current) {
@@ -166,13 +167,21 @@ auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, c
   ImGui::EndGroup();
 
   // The whole closed field accepts drops, like Unity's object fields. A null type would make ImGui accept any payload.
-  if (const auto* payload_type = drag_payload_type_for(options.kind); payload_type != nullptr && ImGui::BeginDragDropTarget()) {
-    if (const auto* payload = ImGui::AcceptDragDropPayload(payload_type)) {
-      auto dropped = asset_drag_payload{};
-      std::memcpy(&dropped, payload->Data, sizeof(dropped));
+  if (ImGui::BeginDragDropTarget()) {
+    for (const auto kind : {options.kind, options.alternate_kind}) {
+      const auto* payload_type = drag_payload_type_for(kind);
 
-      result.changed = true;
-      result.picked = asset_picker_item{resolve_drag_id(dropped), std::filesystem::path{dropped.path}};
+      if (payload_type == nullptr) {
+        continue;
+      }
+
+      if (const auto* payload = ImGui::AcceptDragDropPayload(payload_type)) {
+        auto dropped = asset_drag_payload{};
+        std::memcpy(&dropped, payload->Data, sizeof(dropped));
+
+        result.changed = true;
+        result.picked = asset_picker_item{resolve_drag_id(dropped), std::filesystem::path{dropped.path}};
+      }
     }
 
     ImGui::EndDragDropTarget();
@@ -195,6 +204,12 @@ auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, c
 
       for (auto& [id, path] : assets_module.assets_of(options.kind)) {
         candidates.push_back(asset_picker_item{id, std::move(path)});
+      }
+
+      if (options.alternate_kind != assets::asset_type::unknown) {
+        for (auto& [id, path] : assets_module.assets_of(options.alternate_kind)) {
+          candidates.push_back(asset_picker_item{id, std::move(path)});
+        }
       }
 
       std::ranges::sort(candidates, {}, &asset_picker_item::path);
@@ -259,7 +274,7 @@ auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, c
           ImGui::PushID(index);
 
           auto row_tile = asset_tile_desc{};
-          row_tile.icon_glyph = icon_for(options.kind);
+          row_tile.icon_glyph = icon_for(options.alternate_kind != assets::asset_type::unknown ? assets::asset_type_of(candidate.path) : options.kind);
           row_tile.size = row_size;
 
           if (options.kind == assets::asset_type::texture) {

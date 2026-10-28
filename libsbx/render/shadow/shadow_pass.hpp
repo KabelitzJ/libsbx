@@ -41,7 +41,7 @@ public:
 private:
 
   // Same entry points as depth_pre_pass, with the cascade's cull and sample state.
-  [[nodiscard]] auto _resolve_custom_pipeline(const std::string& shader_path, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
+  [[nodiscard]] auto _resolve_custom_pipeline(const material_shader_source& source, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u> _pipelines{};
 

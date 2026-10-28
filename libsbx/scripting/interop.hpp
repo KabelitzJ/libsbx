@@ -694,6 +694,12 @@ struct interop {
   /** @brief Sets a texture property. False for an unknown reference or a value property. */
   static auto material_set_property_texture(std::uint64_t material_uuid, managed::string reference, std::uint64_t texture_uuid) -> managed::bool32;
 
+  /** @brief Puts a texture array into a texture property's slot; the shader reads it as texture_arrays[index]. False for an unknown reference or a value property. */
+  static auto material_set_property_texture_array(std::uint64_t material_uuid, managed::string reference, std::uint64_t array_uuid) -> managed::bool32;
+
+  /** @brief Puts a font's SDF atlas into a texture property's slot. False for an unknown reference or a value property. */
+  static auto material_set_property_font(std::uint64_t material_uuid, managed::string reference, std::uint64_t font_uuid) -> managed::bool32;
+
   // Script compute: every object is an opaque id into scripting_module::resources().
   // Functions returning bool log the reason and return false on misuse; the C# wrappers turn that into an exception.
   // Shader parameters bind by push_data field name via Slang reflection, type-checked against the setter.

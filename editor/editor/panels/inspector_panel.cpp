@@ -10,6 +10,7 @@
 #include <cstring>
 #include <optional>
 #include <span>
+#include <string>
 #include <type_traits>
 #include <variant>
 #include <vector>
@@ -357,7 +358,7 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
   if (_asset_cache.id.value() != asset.id.value()) {
     _asset_cache = asset_property_cache{};
     _asset_cache.id = asset.id;
-    _shader_graph_seed_pending = false; // the material's own generic_params are already meaningful
+    _shader_seed_pending = false; // the material's own generic_params are already meaningful
 
     switch (asset.kind) {
       case sbx::assets::asset_type::texture: _asset_cache.texture = assets_module.load_texture(asset.id); break;
@@ -370,6 +371,7 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
       case sbx::assets::asset_type::font: _asset_cache.font = assets_module.load_font(asset.id); break;
       case sbx::assets::asset_type::audio_clip: _asset_cache.audio_clip = assets_module.load_audio_clip(asset.id); break;
       case sbx::assets::asset_type::scene: _asset_cache.scene = assets_module.load_scene(asset.id); break;
+      case sbx::assets::asset_type::shader: _asset_cache.shader = assets_module.load_shader(asset.id); break;
       case sbx::assets::asset_type::prefab:
       case sbx::assets::asset_type::script:
       case sbx::assets::asset_type::unknown:
@@ -505,7 +507,7 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
 
         if (!properties.empty() && ImGui::TreeNodeEx("Properties", ImGuiTreeNodeFlags_DefaultOpen)) {
           for (const auto& property : properties) {
-            ImGui::Text("%s (%s, %s)%s", property.name.c_str(), property.reference.c_str(), sbx::assets::shader_graph_parameter_type_to_string(property.type), property.exposed ? "" : " hidden");
+            ImGui::Text("%s (%s, %s)%s", property.name.c_str(), property.reference.c_str(), sbx::assets::shader_property_type_to_string(property.type), property.exposed ? "" : " hidden");
           }
 
           ImGui::TreePop();
@@ -563,6 +565,26 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
       ImGui::Text("Type: Script");
       ImGui::Text("Class: %s", asset.path.stem().string().c_str());
       ImGui::TextDisabled("Attach to a node via its \"Add Component > Script\" menu.");
+      break;
+    }
+    case sbx::assets::asset_type::shader: {
+      ImGui::Text("Type: Shader");
+      const auto& handle = _asset_cache.shader;
+      if (handle.is_loaded()) {
+        ImGui::Text("Kind: %s", std::string{sbx::reflection::to_string(handle->kind())}.c_str());
+
+        if (handle->kind() == sbx::assets::shader_kind::surface) {
+          ImGui::Text("Depth/Shadow Entry Points: %s", handle->has_depth_entry_points() ? "yes" : "no (skips the depth pre-pass and shadows)");
+        }
+
+        if (!handle->error().empty()) {
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{1.0f, 0.6f, 0.2f, 1.0f});
+          ImGui::TextWrapped(ICON_MDI_ALERT " %s", handle->error().c_str());
+          ImGui::PopStyleColor();
+        }
+
+        ImGui::TextDisabled("Reloads when the file changes.");
+      }
       break;
     }
     case sbx::assets::asset_type::unknown: {

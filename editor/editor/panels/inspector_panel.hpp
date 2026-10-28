@@ -52,6 +52,7 @@ private:
     sbx::assets::particle_effect_handle particle_effect{};
     sbx::assets::animation_graph_handle animation_graph{};
     sbx::assets::shader_graph_handle shader_graph{};
+    sbx::assets::shader_handle shader{};
     sbx::assets::font_handle font{};
     sbx::assets::audio_clip_handle audio_clip{};
     sbx::assets::scene_handle scene{};
@@ -77,6 +78,17 @@ private:
   auto _draw_transform_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
   auto _draw_asset_properties(editor_state& state, const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
   auto _draw_material_properties(editor_state& state, const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
+
+  /**
+   * @brief Draws a shader's exposed properties as fields over the edited material's generic slots.
+   *
+   * @param state The editor state.
+   * @param properties The material's shader properties.
+   * @param assets_module The assets module.
+   *
+   * @return Whether any value changed.
+   */
+  auto _draw_shader_properties(editor_state& state, std::span<const sbx::assets::shader_property> properties, sbx::assets::assets_module& assets_module) -> bool;
 
   /** @brief The Unity-style Import Settings section: a working copy with Revert/Apply, plus Reimport. */
   auto _draw_import_settings_section(const asset_selection& asset) -> void;
@@ -118,7 +130,7 @@ private:
   bool _material_edit_pending{false};
 
   // Set when a shader graph is assigned: it loads asynchronously, so its defaults are seeded into _material_edit once it's loaded.
-  bool _shader_graph_seed_pending{false};
+  bool _shader_seed_pending{false};
 
   sbx::assets::particle_effect::create_info _particle_effect_edit{};
 

@@ -248,7 +248,7 @@ lighting_output evaluate_lit_surface<let ReceivesShadows : bool>(lighting_input 
 }
 
 // The built-in pbr material's surface, from its fixed texture slots and factors -- what
-// evaluate_lighting shades, and a starting point for a shader_code material to adjust
+// evaluate_lighting shades, and a starting point for a code shader to adjust
 // (material/code_material.slang).
 lit_surface builtin_lit_surface(lighting_input input) {
   material_data material = input.frame_data.materials[input.material_index];

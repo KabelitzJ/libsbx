@@ -38,6 +38,7 @@
 #include <libsbx/assets/particle_effect.hpp>
 #include <libsbx/assets/animation_graph.hpp>
 #include <libsbx/assets/shader_graph.hpp>
+#include <libsbx/assets/shader.hpp>
 #include <libsbx/assets/asset_cooker.hpp>
 #include <libsbx/assets/asset_manifest.hpp>
 #include <libsbx/assets/asset_loader.hpp>
@@ -56,6 +57,7 @@ struct resident_asset_counts {
   std::size_t particle_effects{0u};
   std::size_t animation_graphs{0u};
   std::size_t shader_graphs{0u};
+  std::size_t shaders{0u};
   std::size_t skeletons{0u};
   std::size_t animation_clips{0u};
 }; // struct resident_asset_counts
@@ -387,6 +389,19 @@ public:
   auto save_shader_graph(shader_graph_handle& graph, const std::filesystem::path& path) -> math::uuid;
 
   /**
+   * @brief Loads a hand-written `.slang` shader by uuid, or returns the existing handle.
+   *
+   * Reflects its entry points synchronously; the render passes compile it on first use.
+   *
+   * @param id The shader's uuid.
+   *
+   * @return The shader handle, loaded on return; invalid for an unknown uuid.
+   */
+  auto load_shader(const math::uuid& id) -> shader_handle;
+
+  auto load_shader(const std::filesystem::path& path) -> shader_handle;
+
+  /**
    * @brief Finalizes up to max_uploads_per_frame loader results: resolves nested asset references and queues GPU uploads.
    *
    * Main thread only, while the render thread is idle: finalizing writes records that packet building reads and fires on_loaded callbacks.
@@ -498,8 +513,8 @@ private:
     math::vector2 uv_tiling;
     math::vector2 uv_offset;
     // One float4 per exposed param regardless of type, avoiding packing and alignment pitfalls.
-    math::vector4 generic_params[shader_graph_max_params];
-    std::uint32_t generic_textures[shader_graph_max_textures];
+    math::vector4 generic_params[material_max_params];
+    std::uint32_t generic_textures[material_max_textures];
   }; // struct material_data
 
   // Snapshotted on the main thread so the render thread never reads a record being edited.
@@ -534,6 +549,8 @@ private:
   auto _finalize_particle_effect(asset_loader::particle_effect_result& result) -> void;
   auto _finalize_animation_graph(asset_loader::animation_graph_result& result) -> void;
   auto _finalize_shader_graph(asset_loader::shader_graph_result& result) -> void;
+
+  auto _reflect_shader(shader& record) -> void;
   auto _submit_mesh(const math::uuid& id, bool force_recook) -> mesh_handle;
 
   auto _retire_mesh_buffers(const mesh& record, std::uint64_t frame_index) -> void;
@@ -580,6 +597,7 @@ private:
   std::unordered_map<math::uuid, std::shared_ptr<particle_effect>> _particle_effect_files{};
   std::unordered_map<math::uuid, std::shared_ptr<animation_graph>> _animation_graph_files{};
   std::unordered_map<math::uuid, std::shared_ptr<shader_graph>> _shader_graph_files{};
+  std::unordered_map<math::uuid, std::shared_ptr<shader>> _shaders{};
 
   texture2d_handle _white{};
   texture2d_handle _normal{};

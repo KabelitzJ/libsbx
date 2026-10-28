@@ -17,7 +17,7 @@ using namespace sbx::assets;
 static constexpr auto legacy_graph = R"(
 name: legacy
 nodes:
-  - {id: 0, type: constant_color, name: Tint, exposed: true, value: [1, 0, 0, 1]}
+  - {id: 0, type: constant_color, name: Tint, exposed: true, value: {r: 1, g: 0, b: 0, a: 1}}
   - {id: 1, type: constant_float, name: Hidden, exposed: false, value: 2}
   - {id: 2, type: constant_float, name: Strength, exposed: true, value: 0.5}
   - {id: 3, type: texture_sample, name: Albedo, texture: ""}
@@ -46,11 +46,11 @@ TEST(shader_graph_properties_test, legacy_graph_migrates_to_properties_in_its_ol
 
   EXPECT_EQ(tint.name, "Tint");
   EXPECT_EQ(tint.reference, "_Tint");
-  EXPECT_EQ(tint.type, shader_graph_parameter_type::color_value);
+  EXPECT_EQ(tint.type, shader_property_type::color_value);
   // Old parameters keep one float4 each, so existing materials read the same values.
   EXPECT_EQ(tint.slot, 0u);
   EXPECT_EQ(strength.slot, 4u);
-  EXPECT_EQ(albedo.type, shader_graph_parameter_type::texture_value);
+  EXPECT_EQ(albedo.type, shader_property_type::texture_value);
   EXPECT_EQ(albedo.slot, 0u);
 
   const auto node = [&](std::uint32_t id) { return *std::ranges::find(description->nodes, id, &shader_graph_node_description::id); };
@@ -66,10 +66,10 @@ TEST(shader_graph_properties_test, legacy_graph_migrates_to_properties_in_its_ol
 }
 
 TEST(shader_graph_properties_test, slots_stay_stable_and_references_unique) {
-  auto properties = std::vector<shader_graph_property>{};
+  auto properties = std::vector<shader_property>{};
 
-  const auto add = [&](const std::string& name, shader_graph_parameter_type type) {
-    auto property = shader_graph_property{};
+  const auto add = [&](const std::string& name, shader_property_type type) {
+    auto property = shader_property{};
     property.id = shader_graph_next_property_id(properties);
     property.name = name;
     property.reference = shader_graph_make_reference(name, properties);
@@ -78,9 +78,9 @@ TEST(shader_graph_properties_test, slots_stay_stable_and_references_unique) {
     properties.push_back(property);
   };
 
-  add("Base Color", shader_graph_parameter_type::color_value);
-  add("Base Color", shader_graph_parameter_type::float_value);
-  add("2nd map", shader_graph_parameter_type::texture_value);
+  add("Base Color", shader_property_type::color_value);
+  add("Base Color", shader_property_type::float_value);
+  add("2nd map", shader_property_type::texture_value);
 
   EXPECT_EQ(properties[0].reference, "_BaseColor");
   EXPECT_EQ(properties[1].reference, "_BaseColor_1");
@@ -93,20 +93,20 @@ TEST(shader_graph_properties_test, slots_stay_stable_and_references_unique) {
   // Deleting and reordering never moves a slot; the freed one is reused.
   properties.erase(properties.begin());
   std::ranges::reverse(properties);
-  EXPECT_EQ(std::ranges::find(properties, std::string{"_BaseColor_1"}, &shader_graph_property::reference)->slot, 4u);
+  EXPECT_EQ(std::ranges::find(properties, std::string{"_BaseColor_1"}, &shader_property::reference)->slot, 4u);
 
-  add("Roughness", shader_graph_parameter_type::float_value);
+  add("Roughness", shader_property_type::float_value);
   EXPECT_EQ(properties.back().slot, 0u);
 }
 
 TEST(shader_graph_properties_test, texture_property_feeds_sample_texture) {
   auto graph = shader_graph::create_info{};
 
-  auto property = shader_graph_property{};
+  auto property = shader_property{};
   property.id = 1u;
   property.name = "Albedo";
   property.reference = "_Albedo";
-  property.type = shader_graph_parameter_type::texture_value;
+  property.type = shader_property_type::texture_value;
   property.slot = 3u;
   graph.properties.push_back(property);
 
@@ -140,10 +140,10 @@ TEST(shader_graph_properties_test, texture_property_feeds_sample_texture) {
 }
 
 TEST(shader_graph_properties_test, values_pack_by_component_without_straddling_float4s) {
-  auto properties = std::vector<shader_graph_property>{};
+  auto properties = std::vector<shader_property>{};
 
-  const auto add = [&](shader_graph_parameter_type type) {
-    auto property = shader_graph_property{};
+  const auto add = [&](shader_property_type type) {
+    auto property = shader_property{};
     property.id = shader_graph_next_property_id(properties);
     property.type = type;
     property.slot = shader_graph_next_property_slot(properties, type);
@@ -151,32 +151,32 @@ TEST(shader_graph_properties_test, values_pack_by_component_without_straddling_f
     return property.slot;
   };
 
-  EXPECT_EQ(add(shader_graph_parameter_type::float_value), 0u);
-  EXPECT_EQ(add(shader_graph_parameter_type::vector2_value), 2u);
-  EXPECT_EQ(add(shader_graph_parameter_type::float_value), 1u);
-  EXPECT_EQ(add(shader_graph_parameter_type::vector3_value), 4u);
-  EXPECT_EQ(add(shader_graph_parameter_type::float_value), 7u);
-  EXPECT_EQ(add(shader_graph_parameter_type::color_value), 8u);
+  EXPECT_EQ(add(shader_property_type::float_value), 0u);
+  EXPECT_EQ(add(shader_property_type::vector2_value), 2u);
+  EXPECT_EQ(add(shader_property_type::float_value), 1u);
+  EXPECT_EQ(add(shader_property_type::vector3_value), 4u);
+  EXPECT_EQ(add(shader_property_type::float_value), 7u);
+  EXPECT_EQ(add(shader_property_type::color_value), 8u);
 
-  EXPECT_EQ(shader_graph_parameter_expression(shader_graph_parameter_type::vector2_value, 2u), "material.generic_params[0].zw");
-  EXPECT_EQ(shader_graph_parameter_expression(shader_graph_parameter_type::float_value, 7u), "material.generic_params[1].w");
-  EXPECT_EQ(shader_graph_parameter_expression(shader_graph_parameter_type::color_value, 8u), "material.generic_params[2]");
+  EXPECT_EQ(shader_graph_parameter_expression(shader_property_type::vector2_value, 2u), "material.generic_params[0].zw");
+  EXPECT_EQ(shader_graph_parameter_expression(shader_property_type::float_value, 7u), "material.generic_params[1].w");
+  EXPECT_EQ(shader_graph_parameter_expression(shader_property_type::color_value, 8u), "material.generic_params[2]");
 
   // Writing one packed value leaves its neighbours alone.
-  auto params = std::array<sbx::math::vector4, shader_graph_max_params>{};
+  auto params = std::array<sbx::math::vector4, material_max_params>{};
   params[0] = sbx::math::vector4{1.0f, 2.0f, 3.0f, 4.0f};
 
-  shader_graph_write_parameter(params, shader_graph_parameter_type::vector2_value, 2u, sbx::math::vector4{8.0f, 9.0f, 0.0f, 0.0f});
+  shader_property_write(params, shader_property_type::vector2_value, 2u, sbx::math::vector4{8.0f, 9.0f, 0.0f, 0.0f});
   EXPECT_EQ(params[0], (sbx::math::vector4{1.0f, 2.0f, 8.0f, 9.0f}));
-  EXPECT_EQ(shader_graph_read_parameter(params, shader_graph_parameter_type::float_value, 1u).x(), 2.0f);
+  EXPECT_EQ(shader_property_read(params, shader_property_type::float_value, 1u).x(), 2.0f);
 
   // 32 Floats fill the material exactly.
-  auto floats = std::vector<shader_graph_property>{};
+  auto floats = std::vector<shader_property>{};
 
-  for (auto index = 0u; index < shader_graph_max_param_components; ++index) {
-    ASSERT_TRUE(shader_graph_has_room_for(floats, shader_graph_parameter_type::float_value));
-    floats.push_back(shader_graph_property{.id = index + 1u, .type = shader_graph_parameter_type::float_value, .slot = shader_graph_next_property_slot(floats, shader_graph_parameter_type::float_value)});
+  for (auto index = 0u; index < material_max_param_components; ++index) {
+    ASSERT_TRUE(shader_graph_has_room_for(floats, shader_property_type::float_value));
+    floats.push_back(shader_property{.id = index + 1u, .type = shader_property_type::float_value, .slot = shader_graph_next_property_slot(floats, shader_property_type::float_value)});
   }
 
-  EXPECT_FALSE(shader_graph_has_room_for(floats, shader_graph_parameter_type::float_value));
+  EXPECT_FALSE(shader_graph_has_room_for(floats, shader_property_type::float_value));
 }

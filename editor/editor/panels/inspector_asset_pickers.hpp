@@ -57,8 +57,8 @@ auto draw_animation_graph_picker(editor_state& state, const char* popup_id, sbx:
 /** @brief An environment map (.hdr) picker for skybox.environment. */
 auto draw_environment_map_picker(editor_state& state, const char* popup_id, sbx::assets::environment_map_handle& slot) -> bool;
 
-/** @brief A shader graph picker with a button to open the graph editor. */
-auto draw_shader_graph_picker(editor_state& state, const char* popup_id, sbx::assets::shader_graph_handle& slot) -> bool;
+/** @brief A custom material's shader picker listing shader graphs and `.slang` shaders, with a button that opens a graph in the graph editor. */
+auto draw_shader_picker(editor_state& state, const char* popup_id, sbx::assets::material_shader& slot) -> bool;
 
 } // namespace editor
 

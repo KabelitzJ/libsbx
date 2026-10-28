@@ -29,14 +29,9 @@
 #include <libsbx/assets/asset_handle.hpp>
 #include <libsbx/assets/loadable.hpp>
 #include <libsbx/assets/texture2d.hpp>
+#include <libsbx/assets/shader_property.hpp>
 
 namespace sbx::assets {
-
-inline constexpr auto shader_graph_max_params = std::uint32_t{8u};
-inline constexpr auto shader_graph_max_textures = std::uint32_t{16u};
-
-// generic_params seen as one array of floats; value properties are packed into it by component.
-inline constexpr auto shader_graph_max_param_components = shader_graph_max_params * 4u;
 
 enum class shader_value_type : std::uint8_t {
   scalar,
@@ -654,18 +649,14 @@ enum class shader_node_category : std::uint8_t {
   }
 }
 
-using shader_graph_node_value = std::variant<std::monostate, std::float_t, math::vector2, math::vector3, math::vector4, math::color, texture2d_handle, std::string>;
-
-inline constexpr auto shader_graph_invalid_property_id = std::uint32_t{0u};
-
 struct shader_graph_node {
   std::uint32_t id{0u};
   shader_node_type type{shader_node_type::constant_float};
   math::vector2 editor_position{0.0f, 0.0f};
   std::string name{};
   bool preview{false};
-  shader_graph_node_value value{};
-  std::uint32_t property_id{shader_graph_invalid_property_id}; // property nodes only
+  shader_property_value value{};
+  std::uint32_t property_id{shader_property_invalid_id}; // property nodes only
 }; // struct shader_graph_node
 
 [[nodiscard]] inline auto shader_node_swizzle_pattern(const shader_graph_node& node) -> std::string {
@@ -771,135 +762,53 @@ struct shader_graph_edge {
   }
 }
 
-enum class shader_graph_parameter_type : std::uint8_t {
-  float_value,
-  vector2_value,
-  vector3_value,
-  vector4_value,
-  color_value,
-  texture_value
-}; // enum class shader_graph_parameter_type
-
-[[nodiscard]] inline auto shader_graph_parameter_type_to_string(shader_graph_parameter_type type) -> const char* {
+[[nodiscard]] inline auto shader_graph_parameter_value_type(shader_property_type type) -> shader_value_type {
   switch (type) {
-    case shader_graph_parameter_type::float_value: return "float";
-    case shader_graph_parameter_type::vector2_value: return "vector2";
-    case shader_graph_parameter_type::vector3_value: return "vector3";
-    case shader_graph_parameter_type::vector4_value: return "vector4";
-    case shader_graph_parameter_type::color_value: return "color";
-    case shader_graph_parameter_type::texture_value: return "texture2d";
-  }
-
-  return "float";
-}
-
-[[nodiscard]] inline auto shader_graph_parameter_type_from_string(std::string_view value) -> shader_graph_parameter_type {
-  if (value == "vector2") return shader_graph_parameter_type::vector2_value;
-  if (value == "vector3") return shader_graph_parameter_type::vector3_value;
-  if (value == "vector4") return shader_graph_parameter_type::vector4_value;
-  if (value == "color") return shader_graph_parameter_type::color_value;
-  if (value == "texture2d") return shader_graph_parameter_type::texture_value;
-  return shader_graph_parameter_type::float_value;
-}
-
-[[nodiscard]] inline auto shader_graph_parameter_value_type(shader_graph_parameter_type type) -> shader_value_type {
-  switch (type) {
-    case shader_graph_parameter_type::float_value: return shader_value_type::scalar;
-    case shader_graph_parameter_type::vector2_value: return shader_value_type::vector2;
-    case shader_graph_parameter_type::vector3_value: return shader_value_type::vector3;
-    case shader_graph_parameter_type::vector4_value: return shader_value_type::vector4;
-    case shader_graph_parameter_type::color_value: return shader_value_type::vector4;
-    case shader_graph_parameter_type::texture_value: return shader_value_type::texture2d;
+    case shader_property_type::float_value: return shader_value_type::scalar;
+    case shader_property_type::vector2_value: return shader_value_type::vector2;
+    case shader_property_type::vector3_value: return shader_value_type::vector3;
+    case shader_property_type::vector4_value: return shader_value_type::vector4;
+    case shader_property_type::color_value: return shader_value_type::vector4;
+    case shader_property_type::texture_value: return shader_value_type::texture2d;
   }
 
   return shader_value_type::scalar;
 }
 
-enum class shader_graph_float_mode : std::uint8_t {
-  plain,
-  slider
-}; // enum class shader_graph_float_mode
-
-/**
- * @brief A blackboard property: a named material input that property nodes read.
- *
- * For a texture, `slot` indexes generic_textures. For a value, it's a float offset into generic_params seen as one float array, packed:
- * a Float goes anywhere, a Vector2 at an even offset, everything else at a multiple of 4, so no value straddles two float4s.
- * Either is assigned once, when the property is created, and survives renames and reordering, since materials store their values by position.
- */
-struct shader_graph_property {
-  std::uint32_t id{shader_graph_invalid_property_id};
-  std::string name{};
-  std::string reference{};
-  shader_graph_parameter_type type{shader_graph_parameter_type::float_value};
-  shader_graph_node_value value{};
-  bool exposed{true};
-  std::uint32_t slot{0u};
-  shader_graph_float_mode float_mode{shader_graph_float_mode::plain};
-  math::vector2 slider_range{0.0f, 1.0f};
-  bool is_hdr{false};
-  bool is_linear{false};
-}; // struct shader_graph_property
-
-/** @brief One material input a graph reads: a property, or an inline Sample Texture whose Texture input is unconnected (property_id invalid, never exposed). `slot` as in shader_graph_property. */
+/** @brief One material input a graph reads: a property, or an inline Sample Texture whose Texture input is unconnected (property_id invalid, never exposed). `slot` as in shader_property. */
 struct shader_graph_parameter {
-  std::uint32_t property_id{shader_graph_invalid_property_id};
+  std::uint32_t property_id{shader_property_invalid_id};
   std::uint32_t node_id{0u};
   std::string name{};
   std::string reference{};
-  shader_graph_parameter_type type{shader_graph_parameter_type::float_value};
+  shader_property_type type{shader_property_type::float_value};
   std::uint32_t slot{0u};
   bool exposed{false};
-  shader_graph_node_value default_value{};
+  shader_property_value default_value{};
 }; // struct shader_graph_parameter
 
-[[nodiscard]] inline auto shader_graph_find_property(const std::vector<shader_graph_property>& properties, std::uint32_t id) -> memory::observer_ptr<const shader_graph_property> {
-  const auto entry = std::ranges::find(properties, id, &shader_graph_property::id);
-  return entry != properties.end() ? memory::make_observer(*entry) : memory::observer_ptr<const shader_graph_property>{};
+[[nodiscard]] inline auto shader_graph_find_property(const std::vector<shader_property>& properties, std::uint32_t id) -> memory::observer_ptr<const shader_property> {
+  const auto entry = std::ranges::find(properties, id, &shader_property::id);
+  return entry != properties.end() ? memory::make_observer(*entry) : memory::observer_ptr<const shader_property>{};
 }
 
-/** @brief How many generic_params floats a value of @p type takes; 0 for textures. */
-[[nodiscard]] inline auto shader_graph_parameter_component_count(shader_graph_parameter_type type) -> std::uint32_t {
+[[nodiscard]] inline auto shader_graph_parameter_alignment(shader_property_type type) -> std::uint32_t {
   switch (type) {
-    case shader_graph_parameter_type::float_value: return 1u;
-    case shader_graph_parameter_type::vector2_value: return 2u;
-    case shader_graph_parameter_type::vector3_value: return 3u;
-    case shader_graph_parameter_type::vector4_value: return 4u;
-    case shader_graph_parameter_type::color_value: return 4u;
-    case shader_graph_parameter_type::texture_value: return 0u;
-  }
-
-  return 1u;
-}
-
-[[nodiscard]] inline auto shader_graph_parameter_alignment(shader_graph_parameter_type type) -> std::uint32_t {
-  switch (type) {
-    case shader_graph_parameter_type::float_value: return 1u;
-    case shader_graph_parameter_type::vector2_value: return 2u;
+    case shader_property_type::float_value: return 1u;
+    case shader_property_type::vector2_value: return 2u;
     default: return 4u;
   }
-}
-
-/** @brief Which generic_params floats @p property occupies, as a bit mask (bit i = float i); 0 for textures. */
-[[nodiscard]] inline auto shader_graph_property_component_mask(shader_graph_parameter_type type, std::uint32_t slot) -> std::uint64_t {
-  const auto count = shader_graph_parameter_component_count(type);
-  // Out-of-range slots (a hand-edited file) occupy nothing here; codegen validation rejects them.
-  if (count == 0u || slot + count > 64u) {
-    return 0u;
-  }
-
-  return ((std::uint64_t{1u} << count) - 1u) << slot;
 }
 
 /**
  * @brief Where a new @p type property goes: the lowest free texture slot, or the lowest aligned float offset whose components are all free.
  *
- * At or past the budget (shader_graph_max_textures / shader_graph_max_param_components) when the graph is full.
+ * At or past the budget (material_max_textures / material_max_param_components) when the graph is full.
  */
-[[nodiscard]] inline auto shader_graph_next_property_slot(const std::vector<shader_graph_property>& properties, shader_graph_parameter_type type) -> std::uint32_t {
-  if (type == shader_graph_parameter_type::texture_value) {
+[[nodiscard]] inline auto shader_graph_next_property_slot(const std::vector<shader_property>& properties, shader_property_type type) -> std::uint32_t {
+  if (type == shader_property_type::texture_value) {
     for (auto slot = std::uint32_t{0u}; ; ++slot) {
-      const auto taken = std::ranges::any_of(properties, [slot](const auto& property) { return property.type == shader_graph_parameter_type::texture_value && property.slot == slot; });
+      const auto taken = std::ranges::any_of(properties, [slot](const auto& property) { return property.type == shader_property_type::texture_value && property.slot == slot; });
 
       if (!taken) {
         return slot;
@@ -910,28 +819,28 @@ struct shader_graph_parameter {
   auto used = std::uint64_t{0u};
 
   for (const auto& property : properties) {
-    used |= shader_graph_property_component_mask(property.type, property.slot);
+    used |= shader_property_component_mask(property.type, property.slot);
   }
 
   const auto alignment = shader_graph_parameter_alignment(type);
 
   for (auto offset = std::uint32_t{0u}; ; offset += alignment) {
-    if ((shader_graph_property_component_mask(type, offset) & used) == 0u) {
+    if ((shader_property_component_mask(type, offset) & used) == 0u) {
       return offset;
     }
   }
 }
 
 /** @brief Whether a new @p type property still fits the material's budget. */
-[[nodiscard]] inline auto shader_graph_has_room_for(const std::vector<shader_graph_property>& properties, shader_graph_parameter_type type) -> bool {
+[[nodiscard]] inline auto shader_graph_has_room_for(const std::vector<shader_property>& properties, shader_property_type type) -> bool {
   const auto slot = shader_graph_next_property_slot(properties, type);
 
-  return type == shader_graph_parameter_type::texture_value
-    ? slot < shader_graph_max_textures
-    : slot + shader_graph_parameter_component_count(type) <= shader_graph_max_param_components;
+  return type == shader_property_type::texture_value
+    ? slot < material_max_textures
+    : slot + shader_property_component_count(type) <= material_max_param_components;
 }
 
-[[nodiscard]] inline auto shader_graph_next_property_id(const std::vector<shader_graph_property>& properties) -> std::uint32_t {
+[[nodiscard]] inline auto shader_graph_next_property_id(const std::vector<shader_property>& properties) -> std::uint32_t {
   auto next = std::uint32_t{1u};
 
   for (const auto& property : properties) {
@@ -942,7 +851,7 @@ struct shader_graph_parameter {
 }
 
 /** @brief A unique reference name derived from @p name, Unity-style: "Base Color" -> "_BaseColor", "_BaseColor_1" if taken. */
-[[nodiscard]] inline auto shader_graph_make_reference(std::string_view name, const std::vector<shader_graph_property>& properties, std::uint32_t ignored_id = shader_graph_invalid_property_id) -> std::string {
+[[nodiscard]] inline auto shader_graph_make_reference(std::string_view name, const std::vector<shader_property>& properties, std::uint32_t ignored_id = shader_property_invalid_id) -> std::string {
   auto base = std::string{"_"};
   auto capitalize = true;
 
@@ -981,8 +890,8 @@ struct shader_graph_parameter {
 }
 
 /** @brief The Slang expression reading a value property's packed components out of `material.generic_params`. */
-[[nodiscard]] inline auto shader_graph_parameter_expression(shader_graph_parameter_type type, std::uint32_t slot) -> std::string {
-  const auto count = shader_graph_parameter_component_count(type);
+[[nodiscard]] inline auto shader_graph_parameter_expression(shader_property_type type, std::uint32_t slot) -> std::string {
+  const auto count = shader_property_component_count(type);
 
   if (count == 4u) {
     return fmt::format("material.generic_params[{}]", slot / 4u);
@@ -991,52 +900,12 @@ struct shader_graph_parameter {
   return fmt::format("material.generic_params[{}].{}", slot / 4u, std::string_view{"xyzw"}.substr(slot % 4u, count));
 }
 
-[[nodiscard]] inline auto shader_graph_value_to_vector4(const shader_graph_node_value& value) -> math::vector4 {
-  return std::visit([]<typename T>(const T& entry) -> math::vector4 {
-    if constexpr (std::is_same_v<T, std::float_t>) return math::vector4{entry, 0.0f, 0.0f, 0.0f};
-    else if constexpr (std::is_same_v<T, math::vector2>) return math::vector4{entry.x(), entry.y(), 0.0f, 0.0f};
-    else if constexpr (std::is_same_v<T, math::vector3>) return math::vector4{entry.x(), entry.y(), entry.z(), 0.0f};
-    else if constexpr (std::is_same_v<T, math::vector4>) return entry;
-    else if constexpr (std::is_same_v<T, math::color>) return math::vector4{entry.r(), entry.g(), entry.b(), entry.a()};
-    else return math::vector4{0.0f, 0.0f, 0.0f, 0.0f};
-  }, value);
-}
-
-/** @brief Writes the first component_count(@p type) components of @p value at float offset @p slot of @p params, leaving the floats around it alone. */
-inline auto shader_graph_write_parameter(std::span<math::vector4> params, shader_graph_parameter_type type, std::uint32_t slot, const math::vector4& value) -> void {
-  const auto count = shader_graph_parameter_component_count(type);
-
-  for (auto component = std::uint32_t{0u}; component < count; ++component) {
-    const auto offset = slot + component;
-
-    if (offset < params.size() * 4u) {
-      params[offset / 4u][offset % 4u] = value[component];
-    }
-  }
-}
-
-/** @brief The inverse of shader_graph_write_parameter; components past the type's width read 0. */
-[[nodiscard]] inline auto shader_graph_read_parameter(std::span<const math::vector4> params, shader_graph_parameter_type type, std::uint32_t slot) -> math::vector4 {
-  auto result = math::vector4{0.0f, 0.0f, 0.0f, 0.0f};
-  const auto count = shader_graph_parameter_component_count(type);
-
-  for (auto component = std::uint32_t{0u}; component < count; ++component) {
-    const auto offset = slot + component;
-
-    if (offset < params.size() * 4u) {
-      result[component] = params[offset / 4u][offset % 4u];
-    }
-  }
-
-  return result;
-}
-
 /**
  * @brief Every material slot the graph reads: all properties (by slot), then inline Sample Texture nodes on the texture slots no property uses, in node id order.
  *
  * Inline slots aren't stable, which is fine: they're never exposed, and asset_residency fills them from the graph's own default.
  */
-[[nodiscard]] inline auto compute_shader_graph_parameters(const std::vector<shader_graph_property>& properties, const std::vector<shader_graph_node>& nodes, const std::vector<shader_graph_edge>& edges) -> std::vector<shader_graph_parameter> {
+[[nodiscard]] inline auto compute_shader_graph_parameters(const std::vector<shader_property>& properties, const std::vector<shader_graph_node>& nodes, const std::vector<shader_graph_edge>& edges) -> std::vector<shader_graph_parameter> {
   auto result = std::vector<shader_graph_parameter>{};
   result.reserve(properties.size());
 
@@ -1059,11 +928,11 @@ inline auto shader_graph_write_parameter(std::span<math::vector4> params, shader
   auto slot = std::uint32_t{0u};
 
   for (const auto& node : inline_samples) {
-    while (std::ranges::any_of(properties, [slot](const auto& property) { return property.type == shader_graph_parameter_type::texture_value && property.slot == slot; })) {
+    while (std::ranges::any_of(properties, [slot](const auto& property) { return property.type == shader_property_type::texture_value && property.slot == slot; })) {
       ++slot;
     }
 
-    result.push_back(shader_graph_parameter{shader_graph_invalid_property_id, node->id, node->name, std::string{}, shader_graph_parameter_type::texture_value, slot++, false, node->value});
+    result.push_back(shader_graph_parameter{shader_property_invalid_id, node->id, node->name, std::string{}, shader_property_type::texture_value, slot++, false, node->value});
   }
 
   return result;
@@ -1073,7 +942,7 @@ class shader_graph_type_resolver {
 
 public:
 
-  shader_graph_type_resolver(const std::vector<shader_graph_property>& properties, const std::vector<shader_graph_node>& nodes, const std::vector<shader_graph_edge>& edges)
+  shader_graph_type_resolver(const std::vector<shader_property>& properties, const std::vector<shader_graph_node>& nodes, const std::vector<shader_graph_edge>& edges)
   : _properties{memory::make_observer(properties)} {
     for (const auto& node : nodes) {
       _nodes_by_id.emplace(node.id, &node);
@@ -1251,7 +1120,7 @@ private:
     }
   }
 
-  memory::observer_ptr<const std::vector<shader_graph_property>> _properties{};
+  memory::observer_ptr<const std::vector<shader_property>> _properties{};
   std::unordered_map<std::uint32_t, const shader_graph_node*> _nodes_by_id{};
   std::unordered_map<std::uint64_t, std::uint64_t> _incoming{};
   std::unordered_map<std::uint64_t, std::optional<shader_value_type>> _memo{};
@@ -1267,7 +1136,7 @@ public:
 
   struct create_info {
     std::string name{"shader_graph"};
-    std::vector<shader_graph_property> properties{};
+    std::vector<shader_property> properties{};
     std::vector<shader_graph_node> nodes{};
     std::vector<shader_graph_edge> edges{};
   }; // struct create_info
@@ -1292,7 +1161,7 @@ public:
     return _name;
   }
 
-  [[nodiscard]] auto properties() const noexcept -> const std::vector<shader_graph_property>& {
+  [[nodiscard]] auto properties() const noexcept -> const std::vector<shader_property>& {
     return _properties;
   }
 
@@ -1321,7 +1190,7 @@ public:
 private:
 
   std::string _name{"shader_graph"};
-  std::vector<shader_graph_property> _properties{};
+  std::vector<shader_property> _properties{};
   std::vector<shader_graph_node> _nodes{};
   std::vector<shader_graph_edge> _edges{};
   math::uuid _id{math::uuid::nil()};
@@ -1330,23 +1199,23 @@ private:
 
 using shader_graph_handle = asset_handle<shader_graph>;
 
-[[nodiscard]] inline auto shader_graph_default_generic_params(const shader_graph& graph) -> std::array<math::vector4, shader_graph_max_params> {
-  auto result = std::array<math::vector4, shader_graph_max_params>{};
+[[nodiscard]] inline auto shader_graph_default_generic_params(const shader_graph& graph) -> std::array<math::vector4, material_max_params> {
+  auto result = std::array<math::vector4, material_max_params>{};
 
   for (const auto& parameter : graph.parameters()) {
-    if (parameter.type != shader_graph_parameter_type::texture_value) {
-      shader_graph_write_parameter(result, parameter.type, parameter.slot, shader_graph_value_to_vector4(parameter.default_value));
+    if (parameter.type != shader_property_type::texture_value) {
+      shader_property_write(result, parameter.type, parameter.slot, shader_property_value_to_vector4(parameter.default_value));
     }
   }
 
   return result;
 }
 
-[[nodiscard]] inline auto shader_graph_default_generic_textures(const shader_graph& graph) -> std::array<texture2d_handle, shader_graph_max_textures> {
-  auto result = std::array<texture2d_handle, shader_graph_max_textures>{};
+[[nodiscard]] inline auto shader_graph_default_generic_textures(const shader_graph& graph) -> std::array<texture2d_handle, material_max_textures> {
+  auto result = std::array<texture2d_handle, material_max_textures>{};
 
   for (const auto& parameter : graph.parameters()) {
-    if (parameter.type == shader_graph_parameter_type::texture_value && parameter.slot < result.size() && std::holds_alternative<texture2d_handle>(parameter.default_value)) {
+    if (parameter.type == shader_property_type::texture_value && parameter.slot < result.size() && std::holds_alternative<texture2d_handle>(parameter.default_value)) {
       result[parameter.slot] = std::get<texture2d_handle>(parameter.default_value);
     }
   }

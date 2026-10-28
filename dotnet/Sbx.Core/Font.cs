@@ -26,8 +26,9 @@ namespace Sbx.Core
   /**
    * A TTF font as the engine cooks it: a single-channel SDF atlas (0.5 = glyph edge) plus glyph
    * metrics, codepoints 32..255 -- for scripts that lay text out themselves (e.g. text along a curve
-   * in the world) instead of through UIText. Bind the atlas with Material.SetGenericTexture(int,
-   * Font). A shared, cached asset like Texture2D.Load's; nothing to dispose.
+   * in the world) instead of through UIText. Bind the atlas with Material.SetTexture(string, Font)
+   * (or SetGenericTexture(int, Font) for a shader without properties). A shared, cached asset like
+   * Texture2D.Load's; nothing to dispose.
    */
   public sealed class Font : Managed.INativeHandle
   {

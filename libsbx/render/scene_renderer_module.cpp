@@ -1360,8 +1360,9 @@ auto scene_renderer_module::_build_graph() -> void {
   _graph.add_pass<transparent_accumulate_pass>(_sample_count);
   _graph.add_pass<particle_simulate_pass>(*_particle_pool_additive, *_particle_pool_alpha_blend);
   _graph.add_pass<particle_pass>(_sample_count);
-  _graph.add_pass<transparent_resolve_pass>();
   _graph.add_pass<canvas_world_pass>(_sample_count);
+  // After every MSAA pass: they resolve color_msaa over color, which would erase the transparents this composites into color.
+  _graph.add_pass<transparent_resolve_pass>();
   _graph.add_pass<bloom_pass>();
   _graph.add_pass<tonemap_pass>();
   _graph.add_pass<fxaa_pass>();

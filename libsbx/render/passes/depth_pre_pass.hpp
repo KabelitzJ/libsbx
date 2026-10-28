@@ -39,7 +39,7 @@ private:
   // Uses depth_vertex_main/depth_fragment_main, always generated so displaced geometry matches its color pass.
   auto _copy_scene_depth(render_context& context) -> void;
 
-  [[nodiscard]] auto _resolve_custom_pipeline(const std::string& shader_path, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
+  [[nodiscard]] auto _resolve_custom_pipeline(const material_shader_source& source, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u> _pipelines{};
 

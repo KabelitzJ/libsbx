@@ -87,6 +87,15 @@ auto asset_watcher::update(editor_state& state) -> void {
       continue;
     }
 
+    // The editor never writes .slang files, so a change is always an outside edit.
+    if (type == sbx::assets::asset_type::shader) {
+      if (const auto id = assets_module.find(path); id != sbx::math::uuid::nil()) {
+        assets_module.reimport(id);
+      }
+
+      continue;
+    }
+
     // ponytail: only sources with an importer hot-reload; editor-native YAML assets (materials, graphs, prefabs, scenes) are rewritten by the editor's own saves, so reloading them here would need self-write suppression first.
     if (sbx::assets::has_import_settings(type)) {
       if (const auto id = assets_module.find(path); id != sbx::math::uuid::nil()) {

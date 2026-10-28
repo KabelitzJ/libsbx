@@ -3,6 +3,7 @@
 #include <editor/panels/inspector_asset_pickers.hpp>
 
 #include <filesystem>
+#include <variant>
 
 #include <fmt/format.h>
 
@@ -331,15 +332,27 @@ auto draw_environment_map_picker(editor_state& state, const char* popup_id, sbx:
   return result.changed;
 }
 
-auto draw_shader_graph_picker(editor_state& state, const char* popup_id, sbx::assets::shader_graph_handle& slot) -> bool {
+auto draw_shader_picker(editor_state& state, const char* popup_id, sbx::assets::material_shader& slot) -> bool {
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
-  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::asset_picker_item{};
+  const auto* graph = std::get_if<sbx::assets::shader_graph_handle>(&slot);
+  const auto* code = std::get_if<sbx::assets::shader_handle>(&slot);
+
+  auto current_id = sbx::math::uuid::nil();
+
+  if (graph != nullptr && graph->is_valid()) {
+    current_id = (*graph)->id();
+  } else if (code != nullptr && code->is_valid()) {
+    current_id = (*code)->id();
+  }
+
+  const auto current = current_id != sbx::math::uuid::nil() ? to_picker_item(assets_module, current_id) : sbx::render::asset_picker_item{};
 
   const auto options = sbx::render::asset_picker_options{
     .kind = sbx::assets::asset_type::shader_graph,
+    .alternate_kind = sbx::assets::asset_type::shader,
     .allow_none = true,
-    .show_edit_button = true,
+    .show_edit_button = graph != nullptr && graph->is_valid(),
     .show_reveal_button = true,
     .width = ImGui::CalcItemWidth(),
   };
@@ -347,17 +360,21 @@ auto draw_shader_graph_picker(editor_state& state, const char* popup_id, sbx::as
   const auto result = sbx::render::draw_asset_picker(popup_id, current, {}, options);
 
   if (result.cleared) {
-    slot = sbx::assets::shader_graph_handle{};
+    slot = std::monostate{};
   } else if (result.changed) {
-    slot = assets_module.load_shader_graph(result.picked.path);
+    if (sbx::assets::asset_type_of(result.picked.path) == sbx::assets::asset_type::shader_graph) {
+      slot = assets_module.load_shader_graph(result.picked.path);
+    } else {
+      slot = assets_module.load_shader(result.picked.path);
+    }
   }
 
-  if (result.edit_requested && slot.is_valid()) {
-    state.request_open_shader_graph_editor(slot->id(), relative_asset_path(assets_module, slot->id()));
+  if (result.edit_requested && graph != nullptr && graph->is_valid()) {
+    state.request_open_shader_graph_editor((*graph)->id(), relative_asset_path(assets_module, (*graph)->id()));
   }
 
-  if (result.reveal_requested && slot.is_valid()) {
-    state.request_reveal_in_browser(relative_asset_path(assets_module, slot->id()));
+  if (result.reveal_requested && current_id != sbx::math::uuid::nil()) {
+    state.request_reveal_in_browser(relative_asset_path(assets_module, current_id));
   }
 
   return result.changed;

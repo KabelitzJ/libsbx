@@ -8,8 +8,8 @@
 
 static const uint shadow_cascade_count = 4;
 
-static const uint shader_graph_max_params = 8;
-static const uint shader_graph_max_textures = 16;
+static const uint material_max_params = 8;
+static const uint material_max_textures = 16;
 
 struct vertex {
   float3 position;
@@ -52,8 +52,8 @@ struct material_data {
   float ior;
   float2 uv_tiling;
   float2 uv_offset;
-  float4 generic_params[shader_graph_max_params];
-  uint generic_textures[shader_graph_max_textures];
+  float4 generic_params[material_max_params];
+  uint generic_textures[material_max_textures];
 }; // struct material_data
 
 float2 apply_uv_transform(material_data material, float2 uv) {

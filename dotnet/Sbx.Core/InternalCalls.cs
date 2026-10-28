@@ -227,6 +227,8 @@ namespace Sbx.Core
     internal static delegate* unmanaged<ulong, NativeString, bool> Material_HasProperty;
     internal static delegate* unmanaged<ulong, NativeString, float, float, float, float, bool> Material_SetProperty;
     internal static delegate* unmanaged<ulong, NativeString, ulong, bool> Material_SetPropertyTexture;
+    internal static delegate* unmanaged<ulong, NativeString, ulong, bool> Material_SetPropertyTextureArray;
+    internal static delegate* unmanaged<ulong, NativeString, ulong, bool> Material_SetPropertyFont;
     internal static delegate* unmanaged<ulong, void> Material_Release;
     internal static delegate* unmanaged<ulong, bool> Material_IsLoaded;
     internal static delegate* unmanaged<NativeString> Project_GetAssetsDirectory;

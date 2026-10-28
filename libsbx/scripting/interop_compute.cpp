@@ -6,8 +6,11 @@
 #include <cstring>
 #include <filesystem>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
+
+#include <fmt/format.h>
 
 #include <libsbx/utility/logger.hpp>
 
@@ -201,12 +204,22 @@ auto interop::compute_buffer_release(std::uint64_t id) -> void {
 }
 
 auto interop::compute_shader_load(managed::string path) -> std::uint64_t {
-  const auto resolved = core::engine::project().assets_directory() / std::filesystem::path{std::string{path}};
+  const auto relative = std::filesystem::path{std::string{path}};
 
-  if (!std::filesystem::exists(resolved)) {
-    utility::logger<"scripting">::error("compute_shader_load: '{}' does not exist", resolved.string());
+  if (!std::filesystem::exists(core::engine::project().assets_directory() / relative)) {
+    utility::logger<"scripting">::error("compute_shader_load: '{}' does not exist", relative.generic_string());
     return 0u;
   }
+
+  // Through the asset so the file is tracked by uuid like any other shader.
+  const auto asset = core::engine::get_module<assets::assets_module>().load_shader(relative);
+
+  if (!asset.is_valid() || asset->kind() != assets::shader_kind::compute) {
+    utility::logger<"scripting">::error("compute_shader_load: '{}' is not a compute shader (it needs a compute_main entry point){}", relative.generic_string(), asset.is_valid() && !asset->error().empty() ? fmt::format(":\n{}", asset->error()) : std::string{});
+    return 0u;
+  }
+
+  const auto resolved = asset->path();
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 

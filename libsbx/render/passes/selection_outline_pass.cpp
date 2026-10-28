@@ -173,7 +173,7 @@ auto selection_outline_pass::execute(render_context& context, std::uint32_t grou
 
   if (group == mask_group) {
     // Custom-shader materials outline their undisplaced mesh.
-    submit_draw_commands(context, context.packet->selected_commands, _mask_pipelines, 0xFFFFFFFFu, [this](const std::string& /*shader_path*/, bool is_double_sided) {
+    submit_draw_commands(context, context.packet->selected_commands, _mask_pipelines, 0xFFFFFFFFu, [this](const material_shader_source& /*source*/, bool is_double_sided) {
       return _mask_pipelines[is_double_sided ? 1u : 0u];
     });
 

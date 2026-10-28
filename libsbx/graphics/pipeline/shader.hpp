@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <vulkan/vulkan.h>
@@ -32,7 +33,7 @@ public:
     std::string entry_point;
   }; // struct stage
 
-  shader(const std::filesystem::path& path, std::span<const shader_compiler::entry_point_request> entry_points, id_type id);
+  shader(const std::filesystem::path& path, std::span<const shader_compiler::entry_point_request> entry_points, id_type id, std::string_view material_loader = {});
 
   /**
    * @brief Wraps already-compiled SPIR-V directly into VkShaderModules -- no shader_compiler

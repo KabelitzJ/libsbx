@@ -55,8 +55,8 @@ struct shader_graph_preview_material_data {
   std::float_t ior{0.0f};
   sbx::math::vector2 uv_tiling{1.0f, 1.0f};
   sbx::math::vector2 uv_offset{0.0f, 0.0f};
-  std::array<sbx::math::vector4, sbx::assets::shader_graph_max_params> generic_params{};
-  std::array<std::uint32_t, sbx::assets::shader_graph_max_textures> generic_textures{};
+  std::array<sbx::math::vector4, sbx::assets::material_max_params> generic_params{};
+  std::array<std::uint32_t, sbx::assets::material_max_textures> generic_textures{};
 
   auto operator==(const shader_graph_preview_material_data&) const -> bool = default;
 }; // struct shader_graph_preview_material_data

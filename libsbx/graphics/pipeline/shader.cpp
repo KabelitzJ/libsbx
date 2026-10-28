@@ -9,14 +9,14 @@
 
 namespace sbx::graphics {
 
-shader::shader(const std::filesystem::path& path, std::span<const shader_compiler::entry_point_request> entry_points, id_type id)
+shader::shader(const std::filesystem::path& path, std::span<const shader_compiler::entry_point_request> entry_points, id_type id, std::string_view material_loader)
 : _id{id} {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& logical_device = graphics_module.logical_device();
   auto& compiler = graphics_module.shader_compiler();
 
-  auto compiled = compiler.compile(path, entry_points);
+  auto compiled = compiler.compile(path, entry_points, material_loader);
 
   _stages.reserve(compiled.size());
 

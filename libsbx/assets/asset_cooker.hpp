@@ -35,7 +35,7 @@ inline constexpr auto texture_cook_version = std::uint32_t{1u};
 inline constexpr auto font_cook_version = std::uint32_t{1u};
 inline constexpr auto audio_clip_cook_version = std::uint32_t{1u};
 inline constexpr auto environment_cook_version = std::uint32_t{1u};
-inline constexpr auto material_cook_version = std::uint32_t{6u};
+inline constexpr auto material_cook_version = std::uint32_t{7u};
 inline constexpr auto skeleton_cook_version = std::uint32_t{1u};
 inline constexpr auto animation_cook_version = std::uint32_t{1u};
 inline constexpr auto mesh_cook_version = std::uint32_t{11u};
@@ -147,16 +147,13 @@ struct material_description {
   std::string occlusion{};
   std::string emissive{};
 
-  // Path to a `.shadergraph` (empty = built-in shading). Not part of the cooked binary format.
-  std::string shader_graph{};
-  std::array<math::vector4, shader_graph_max_params> generic_params{};
-  std::array<std::string, shader_graph_max_textures> generic_texture_paths{};
+  // Path to a `.shadergraph` or `.slang` for shading_model::custom (empty = none). Not part of the cooked binary format.
+  std::string shader{};
+  std::array<math::vector4, material_max_params> generic_params{};
+  std::array<std::string, material_max_textures> generic_texture_paths{};
 
   // Per generic texture slot: load as linear instead of sRGB, for data like normal maps or masks.
-  std::array<bool, shader_graph_max_textures> generic_texture_linear{};
-
-  // Path to a hand-written `.slang` for shading_model::shader_code. Not part of the cooked binary format.
-  std::string shader_code{};
+  std::array<bool, material_max_textures> generic_texture_linear{};
 }; // struct material_description
 
 /** @brief A particle emitter's fields with assets-relative paths instead of handles, resolved by asset_residency when finalizing. */
@@ -209,7 +206,7 @@ struct particle_effect_description {
   std::vector<particle_emitter_description> emitters{};
 }; // struct particle_effect_description
 
-/** @brief shader_graph_node_value with a texture path instead of a handle, resolved by asset_residency when finalizing. */
+/** @brief shader_property_value with a texture path instead of a handle, resolved by asset_residency when finalizing. */
 using shader_graph_node_value_description = std::variant<std::monostate, std::float_t, math::vector2, math::vector3, math::vector4, math::color, std::string>;
 
 struct shader_graph_node_description {
@@ -220,12 +217,12 @@ struct shader_graph_node_description {
   bool exposed{false}; // only read to migrate graphs saved before blackboard properties
   bool preview{false};
   shader_graph_node_value_description value{};
-  std::uint32_t property_id{shader_graph_invalid_property_id};
+  std::uint32_t property_id{shader_property_invalid_id};
 }; // struct shader_graph_node_description
 
 /** @brief A property whose texture default is still a path; property.value stays empty for textures. */
 struct shader_graph_property_description {
-  shader_graph_property property{};
+  shader_property property{};
   std::string texture_path{};
 }; // struct shader_graph_property_description
 

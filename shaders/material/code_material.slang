@@ -7,8 +7,8 @@
 
 // The entry points every pass requests from a custom-shader material (vertex_main/fragment_main
 // for the opaque/transparent passes, depth_vertex_main/depth_fragment_main for depth-pre and
-// shadows -- see render_pass.hpp's custom_pipeline_resolver), for a shading_model::shader_code
-// material to include instead of writing them itself. The including file defines just
+// shadows -- see render_pass.hpp's custom_pipeline_resolver), for a code shader
+// to include instead of writing them itself. The including file defines just
 //
 //   lighting_output material_fragment<let ReceivesShadows : bool>(material_context context)
 //

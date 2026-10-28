@@ -61,9 +61,9 @@ static auto validate_shader_graph_parameters(const shader_graph::create_info& gr
 
   // The only place the budget and packing are enforced; an out-of-range slot would index past generic_params/generic_textures on the GPU.
   for (const auto& parameter : compute_shader_graph_parameters(graph.properties, graph.nodes, graph.edges)) {
-    if (parameter.type == shader_graph_parameter_type::texture_value) {
-      if (parameter.slot >= shader_graph_max_textures) {
-        return fmt::format("graph uses more than {} textures (properties plus unconnected Sample Texture nodes)", shader_graph_max_textures);
+    if (parameter.type == shader_property_type::texture_value) {
+      if (parameter.slot >= material_max_textures) {
+        return fmt::format("graph uses more than {} textures (properties plus unconnected Sample Texture nodes)", material_max_textures);
       }
 
       if (!used_texture_slots.insert(parameter.slot).second) {
@@ -73,17 +73,17 @@ static auto validate_shader_graph_parameters(const shader_graph::create_info& gr
       continue;
     }
 
-    const auto count = shader_graph_parameter_component_count(parameter.type);
+    const auto count = shader_property_component_count(parameter.type);
 
-    if (parameter.slot + count > shader_graph_max_param_components) {
-      return fmt::format("graph's properties need more than the {} floats a material holds", shader_graph_max_param_components);
+    if (parameter.slot + count > material_max_param_components) {
+      return fmt::format("graph's properties need more than the {} floats a material holds", material_max_param_components);
     }
 
     if (parameter.slot % shader_graph_parameter_alignment(parameter.type) != 0u) {
       return fmt::format("property '{}' is at float offset {}, which isn't aligned for its type", parameter.name, parameter.slot);
     }
 
-    const auto mask = shader_graph_property_component_mask(parameter.type, parameter.slot);
+    const auto mask = shader_property_component_mask(parameter.type, parameter.slot);
 
     if ((used_components & mask) != 0u) {
       return fmt::format("property '{}' overlaps another property's floats", parameter.name);
@@ -202,7 +202,7 @@ public:
     }
 
     for (const auto& parameter : compute_shader_graph_parameters(graph.properties, graph.nodes, graph.edges)) {
-      if (parameter.property_id == shader_graph_invalid_property_id) {
+      if (parameter.property_id == shader_property_invalid_id) {
         _inline_texture_slot_of.emplace(parameter.node_id, parameter.slot);
       }
     }
@@ -421,7 +421,7 @@ private:
           return {"0.0", "float"};
         }
 
-        if (property->type == shader_graph_parameter_type::texture_value) {
+        if (property->type == shader_property_type::texture_value) {
           return {fmt::format("material.generic_textures[{}]", property->slot), "texture2d"};
         }
 
@@ -598,7 +598,7 @@ private:
   }
 
   codegen_context _context;
-  memory::observer_ptr<const std::vector<shader_graph_property>> _properties;
+  memory::observer_ptr<const std::vector<shader_property>> _properties;
   std::string _sampler_index_expression;
   std::string _time_expression;
   std::string _delta_time_expression;

@@ -24,6 +24,7 @@ auto drag_payload_type_for(assets::asset_type type) -> const char* {
     case assets::asset_type::particle_effect: return drag_drop_payload_particle_effect;
     case assets::asset_type::animation_graph: return drag_drop_payload_animation_graph;
     case assets::asset_type::shader_graph: return drag_drop_payload_shader_graph;
+    case assets::asset_type::shader: return drag_drop_payload_shader;
     case assets::asset_type::font: return drag_drop_payload_font;
     case assets::asset_type::audio_clip: return drag_drop_payload_audio_clip;
     case assets::asset_type::scene: return drag_drop_payload_scene;
@@ -46,6 +47,7 @@ auto icon_for(assets::asset_type type) -> const char* {
     case assets::asset_type::prefab: return ICON_MDI_CUBE_SCAN;
     case assets::asset_type::scene: return ICON_MDI_FILE_TREE;
     case assets::asset_type::script: return ICON_MDI_FILE_CODE_OUTLINE;
+    case assets::asset_type::shader: return ICON_MDI_CODE_BRACES;
     case assets::asset_type::unknown: return ICON_MDI_FILE_OUTLINE;
   }
 

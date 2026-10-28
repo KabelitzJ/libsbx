@@ -3,11 +3,16 @@
 #ifndef LIBSBX_GRAPHICS_PIPELINE_SHADER_COMPILER_HPP_
 #define LIBSBX_GRAPHICS_PIPELINE_SHADER_COMPILER_HPP_
 
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
+#include <unordered_map>
+#include <variant>
 #include <vector>
 
 #include <vulkan/vulkan.h>
@@ -77,11 +82,50 @@ public:
     std::vector<push_constant_field> fields{};
   }; // struct push_constant_layout
 
+  /** @brief A user attribute on a struct field, e.g. `[Range(0, 1)]`. Named without the `Attribute` suffix; integer arguments read as floats. */
+  struct reflected_attribute {
+    std::string name;
+    std::vector<std::variant<std::float_t, std::string>> arguments;
+  }; // struct reflected_attribute
+
+  /** @brief One field of a reflected struct, in declaration order. */
+  struct reflected_field {
+    enum class kind : std::uint8_t {
+      float_vector, // float, float2, float3 or float4
+      texture2d,
+      texture2d_array,
+      structure,
+      other
+    }; // enum class kind
+
+    std::string name;
+    kind type{kind::other};
+    std::uint32_t component_count{0u}; // float_vector only
+    std::string type_name;             // Slang's name for the type, e.g. "float4"
+    std::vector<reflected_attribute> attributes;
+  }; // struct reflected_field
+
+  struct module_reflection {
+    std::vector<std::string> entry_points;
+    std::unordered_map<std::string, std::vector<reflected_field>> structs;
+  }; // struct module_reflection
+
   shader_compiler();
 
   ~shader_compiler();
 
-  [[nodiscard]] auto compile(const std::filesystem::path& path, std::span<const entry_point_request> entry_points) -> std::vector<compiled_entry_point>;
+  /**
+   * @brief Compiles @p entry_points of @p path to SPIR-V, through the disk cache.
+   *
+   * @param path The shader to compile.
+   * @param entry_points The entry points to compile and their stages.
+   * @param material_loader Generated Slang appended to the source, with SBX_GENERATED_MATERIAL_LOADER defined ahead of it; empty for none. See shaders/material_properties.slang.
+   *
+   * @return One SPIR-V blob per entry point, in the order given.
+   *
+   * @throws utility::runtime_error If the file doesn't parse, an entry point is missing, or Slang fails to link or generate code.
+   */
+  [[nodiscard]] auto compile(const std::filesystem::path& path, std::span<const entry_point_request> entry_points, std::string_view material_loader = {}) -> std::vector<compiled_entry_point>;
 
   /**
    * @brief Reflects the push-constant struct @p entry_point sees in @p path. Throws on a field
@@ -90,17 +134,32 @@ public:
    */
   [[nodiscard]] auto reflect_push_constants(const std::filesystem::path& path, const std::string& entry_point) -> push_constant_layout;
 
+  /**
+   * @brief Parses @p path and reports which of @p entry_points and @p structs it defines.
+   *
+   * @param path The shader to parse.
+   * @param entry_points The entry point names to look for.
+   * @param structs The struct names to reflect.
+   *
+   * @return The entry points that exist, in the order given, and the fields of each struct that exists.
+   *
+   * @throws utility::runtime_error If the file can't be read or doesn't parse; the message carries Slang's diagnostics.
+   */
+  [[nodiscard]] auto reflect_module(const std::filesystem::path& path, std::span<const std::string_view> entry_points, std::span<const std::string_view> structs) -> module_reflection;
+
 private:
 
   [[nodiscard]] auto _create_session(const std::filesystem::path& path, std::span<const slang::CompilerOptionEntry> options) -> Slang::ComPtr<slang::ISession>;
 
-  [[nodiscard]] auto _load_module(slang::ISession& session, const std::filesystem::path& path) -> slang::IModule*;
+  [[nodiscard]] auto _load_module(slang::ISession& session, const std::filesystem::path& path, std::string_view material_loader = {}) -> slang::IModule*;
 
   // dependencies: one entry per file the module parsed (entry file plus transitive #includes via
   // slang::IModule::getDependencyFile*), each packed by the caller as "<path>\0<content>" — so
   // editing an included header changes the key too, instead of leaving a stale cache entry.
   [[nodiscard]] auto _cache_key(std::span<const std::string> dependencies, std::span<const entry_point_request> entry_points, std::span<const slang::CompilerOptionEntry> options, const char* profile) const -> std::string;
 
+  // The global session isn't thread-safe; compile runs on the render thread, reflection on the main thread.
+  std::mutex _mutex{};
   Slang::ComPtr<slang::IGlobalSession> _global_session{};
   shader_disk_cache _disk_cache{};
 

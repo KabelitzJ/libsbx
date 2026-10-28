@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <optional>
+#include <variant>
 #include <vector>
 
 #include <fmt/format.h>
@@ -16,23 +18,23 @@
 
 namespace sbx::render {
 
-auto custom_shader_path(const assets::material& material) -> std::string {
-  if (material.shading() == assets::shading_model::shader_graph && material.shader_graph().is_valid()) {
-    return assets::shader_graph_generated_path(material.shader_graph()->id(), material.shader_graph()->generation());
+auto shader_source_of(const assets::material& material) -> std::optional<material_shader_source> {
+  if (material.shading() != assets::shading_model::custom) {
+    return std::nullopt;
   }
 
-  if (material.shading() == assets::shading_model::shader_code) {
-    return material.shader_code().generic_string();
+  if (const auto* graph = std::get_if<assets::shader_graph_handle>(&material.shader()); graph != nullptr && graph->is_valid()) {
+    return material_shader_source{assets::shader_graph_generated_path((*graph)->id(), (*graph)->generation())};
   }
 
-  return {};
+  if (const auto* code = std::get_if<assets::shader_handle>(&material.shader()); code != nullptr && code->is_valid() && (*code)->kind() == assets::shader_kind::surface) {
+    return material_shader_source{(*code)->path().generic_string(), (*code)->generation(), (*code)->has_depth_entry_points(), (*code)->material_loader()};
+  }
+
+  return std::nullopt;
 }
 
-auto resolve_custom_pipeline(const std::string& shader_path, std::span<const graphics::shader_compiler::entry_point_request> entry_points, graphics::graphics_pipeline::create_info pipeline_template, std::string_view pass_label) -> memory::observer_ptr<graphics::graphics_pipeline> {
-  if (shader_path.empty()) {
-    return {};
-  }
-
+auto resolve_custom_pipeline(const material_shader_source& source, std::span<const graphics::shader_compiler::entry_point_request> entry_points, graphics::graphics_pipeline::create_info pipeline_template, std::string_view pass_label) -> memory::observer_ptr<graphics::graphics_pipeline> {
   // shader_compiler throws on a bad user shader and nothing upstream catches it mid-frame; skip the draw instead.
   try {
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
@@ -41,12 +43,12 @@ auto resolve_custom_pipeline(const std::string& shader_path, std::span<const gra
 
     const auto requests = std::vector<graphics::shader_compiler::entry_point_request>{entry_points.begin(), entry_points.end()};
 
-    pipeline_template.shader = shader_cache.get({shader_path, requests});
-    pipeline_template.name = fmt::format("{} Custom {}", pass_label, std::filesystem::path{shader_path}.stem().string());
+    pipeline_template.shader = shader_cache.get({source.path, requests, source.generation, source.material_loader ? std::string_view{*source.material_loader} : std::string_view{}});
+    pipeline_template.name = fmt::format("{} Custom {}", pass_label, std::filesystem::path{source.path}.stem().string());
 
     return pipeline_cache.get(pipeline_template);
   } catch (const std::exception& exception) {
-    utility::logger<"render">::warn("'{}' failed to compile ({}) -- skipping {} for it until it's fixed", shader_path, exception.what(), pass_label);
+    utility::logger<"render">::warn("'{}' failed to compile ({}) -- skipping {} for it until it's fixed", source.path, exception.what(), pass_label);
     return {};
   }
 }
@@ -70,14 +72,14 @@ static auto prepare_draw_command(graphics::resource_registry& registry, render_c
 
   auto pipeline = memory::observer_ptr<graphics::graphics_pipeline>{};
 
-  if (command.material->shading() == assets::shading_model::shader_graph || command.material->shading() == assets::shading_model::shader_code) {
-    const auto shader_path = custom_shader_path(*command.material);
+  if (command.material->shading() == assets::shading_model::custom) {
+    const auto source = shader_source_of(*command.material);
 
-    if (shader_path.empty() || !resolve_custom_pipeline) {
+    if (!source || !resolve_custom_pipeline) {
       return false;
     }
 
-    pipeline = resolve_custom_pipeline(shader_path, command.material->is_double_sided());
+    pipeline = resolve_custom_pipeline(*source, command.material->is_double_sided());
 
     if (!pipeline) {
       return false; // no usable pipeline for this shader yet

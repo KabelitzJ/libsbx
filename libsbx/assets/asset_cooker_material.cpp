@@ -145,7 +145,8 @@ auto asset_cooker::parse_material_file(const std::filesystem::path& source) -> s
   }
   if (root["shading_model"]) {
     const auto model = root["shading_model"].as<std::string>();
-    description.shading = (model == "unlit") ? shading_model::unlit : (model == "shader_graph") ? shading_model::shader_graph : (model == "shader_code") ? shading_model::shader_code : shading_model::pbr;
+    // "shader_graph" and "shader_code" are the pre-unification names of custom.
+    description.shading = (model == "unlit") ? shading_model::unlit : (model == "custom" || model == "shader_graph" || model == "shader_code") ? shading_model::custom : shading_model::pbr;
   }
   if (root["alpha_cutoff"]) description.alpha_cutoff = root["alpha_cutoff"].as<std::float_t>();
   if (root["is_double_sided"]) description.is_double_sided = root["is_double_sided"].as<bool>();
@@ -171,8 +172,16 @@ auto asset_cooker::parse_material_file(const std::filesystem::path& source) -> s
   description.occlusion = path_slot("occlusion");
   description.emissive = path_slot("emissive");
 
-  description.shader_graph = path_slot("shader_graph");
-  description.shader_code = path_slot("shader_code");
+  // Older files store the shader under the key of its kind.
+  description.shader = path_slot("shader");
+
+  if (description.shader.empty()) {
+    description.shader = path_slot("shader_graph");
+  }
+
+  if (description.shader.empty()) {
+    description.shader = path_slot("shader_code");
+  }
 
   if (const auto generic_params = root["generic_params"]) {
     for (auto i = std::size_t{0u}; i < generic_params.size() && i < description.generic_params.size(); ++i) {

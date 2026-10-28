@@ -27,7 +27,8 @@ enum class [[=reflection::named]] asset_type : std::uint8_t {
   audio_clip,
   prefab,
   scene, // no cook step, but manifest-registered like prefab
-  script // no cook step; compiled by scripting::script_compiler. Manifested so scenes can reference a script across renames
+  script, // no cook step; compiled by scripting::script_compiler. Manifested so scenes can reference a script across renames
+  shader // hand-written .slang; no cook step, reflected on load and compiled by the render passes
 }; // enum class asset_type
 
 /** @brief The single extension -> type table; case-insensitive. */

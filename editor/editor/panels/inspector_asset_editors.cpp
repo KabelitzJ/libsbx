@@ -5,8 +5,9 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
-#include <filesystem>
 #include <optional>
+#include <span>
+#include <variant>
 
 #include <fmt/format.h>
 
@@ -49,22 +50,20 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
 
   auto changed = draw_text_field("Name", _material_edit.name);
 
-  // The material type: Unlit/PBR show the built-in fields, Shader Graph only the graph's exposed parameters, Shader Code the file plus every built-in field.
-  static constexpr auto material_type_names = std::array<const char*, 4u>{"Unlit", "PBR", "Shader Graph", "Shader Code"};
+  // The material type: Unlit/PBR show the built-in fields, Custom a shader graph's exposed parameters or a code shader's properties (or raw slots without a `properties` struct) plus every built-in field.
+  static constexpr auto material_type_names = std::array<const char*, 3u>{"Unlit", "PBR", "Custom"};
 
   const auto material_type_index = [](sbx::assets::shading_model shading) -> std::int32_t {
     switch (shading) {
       case sbx::assets::shading_model::unlit: return 0;
-      case sbx::assets::shading_model::shader_graph: return 2;
-      case sbx::assets::shading_model::shader_code: return 3;
+      case sbx::assets::shading_model::custom: return 2;
       default: return 1;
     }
   };
 
   const auto material_type_from_index = [](std::int32_t index) -> sbx::assets::shading_model {
     if (index == 0) return sbx::assets::shading_model::unlit;
-    if (index == 2) return sbx::assets::shading_model::shader_graph;
-    if (index == 3) return sbx::assets::shading_model::shader_code;
+    if (index == 2) return sbx::assets::shading_model::custom;
     return sbx::assets::shading_model::pbr;
   };
 
@@ -75,7 +74,7 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
     changed = true;
   }
 
-  const auto is_shader_graph = _material_edit.shading == sbx::assets::shading_model::shader_graph;
+  const auto is_custom = _material_edit.shading == sbx::assets::shading_model::custom;
 
   // Alpha mode, culling, shadows and UV transform apply to every material type.
   static constexpr auto alpha_mode_names = std::array<const char*, 3u>{"Opaque", "Mask", "Blend"};
@@ -106,137 +105,76 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
     changed = true;
   }
 
-  if (is_shader_graph) {
-    ImGui::SeparatorText("Shader Graph");
+  if (is_custom) {
+    ImGui::SeparatorText("Shader");
 
-    if (draw_shader_graph_picker(state, "##shader_graph_picker", _material_edit.shader_graph)) {
+    if (draw_shader_picker(state, "##shader_picker", _material_edit.shader)) {
       changed = true;
-      _shader_graph_seed_pending = _material_edit.shader_graph.is_valid();
+      _shader_seed_pending = !std::holds_alternative<std::monostate>(_material_edit.shader);
     }
 
+    if (std::holds_alternative<std::monostate>(_material_edit.shader)) {
+      ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " No shader assigned -- this material is invalid and won't render until one is.");
+    }
+  }
+
+  const auto* graph_slot = is_custom ? std::get_if<sbx::assets::shader_graph_handle>(&_material_edit.shader) : nullptr;
+  const auto graph = graph_slot != nullptr ? *graph_slot : sbx::assets::shader_graph_handle{};
+  const auto* code = is_custom ? std::get_if<sbx::assets::shader_handle>(&_material_edit.shader) : nullptr;
+
+  if (graph.is_valid()) {
     // A newly assigned graph loads asynchronously; once it's resident, its parameters start at the nodes' authored defaults.
-    if (_shader_graph_seed_pending && _material_edit.shader_graph.is_valid() && !_material_edit.shader_graph->nodes().empty()) {
-      _material_edit.generic_params = sbx::assets::shader_graph_default_generic_params(*_material_edit.shader_graph);
-      _material_edit.generic_textures = sbx::assets::shader_graph_default_generic_textures(*_material_edit.shader_graph);
-      _shader_graph_seed_pending = false;
+    if (_shader_seed_pending && !graph->nodes().empty()) {
+      _material_edit.generic_params = sbx::assets::shader_graph_default_generic_params(*graph);
+      _material_edit.generic_textures = sbx::assets::shader_graph_default_generic_textures(*graph);
+      _shader_seed_pending = false;
       changed = true;
     }
 
-    if (!_material_edit.shader_graph.is_valid()) {
-      ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " No graph assigned -- this material is invalid and won't render until one is.");
-    }
+    changed |= _draw_shader_properties(state, graph->properties(), assets_module);
 
-    auto parameters = _material_edit.shader_graph.is_valid() ? _material_edit.shader_graph->parameters() : std::vector<sbx::assets::shader_graph_parameter>{};
-    std::erase_if(parameters, [](const auto& parameter) { return !parameter.exposed; });
-
-    for (const auto& parameter : parameters) {
-      ImGui::PushID(static_cast<std::int32_t>(parameter.type) * 100 + static_cast<std::int32_t>(parameter.slot));
-
-      const auto label = parameter.name.empty() ? fmt::format("Param {}", parameter.slot) : parameter.name;
-      const auto property = sbx::assets::shader_graph_find_property(_material_edit.shader_graph->properties(), parameter.property_id);
-
-      if (parameter.type == sbx::assets::shader_graph_parameter_type::texture_value) {
-        if (parameter.slot < _material_edit.generic_textures.size()) {
-          const auto format = (property && property->is_linear) ? sbx::graphics::format::r8g8b8a8_unorm : sbx::graphics::format::r8g8b8a8_srgb;
-          changed |= draw_property_row(label.c_str(), [&] { return draw_texture_picker(state, "##generic_texture_picker", _material_edit.generic_textures[parameter.slot], assets_module, format); });
-        }
-
-        ImGui::PopID();
-        continue;
-      }
-
-      // Values are packed by component, so each one reads and writes only its own floats of generic_params.
-      auto value = sbx::assets::shader_graph_read_parameter(_material_edit.generic_params, parameter.type, parameter.slot);
-      auto edited = false;
-
-      switch (parameter.type) {
-        case sbx::assets::shader_graph_parameter_type::float_value: {
-          if (property && property->float_mode == sbx::assets::shader_graph_float_mode::slider) {
-            edited = ImGui::SliderFloat(label.c_str(), &value.x(), property->slider_range.x(), property->slider_range.y());
-          } else {
-            edited = ImGui::DragFloat(label.c_str(), &value.x(), 0.01f);
-          }
-          break;
-        }
-        case sbx::assets::shader_graph_parameter_type::vector2_value: {
-          auto components = std::array<std::float_t, 2u>{value.x(), value.y()};
-
-          if (draw_vector2_control(label.c_str(), components, 0.0f, 0.01f).changed) {
-            value = sbx::math::vector4{components[0], components[1], 0.0f, 0.0f};
-            edited = true;
-          }
-          break;
-        }
-        case sbx::assets::shader_graph_parameter_type::vector3_value: {
-          auto components = std::array<std::float_t, 3u>{value.x(), value.y(), value.z()};
-
-          if (draw_vector3_control(label.c_str(), components, 0.0f, 0.01f).changed) {
-            value = sbx::math::vector4{components[0], components[1], components[2], 0.0f};
-            edited = true;
-          }
-          break;
-        }
-        case sbx::assets::shader_graph_parameter_type::vector4_value: {
-          auto components = std::array<std::float_t, 4u>{value.x(), value.y(), value.z(), value.w()};
-
-          if (ImGui::DragFloat4(label.c_str(), components.data(), 0.01f)) {
-            value = sbx::math::vector4{components[0], components[1], components[2], components[3]};
-            edited = true;
-          }
-          break;
-        }
-        case sbx::assets::shader_graph_parameter_type::color_value: {
-          auto components = std::array<std::float_t, 4u>{value.x(), value.y(), value.z(), value.w()};
-
-          // draw_color_edit clamps to 0-255 per channel, so HDR colors use ImGui's float picker.
-          const auto is_hdr = property && property->is_hdr;
-          edited = is_hdr ? ImGui::ColorEdit4(label.c_str(), components.data(), ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float) : draw_color_edit(label.c_str(), components.data(), 4);
-
-          if (edited) {
-            value = sbx::math::vector4{components[0], components[1], components[2], components[3]};
-          }
-          break;
-        }
-        case sbx::assets::shader_graph_parameter_type::texture_value:
-          break;
-      }
-
-      if (edited) {
-        sbx::assets::shader_graph_write_parameter(_material_edit.generic_params, parameter.type, parameter.slot, value);
-        changed = true;
-      }
-
-      ImGui::PopID();
-    }
-
-    if (_material_edit.shader_graph.is_valid() && parameters.empty()) {
+    if (std::ranges::none_of(graph->properties(), &sbx::assets::shader_property::exposed)) {
       ImGui::TextDisabled("This graph exposes no parameters.");
     }
-  } else {
-    const auto is_shader_code = _material_edit.shading == sbx::assets::shading_model::shader_code;
+  } else if (!is_custom || code != nullptr) {
+    const auto is_shader_code = code != nullptr;
     const auto is_pbr = _material_edit.shading == sbx::assets::shading_model::pbr || is_shader_code;
+    auto show_raw_slots = false;
 
     if (is_shader_code) {
-      ImGui::SeparatorText("Shader Code");
+      if (!code->is_valid()) {
+        ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " Shader not found.");
+      } else if (!(*code)->error().empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{1.0f, 0.6f, 0.2f, 1.0f});
+        ImGui::TextWrapped(ICON_MDI_ALERT " %s", (*code)->error().c_str());
+        ImGui::PopStyleColor();
+      } else if ((*code)->kind() != sbx::assets::shader_kind::surface) {
+        ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " Not a surface shader: it needs vertex_main and fragment_main entry points.");
+      } else if (!(*code)->has_depth_entry_points()) {
+        ImGui::TextDisabled("No depth_vertex_main/depth_fragment_main: depth and shadows use the undisplaced mesh.");
+      }
 
-      // Edited assets-relative, stored absolute; lexical conversion so a half-typed path survives each frame.
-      const auto assets_directory = sbx::core::engine::project().assets_directory();
-      auto relative = _material_edit.shader_code.empty() ? std::string{} : _material_edit.shader_code.lexically_relative(assets_directory).generic_string();
+      const auto has_properties = code->is_valid() && !(*code)->properties().empty();
 
-      if (draw_text_field("Shader", relative)) {
-        _material_edit.shader_code = relative.empty() ? std::filesystem::path{} : assets_directory / relative;
+      // Reflected synchronously on load, so a newly picked shader's defaults are ready at once.
+      if (_shader_seed_pending && has_properties) {
+        _material_edit.generic_params = sbx::assets::shader_property_default_params((*code)->properties());
+        _material_edit.generic_textures = {};
+        _shader_seed_pending = false;
         changed = true;
       }
 
-      if (_material_edit.shader_code.empty()) {
-        ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " No shader assigned -- this material is invalid and won't render until one is.");
-      } else if (!std::filesystem::exists(_material_edit.shader_code)) {
-        ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " File not found.");
+      if (has_properties) {
+        ImGui::SeparatorText("Properties");
+        changed |= _draw_shader_properties(state, (*code)->properties(), assets_module);
+      } else {
+        show_raw_slots = true;
+        _shader_seed_pending = _shader_seed_pending && !code->is_valid();
       }
+    }
 
-      ImGui::TextDisabled("Compiled once per run: restart after editing the file.");
-
-      // A shader file declares no parameters, so every generic slot is shown raw.
+    // A code shader without a `properties` struct reads its generic slots by index, so they're shown raw.
+    if (show_raw_slots) {
       ImGui::SeparatorText("Generic Parameters");
 
       for (auto i = std::size_t{0u}; i < _material_edit.generic_params.size(); ++i) {
@@ -259,7 +197,9 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
         changed |= draw_property_row(label.c_str(), [&] { return draw_texture_picker(state, "##generic_texture_picker", _material_edit.generic_textures[i], assets_module, sbx::graphics::format::r8g8b8a8_srgb); });
         ImGui::PopID();
       }
+    }
 
+    if (is_shader_code) {
       ImGui::SeparatorText("Built-in Fields");
     }
 
@@ -644,6 +584,97 @@ auto inspector_panel::_draw_particle_effect_properties(editor_state& state, cons
   if (ImGui::Button(ICON_MDI_CONTENT_SAVE " Save")) {
     assets_module.save_particle_effect(_asset_cache.particle_effect, asset.path);
   }
+}
+
+auto inspector_panel::_draw_shader_properties(editor_state& state, std::span<const sbx::assets::shader_property> properties, sbx::assets::assets_module& assets_module) -> bool {
+  auto changed = false;
+
+  for (const auto& property : properties) {
+    if (!property.exposed) {
+      continue;
+    }
+
+    ImGui::PushID(static_cast<std::int32_t>(property.type) * 100 + static_cast<std::int32_t>(property.slot));
+
+    const auto label = property.name.empty() ? fmt::format("Param {}", property.slot) : property.name;
+
+    if (property.type == sbx::assets::shader_property_type::texture_value) {
+      // Texture arrays aren't project assets with a picker; Material.SetTexture(string, Texture2DArray) fills them at runtime.
+      if (property.is_texture_array) {
+        draw_property_row(label.c_str(), [] { ImGui::TextDisabled("Texture array, set from script"); return false; });
+      } else if (property.slot < _material_edit.generic_textures.size()) {
+        const auto format = property.is_linear ? sbx::graphics::format::r8g8b8a8_unorm : sbx::graphics::format::r8g8b8a8_srgb;
+        changed |= draw_property_row(label.c_str(), [&] { return draw_texture_picker(state, "##generic_texture_picker", _material_edit.generic_textures[property.slot], assets_module, format); });
+      }
+
+      ImGui::PopID();
+      continue;
+    }
+
+    // Values are packed by component, so each one reads and writes only its own floats of generic_params.
+    auto value = sbx::assets::shader_property_read(_material_edit.generic_params, property.type, property.slot);
+    auto edited = false;
+
+    switch (property.type) {
+      case sbx::assets::shader_property_type::float_value: {
+        if (property.float_mode == sbx::assets::shader_property_float_mode::slider) {
+          edited = ImGui::SliderFloat(label.c_str(), &value.x(), property.slider_range.x(), property.slider_range.y());
+        } else {
+          edited = ImGui::DragFloat(label.c_str(), &value.x(), 0.01f);
+        }
+        break;
+      }
+      case sbx::assets::shader_property_type::vector2_value: {
+        auto components = std::array<std::float_t, 2u>{value.x(), value.y()};
+
+        if (draw_vector2_control(label.c_str(), components, 0.0f, 0.01f).changed) {
+          value = sbx::math::vector4{components[0], components[1], 0.0f, 0.0f};
+          edited = true;
+        }
+        break;
+      }
+      case sbx::assets::shader_property_type::vector3_value: {
+        auto components = std::array<std::float_t, 3u>{value.x(), value.y(), value.z()};
+
+        if (draw_vector3_control(label.c_str(), components, 0.0f, 0.01f).changed) {
+          value = sbx::math::vector4{components[0], components[1], components[2], 0.0f};
+          edited = true;
+        }
+        break;
+      }
+      case sbx::assets::shader_property_type::vector4_value: {
+        auto components = std::array<std::float_t, 4u>{value.x(), value.y(), value.z(), value.w()};
+
+        if (ImGui::DragFloat4(label.c_str(), components.data(), 0.01f)) {
+          value = sbx::math::vector4{components[0], components[1], components[2], components[3]};
+          edited = true;
+        }
+        break;
+      }
+      case sbx::assets::shader_property_type::color_value: {
+        auto components = std::array<std::float_t, 4u>{value.x(), value.y(), value.z(), value.w()};
+
+        // draw_color_edit clamps to 0-255 per channel, so HDR colors use ImGui's float picker.
+        edited = property.is_hdr ? ImGui::ColorEdit4(label.c_str(), components.data(), ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float) : draw_color_edit(label.c_str(), components.data(), 4);
+
+        if (edited) {
+          value = sbx::math::vector4{components[0], components[1], components[2], components[3]};
+        }
+        break;
+      }
+      case sbx::assets::shader_property_type::texture_value:
+        break;
+    }
+
+    if (edited) {
+      sbx::assets::shader_property_write(_material_edit.generic_params, property.type, property.slot, value);
+      changed = true;
+    }
+
+    ImGui::PopID();
+  }
+
+  return changed;
 }
 
 } // namespace editor

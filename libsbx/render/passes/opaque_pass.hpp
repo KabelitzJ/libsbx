@@ -42,12 +42,12 @@ private:
   /**
    * @brief This pass's custom-shader pipeline resolver for submit_draw_commands_indirect.
    *
-   * @param shader_path The custom shader.
+   * @param source The custom shader.
    * @param is_double_sided Whether to disable culling.
    *
    * @return The pipeline, or null if the shader isn't usable.
    */
-  auto _resolve_custom_pipeline(const std::string& shader_path, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
+  auto _resolve_custom_pipeline(const material_shader_source& source, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u> _pipelines{};
 

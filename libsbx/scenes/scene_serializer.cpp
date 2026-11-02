@@ -90,6 +90,23 @@ auto texture_asset_key(asset_key_table& keys, const math::uuid& id) -> std::stri
   return keys.texture_keys.at(id);
 }
 
+// The scene-local key for an environment map, registered in the environments table on first use.
+auto environment_asset_key(asset_key_table& keys, const math::uuid& id) -> std::string {
+  if (!keys.environment_keys.contains(id)) {
+    const auto name = core::engine::get_module<assets::assets_module>().path_of(id).stem().string();
+    const auto key = make_asset_key(keys, name);
+    keys.environment_keys.emplace(id, key);
+
+    auto entry = YAML::Node{};
+    entry["key"] = key;
+    entry["name"] = name;
+    entry["uuid"] = id.value();
+    keys.environments_table.push_back(entry);
+  }
+
+  return keys.environment_keys.at(id);
+}
+
 auto serialize_post_process(const post_process_settings& settings, asset_key_table& keys) -> YAML::Node {
   auto node = YAML::Node{};
   node["exposure"] = settings.exposure;
@@ -458,6 +475,10 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
     component["color"] = light.color;
     component["intensity"] = light.intensity;
     component["range"] = light.range;
+    component["casts_shadows"] = light.casts_shadows;
+    component["shadow_depth_bias"] = light.shadow_depth_bias;
+    component["shadow_normal_bias"] = light.shadow_normal_bias;
+    component["shadow_resolution"] = light.shadow_resolution;
 
     components.push_back(component);
   }
@@ -472,6 +493,56 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
     component["range"] = light.range;
     component["inner_angle"] = light.inner_angle;
     component["outer_angle"] = light.outer_angle;
+    component["casts_shadows"] = light.casts_shadows;
+    component["shadow_depth_bias"] = light.shadow_depth_bias;
+    component["shadow_normal_bias"] = light.shadow_normal_bias;
+    component["shadow_resolution"] = light.shadow_resolution;
+
+    components.push_back(component);
+  }
+
+  if (registry.all_of<decal>(entity)) {
+    const auto& projector = registry.get<decal>(entity);
+
+    auto component = YAML::Node{};
+    component["type"] = "decal";
+
+    if (projector.albedo.is_valid() && projector.albedo->id() != math::uuid::nil()) {
+      component["albedo"] = texture_asset_key(keys, projector.albedo->id());
+    }
+
+    if (projector.normal.is_valid() && projector.normal->id() != math::uuid::nil()) {
+      component["normal"] = texture_asset_key(keys, projector.normal->id());
+    }
+
+    component["color"] = projector.color;
+    component["opacity"] = projector.opacity;
+    component["normal_strength"] = projector.normal_strength;
+    component["angle_fade_start"] = projector.angle_fade_start;
+    component["angle_fade_end"] = projector.angle_fade_end;
+    component["edge_fade"] = projector.edge_fade;
+    component["sort_order"] = projector.sort_order;
+
+    components.push_back(component);
+  }
+
+  if (registry.all_of<reflection_probe>(entity)) {
+    const auto& probe = registry.get<reflection_probe>(entity);
+
+    auto component = YAML::Node{};
+    component["type"] = "reflection_probe";
+    component["box_extents"] = probe.box_extents;
+    component["blend_distance"] = probe.blend_distance;
+    component["intensity"] = probe.intensity;
+    component["importance"] = probe.importance;
+    component["resolution"] = probe.resolution;
+    component["box_projection"] = probe.box_projection;
+    component["near_plane"] = probe.near_plane;
+    component["far_plane"] = probe.far_plane;
+
+    if (probe.baked.is_valid() && probe.baked->id() != math::uuid::nil()) {
+      component["baked"] = environment_asset_key(keys, probe.baked->id());
+    }
 
     components.push_back(component);
   }
@@ -482,21 +553,9 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
     if (sky.environment.is_valid()) {
       const auto id = sky.environment->id();
 
-      if (!keys.environment_keys.contains(id)) {
-        const auto name = core::engine::get_module<assets::assets_module>().path_of(id).stem().string();
-        const auto key = make_asset_key(keys, name);
-        keys.environment_keys.emplace(id, key);
-
-        auto entry = YAML::Node{};
-        entry["key"] = key;
-        entry["name"] = name;
-        entry["uuid"] = id.value();
-        keys.environments_table.push_back(entry);
-      }
-
       auto component = YAML::Node{};
       component["type"] = "skybox";
-      component["environment"] = keys.environment_keys.at(id);
+      component["environment"] = environment_asset_key(keys, id);
       component["intensity"] = sky.intensity;
       component["ambient_intensity"] = sky.ambient_intensity;
       components.push_back(component);
@@ -1175,6 +1234,12 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
       light.color = component["color"].as<math::color>();
       light.intensity = component["intensity"].as<std::float_t>();
       light.range = component["range"].as<std::float_t>();
+
+      // Scenes saved before point shadows have none of these and keep the defaults.
+      if (component["casts_shadows"]) light.casts_shadows = component["casts_shadows"].as<bool>();
+      if (component["shadow_depth_bias"]) light.shadow_depth_bias = component["shadow_depth_bias"].as<std::float_t>();
+      if (component["shadow_normal_bias"]) light.shadow_normal_bias = component["shadow_normal_bias"].as<std::float_t>();
+      if (component["shadow_resolution"]) light.shadow_resolution = component["shadow_resolution"].as<std::uint32_t>();
     } else if (type == "spot_light") {
       auto& light = target_node.get_or_add_component<spot_light>();
       light.color = component["color"].as<math::color>();
@@ -1182,6 +1247,37 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
       light.range = component["range"].as<std::float_t>();
       light.inner_angle = component["inner_angle"].as<std::float_t>();
       light.outer_angle = component["outer_angle"].as<std::float_t>();
+
+      // Scenes saved before spot shadows have none of these and keep the defaults.
+      if (component["casts_shadows"]) light.casts_shadows = component["casts_shadows"].as<bool>();
+      if (component["shadow_depth_bias"]) light.shadow_depth_bias = component["shadow_depth_bias"].as<std::float_t>();
+      if (component["shadow_normal_bias"]) light.shadow_normal_bias = component["shadow_normal_bias"].as<std::float_t>();
+      if (component["shadow_resolution"]) light.shadow_resolution = component["shadow_resolution"].as<std::uint32_t>();
+    } else if (type == "decal") {
+      auto& projector = target_node.get_or_add_component<decal>();
+      auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+      if (component["albedo"]) projector.albedo = assets_module.load_texture(key_to_uuid.at(component["albedo"].as<std::string>()), graphics::format::r8g8b8a8_srgb);
+      if (component["normal"]) projector.normal = assets_module.load_texture(key_to_uuid.at(component["normal"].as<std::string>()), graphics::format::r8g8b8a8_unorm);
+      if (component["color"]) projector.color = component["color"].as<math::color>();
+      if (component["opacity"]) projector.opacity = component["opacity"].as<std::float_t>();
+      if (component["normal_strength"]) projector.normal_strength = component["normal_strength"].as<std::float_t>();
+      if (component["angle_fade_start"]) projector.angle_fade_start = component["angle_fade_start"].as<std::float_t>();
+      if (component["angle_fade_end"]) projector.angle_fade_end = component["angle_fade_end"].as<std::float_t>();
+      if (component["edge_fade"]) projector.edge_fade = component["edge_fade"].as<std::float_t>();
+      if (component["sort_order"]) projector.sort_order = component["sort_order"].as<std::int32_t>();
+    } else if (type == "reflection_probe") {
+      auto& probe = target_node.get_or_add_component<reflection_probe>();
+
+      if (component["box_extents"]) probe.box_extents = component["box_extents"].as<math::vector3>();
+      if (component["blend_distance"]) probe.blend_distance = component["blend_distance"].as<std::float_t>();
+      if (component["intensity"]) probe.intensity = component["intensity"].as<std::float_t>();
+      if (component["importance"]) probe.importance = component["importance"].as<std::int32_t>();
+      if (component["resolution"]) probe.resolution = component["resolution"].as<std::uint32_t>();
+      if (component["box_projection"]) probe.box_projection = component["box_projection"].as<bool>();
+      if (component["near_plane"]) probe.near_plane = component["near_plane"].as<std::float_t>();
+      if (component["far_plane"]) probe.far_plane = component["far_plane"].as<std::float_t>();
+      if (component["baked"]) probe.baked = core::engine::get_module<assets::assets_module>().load_environment_map(key_to_uuid.at(component["baked"].as<std::string>()));
     } else if (type == "skybox") {
       auto& sky = target_node.get_or_add_component<skybox>();
 

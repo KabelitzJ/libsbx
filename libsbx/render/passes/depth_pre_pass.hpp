@@ -19,20 +19,34 @@
 
 namespace sbx::render {
 
-/** @brief Depth-only pre-pass for the opaque list into the shared MSAA depth target, resolved into a single-sample scene_depth for the Scene Depth node. */
+/**
+ * @brief Depth-only pre-pass for the opaque list into the shared MSAA depth target, resolved into a single-sample scene_depth for the Scene Depth node.
+ *
+ * With occlusion culling on, a second (late) instance adds the late camera view on top, after hiz_pass built the pyramid from the first.
+ */
 class depth_pre_pass final : public graphics_pass {
 
 public:
 
-  explicit depth_pre_pass(graphics::samples samples);
+  /**
+   * @brief Creates the pre-pass for the camera view, or for the late camera view.
+   *
+   * @param samples The depth target's sample count.
+   * @param late Whether this instance draws the late camera view, which only runs with occlusion culling on.
+   */
+  explicit depth_pre_pass(graphics::samples samples, bool late = false);
 
   [[nodiscard]] auto name() const -> std::string_view override {
-    return "Depth Pre";
+    return _late ? "Depth Pre Late" : "Depth Pre";
   }
 
   auto declare(graphics_pass_builder& builder, const graph_resources& resources) -> void override;
 
   auto execute(render_context& context, std::uint32_t group) -> void override;
+
+  [[nodiscard]] auto should_execute(const render_context& context, [[maybe_unused]] std::uint32_t group) const -> bool override {
+    return !_late || context.occlusion_enabled;
+  }
 
 private:
 
@@ -47,6 +61,8 @@ private:
   graphics::resolve_mode _scene_depth_resolve_mode{graphics::resolve_mode::sample_zero};
 
   graphics::samples _samples;
+
+  bool _late;
 
 }; // class depth_pre_pass
 

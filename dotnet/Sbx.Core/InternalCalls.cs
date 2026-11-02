@@ -161,6 +161,10 @@ namespace Sbx.Core
     internal static delegate* unmanaged<bool> RenderSettings_GetWireframeEnabled;
     internal static delegate* unmanaged<uint> RenderSettings_GetMsaaSamples;
     internal static delegate* unmanaged<uint, void> RenderSettings_SetMsaaSamples;
+    internal static delegate* unmanaged<float> RenderSettings_GetLodBias;
+    internal static delegate* unmanaged<float, void> RenderSettings_SetLodBias;
+    internal static delegate* unmanaged<bool> RenderSettings_GetOcclusionCulling;
+    internal static delegate* unmanaged<bool, void> RenderSettings_SetOcclusionCulling;
 
     internal static delegate* unmanaged<ulong, float*, void> Camera_GetFovDegrees;
     internal static delegate* unmanaged<ulong, float, void> Camera_SetFovDegrees;
@@ -172,6 +176,10 @@ namespace Sbx.Core
     internal static delegate* unmanaged<ulong, float, void> Camera_SetExposure;
     internal static delegate* unmanaged<ulong, PostProcessSettings*, void> Camera_GetPostProcess;
     internal static delegate* unmanaged<ulong, PostProcessSettings*, void> Camera_SetPostProcess;
+    internal static delegate* unmanaged<ulong, Components.DecalData*, void> Decal_Get;
+    internal static delegate* unmanaged<ulong, Components.DecalData*, void> Decal_Set;
+    internal static delegate* unmanaged<ulong, Components.ReflectionProbeData*, void> ReflectionProbe_Get;
+    internal static delegate* unmanaged<ulong, Components.ReflectionProbeData*, void> ReflectionProbe_Set;
 
     internal static delegate* unmanaged<float*, void> Time_DeltaTime;
     internal static delegate* unmanaged<float> Time_FixedDeltaTime;

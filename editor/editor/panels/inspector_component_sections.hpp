@@ -22,6 +22,8 @@ auto draw_character_controller_section(editor_state& state, sbx::scenes::scene& 
 auto draw_audio_source_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
 auto draw_audio_listener_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
 auto draw_spot_light_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
+auto draw_decal_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void;
+auto draw_reflection_probe_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
 auto draw_skybox_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void;
 auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void;
 auto draw_rigidbody_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;

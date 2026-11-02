@@ -53,10 +53,20 @@ auto resolve_custom_pipeline(const material_shader_source& source, std::span<con
   }
 }
 
-auto instanced_transform_address(const render_context& context, const draw_command& command, std::uint32_t cascade_index) -> graphics::buffer::address_type {
-  const auto view = cascade_index == 0xFFFFFFFFu ? 0u : 1u + cascade_index;
+auto cull_view_index(const render_context& context, std::uint32_t cascade_index) -> std::uint32_t {
+  if (cascade_index == 0xFFFFFFFFu) {
+    return 0u;
+  }
 
-  return context.instanced_culled_address + (static_cast<graphics::buffer::address_type>(command.culled_offset) + view * command.instance_count) * sizeof(transform_data);
+  return cascade_index == late_camera_view ? context.late_view_index : 1u + cascade_index;
+}
+
+auto instanced_transform_address(const render_context& context, const draw_command& command, std::uint32_t cascade_index, std::uint32_t level) -> graphics::buffer::address_type {
+  // An instanced command reserves only the views it's culled in, with the late camera view last.
+  const auto view = cascade_index == late_camera_view ? command.instanced_view_blocks - 1u : (cascade_index == 0xFFFFFFFFu ? 0u : 1u + cascade_index);
+  const auto block = static_cast<graphics::buffer::address_type>(view) * command.lod_count + level;
+
+  return context.instanced_culled_address + (static_cast<graphics::buffer::address_type>(command.culled_offset) + block * command.instance_count) * sizeof(transform_data);
 }
 
 // Shared prologue of submit_draw_commands/_indirect: validity checks, pipeline resolution, bind-state tracking across the command list, and every push constant except transform_address and cascade_index.
@@ -149,37 +159,40 @@ auto submit_draw_commands_indirect(render_context& context, const std::vector<dr
   auto& bindless_table = graphics_module.bindless_table();
   auto& indirect_args_buffer = registry.get<graphics::buffer>(context.culled_indirect_args_buffer);
 
-  const auto view = cascade_index == 0xFFFFFFFFu ? 0u : 1u + cascade_index;
+  const auto view = cull_view_index(context, cascade_index);
   const auto args_offset = context.culled_indirect_args_slot_offset + view * context.culled_indirect_args_view_stride;
   const auto transform_address = context.culled_transform_address + view * context.culled_transform_view_stride * sizeof(transform_data);
-  const auto command_count = std::min(commands.size(), static_cast<std::size_t>(context.culled_indirect_args_view_stride));
-
   auto bound = false;
   auto current_pipeline = static_cast<const graphics::graphics_pipeline*>(nullptr);
   auto current_mesh = memory::make_observer<const assets::mesh>(nullptr);
 
-  for (auto index = std::size_t{0u}; index < command_count; ++index) {
-    const auto& command = commands[index];
+  for (const auto& command : commands) {
+    // Laid out by scene_renderer_module, which sized the view's args for every command.
+    if (command.lod_args_offset + command.lod_count > context.culled_indirect_args_view_stride) {
+      continue;
+    }
 
     auto values = push_constants{};
-    values.cascade_index = cascade_index;
+    values.cascade_index = cascade_index == late_camera_view ? 0xFFFFFFFFu : cascade_index; // shaders only know the camera
 
     if (!prepare_draw_command(registry, context, command, pipelines, resolve_custom_pipeline, bound, current_pipeline, current_mesh, values)) {
       continue;
     }
 
-    values.transform_address = transform_address;
+    // One indirect draw per detail level; frustum_cull left zero instances in the levels nothing picked.
+    for (auto level = std::uint32_t{0u}; level < command.lod_count; ++level) {
+      if (command.instances) {
+        // An instanced draw's visible transforms are its own block of the instanced pool, from 0.
+        values.transform_address = instanced_transform_address(context, command, cascade_index, level);
+        values.transform_offset = 0u;
+      } else {
+        values.transform_address = transform_address;
+        values.transform_offset = command.lod_culled_offset + level * command.instance_count;
+      }
 
-    // An instanced draw's visible transforms are its own block of the instanced pool, from 0.
-    if (command.instances) {
-      values.transform_address = instanced_transform_address(context, command, cascade_index);
-      values.transform_offset = 0u;
+      context.command_buffer->push_constants(bindless_table.pipeline_layout(), graphics::bindless_table::push_constant_stages, 0u, memory::as_bytes(values));
+      context.command_buffer->draw_indexed_indirect(indirect_args_buffer, args_offset + command.lod_args_offset + level, 1u);
     }
-
-    context.command_buffer->push_constants(bindless_table.pipeline_layout(), graphics::bindless_table::push_constant_stages, 0u, memory::as_bytes(values));
-
-    const auto offset = args_offset + static_cast<std::uint32_t>(index);
-    context.command_buffer->draw_indexed_indirect(indirect_args_buffer, offset, 1u);
   }
 }
 

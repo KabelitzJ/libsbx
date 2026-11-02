@@ -14,6 +14,7 @@ struct vertex_output {
   [[vk::location(2)]] float2 uv : TEXCOORD;
   [[vk::location(3)]] float4 tangent : TANGENT;
   [[vk::location(4)]] float4 color : COLOR;
+  [[vk::location(5)]] nointerpolation float lod_fade : LOD_FADE;
   float4 sv_position : SV_Position;
 }; // struct vertex_output
 
@@ -23,6 +24,7 @@ struct fragment_input {
   [[vk::location(2)]] float2 uv : TEXCOORD;
   [[vk::location(3)]] float4 tangent : TANGENT;
   [[vk::location(4)]] float4 color : COLOR;
+  [[vk::location(5)]] nointerpolation float lod_fade : LOD_FADE;
   float4 sv_position : SV_Position;
   bool is_front_face : SV_IsFrontFace;
 }; // struct fragment_input
@@ -66,6 +68,7 @@ vertex_output vertex_main(vertex_input input) {
   output.tangent = float4(normalize(mul(instance.normal, float4(v.tangent.xyz, 0.0)).xyz), v.tangent.w);
   output.uv = v.uv;
   output.color = v.color * instance.color;
+  output.lod_fade = lod_fade_of(instance);
   output.sv_position = mul(frame_data.projection, mul(frame_data.view, world_position));
 
   return output;
@@ -90,6 +93,8 @@ lighting_input build_lighting_input(fragment_input input) {
 
 [shader("fragment")]
 Policy::Output fragment_main_pbr<Policy : shading_policy>(fragment_input input) {
+  apply_lod_fade(input.lod_fade, input.sv_position);
+
   lighting_input lighting_input = build_lighting_input(input);
 
   lighting_output lighting_output = evaluate_lighting<Policy::receives_shadows>(lighting_input);
@@ -103,6 +108,8 @@ Policy::Output fragment_main_pbr<Policy : shading_policy>(fragment_input input) 
 
 [shader("fragment")]
 Policy::Output fragment_main_unlit<Policy : shading_policy>(fragment_input input) {
+  apply_lod_fade(input.lod_fade, input.sv_position);
+
   lighting_input lighting_input = build_lighting_input(input);
 
   lighting_output lighting_output = evaluate_unlit(lighting_input);
@@ -116,6 +123,8 @@ Policy::Output fragment_main_unlit<Policy : shading_policy>(fragment_input input
 
 [shader("fragment")]
 Policy::Output fragment_main_wireframe<Policy : shading_policy>(fragment_input input) {
+  apply_lod_fade(input.lod_fade, input.sv_position);
+
   lighting_output lighting_output;
   lighting_output.color = float3(0.0, 0.0, 0.0);
   lighting_output.alpha = 1.0;

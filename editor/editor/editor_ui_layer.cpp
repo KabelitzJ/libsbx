@@ -40,6 +40,8 @@
 
 #include <editor/commands/scene_commands.hpp>
 
+#include <editor/probe_baking.hpp>
+
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/utility/profiler.hpp>
@@ -390,6 +392,12 @@ auto editor_ui_layer::_draw_dockspace() -> void {
 
         _state.push_command(scenes_module.active_scene(), std::move(command));
         _state.select_node(scenes_module.active_scene().find(created->id()));
+      }
+
+      ImGui::Separator();
+
+      if (ImGui::MenuItem(ICON_MDI_MIRROR " Bake All Reflection Probes", nullptr, false, !sbx::core::engine::get_module<sbx::render::scene_renderer_module>().is_capturing())) {
+        bake_all_reflection_probes(_state, scenes_module.active_scene());
       }
 
       ImGui::Separator();

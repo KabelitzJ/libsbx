@@ -31,6 +31,8 @@ constexpr auto component_key() -> std::string_view {
   else if constexpr (std::same_as<Component, sbx::scenes::directional_light>) { return "directional_light"; }
   else if constexpr (std::same_as<Component, sbx::scenes::point_light>) { return "point_light"; }
   else if constexpr (std::same_as<Component, sbx::scenes::spot_light>) { return "spot_light"; }
+  else if constexpr (std::same_as<Component, sbx::scenes::decal>) { return "decal"; }
+  else if constexpr (std::same_as<Component, sbx::scenes::reflection_probe>) { return "reflection_probe"; }
   else if constexpr (std::same_as<Component, sbx::scenes::skybox>) { return "skybox"; }
   else if constexpr (std::same_as<Component, sbx::scenes::particle_effect>) { return "particle_effect"; }
   else if constexpr (std::same_as<Component, sbx::scenes::audio_source>) { return "audio_source"; }

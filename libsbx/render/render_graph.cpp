@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <optional>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -80,7 +81,8 @@ auto graphics_pass_builder::add_group(const render_attachment_group& group) -> s
       .access = group.depth->access_mask,
       .layout = graphics::image_layout::depth_attachment_optimal,
       .store_op = group.depth->store_op,
-      .clear_depth = group.depth->clear_value
+      .clear_depth = group.depth->clear_value,
+      .preserve_contents = group.depth->preserve_contents
     });
   }
 
@@ -126,6 +128,9 @@ struct sync_state {
 
 struct image_state : sync_state {
   graphics::image_layout layout{graphics::image_layout::undefined};
+
+  // For a preserved image: the layout the previous frame left it in, so the first barrier keeps its contents instead of discarding them.
+  std::optional<graphics::image_layout> carried_layout{};
 }; // struct image_state
 
 using buffer_state = sync_state;
@@ -231,6 +236,8 @@ auto render_graph::compile(const graph_resources& resources) -> void {
   // Walked twice: round 0 finds each resource's end-of-frame state, round 1 compiles with each first barrier waiting on it, since the previous frame may still be running.
   // Buffers aren't carried: graph-tracked buffers have one region per frame slot.
   auto carried_images = std::unordered_map<graphics::image_handle, sync_scope>{};
+  auto carried_layouts = std::unordered_map<graphics::image_handle, graphics::image_layout>{};
+  auto preserved_images = std::unordered_set<graphics::image_handle>{};
 
   for (auto round = 0u; round < 2u; ++round) {
     _compiled.clear();
@@ -240,6 +247,10 @@ auto render_graph::compile(const graph_resources& resources) -> void {
 
     for (const auto& [image, scope] : carried_images) {
       image_states[image].carried = scope;
+    }
+
+    for (const auto& [image, layout] : carried_layouts) {
+      image_states[image].carried_layout = layout;
     }
 
     // Image -> (entry, group) whose first use cleared it; an entry index of _compiled.size() is the entry being built.
@@ -261,7 +272,7 @@ auto render_graph::compile(const graph_resources& resources) -> void {
     const auto touch_image = [&](graphics::image_handle image, graphics::pipeline_stage stage, graphics::access access, graphics::image_layout layout) -> std::optional<graphics::command_buffer::image_transition_data> {
       auto& state = image_states[image];
 
-      const auto old_layout = state.touched ? state.layout : graphics::image_layout::undefined;
+      const auto old_layout = state.touched ? state.layout : state.carried_layout.value_or(graphics::image_layout::undefined);
       const auto scope = advance_sync(state, stage, access, state.touched && state.layout != layout);
 
       state.layout = layout;
@@ -360,7 +371,12 @@ auto render_graph::compile(const graph_resources& resources) -> void {
           auto& group = entry.groups[op.group_index];
           group.has_rendering = true;
 
-          const auto is_first_use = !image_states[op.image].touched;
+          // A preserved image is never cleared: its first use this frame loads what the previous frame left.
+          const auto is_first_use = !image_states[op.image].touched && !op.preserve_contents;
+
+          if (op.preserve_contents) {
+            preserved_images.insert(op.image);
+          }
 
           if (is_first_use) {
             record_clear(op.image, op.group_index);
@@ -469,6 +485,10 @@ auto render_graph::compile(const graph_resources& resources) -> void {
     if (round == 0u) {
       for (const auto& [image, state] : image_states) {
         carried_images[image] = end_of_frame_scope(state);
+
+        if (preserved_images.contains(image)) {
+          carried_layouts[image] = state.layout;
+        }
       }
     }
   }

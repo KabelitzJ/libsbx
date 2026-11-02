@@ -141,6 +141,28 @@ struct character_controller_data {
   math::vector3 center;
 }; // struct character_controller_data
 
+/** @brief Mirrors Sbx.Core.Components.Decal's DecalData: scenes::decal with the textures as uuids (0 = none). */
+struct decal_component_data {
+  std::uint64_t albedo;
+  std::uint64_t normal;
+  math::color color;
+  std::float_t opacity;
+  std::float_t normal_strength;
+  std::float_t angle_fade_start;
+  std::float_t angle_fade_end;
+  std::float_t edge_fade;
+  std::int32_t sort_order;
+}; // struct decal_component_data
+
+/** @brief Mirrors Sbx.Core.Components.ReflectionProbe's ReflectionProbeData: the runtime-tunable part of scenes::reflection_probe (the bake stays editor-side). */
+struct reflection_probe_component_data {
+  math::vector3 box_extents;
+  std::float_t blend_distance;
+  std::float_t intensity;
+  std::int32_t importance;
+  std::uint32_t box_projection;
+}; // struct reflection_probe_component_data
+
 struct interop {
 
   enum class log_level : std::int32_t {
@@ -467,6 +489,16 @@ struct interop {
 
   static auto camera_set_post_process(std::uint64_t uuid, const post_process_data* value) -> void;
 
+  /** @brief The node's whole decal; the managed side edits a copy and writes it back. */
+  static auto decal_get(std::uint64_t uuid, decal_component_data* out_value) -> void;
+
+  static auto decal_set(std::uint64_t uuid, const decal_component_data* value) -> void;
+
+  /** @brief The node's reflection probe settings; the managed side edits a copy and writes it back. */
+  static auto reflection_probe_get(std::uint64_t uuid, reflection_probe_component_data* out_value) -> void;
+
+  static auto reflection_probe_set(std::uint64_t uuid, const reflection_probe_component_data* value) -> void;
+
   static auto time_delta_time(std::float_t* delta_time) -> void;
 
   /** @brief Seconds per fixed_update step. */
@@ -476,6 +508,16 @@ struct interop {
 
   /** @brief Sets the project's MSAA samples (1, 2, 4 or 8); the renderer picks it up next frame, clamped to the device. */
   static auto render_settings_set_msaa_samples(std::uint32_t samples) -> void;
+
+  static auto render_settings_get_lod_bias() -> std::float_t;
+
+  /** @brief Sets the project's LOD bias (see core::project::lod_bias); applies next frame. */
+  static auto render_settings_set_lod_bias(std::float_t bias) -> void;
+
+  static auto render_settings_get_occlusion_culling() -> managed::bool32;
+
+  /** @brief Turns the project's occlusion culling (see core::project::occlusion_culling) on or off; applies next frame. */
+  static auto render_settings_set_occlusion_culling(bool enabled) -> void;
 
   /**
    * @brief Raycasts against the active scene's colliders and terrain.

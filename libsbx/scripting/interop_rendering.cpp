@@ -35,6 +35,7 @@
 #include <libsbx/render/scene_renderer_module.hpp>
 
 #include <libsbx/scenes/components.hpp>
+#include <libsbx/scenes/scenes_module.hpp>
 
 #include <libsbx/scripting/scripting_module.hpp>
 
@@ -797,6 +798,87 @@ auto interop::debug_draw_wire_circle(math::vector3* center, math::vector3* norma
   }
 
   core::engine::get_module<render::scene_renderer_module>().debug_draw().add_wire_circle(*center, *normal, radius, *color);
+}
+
+auto interop::decal_get(std::uint64_t uuid, decal_component_data* out_value) -> void {
+  auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid() || !out_value || !node.has_component<scenes::decal>()) {
+    utility::logger<"scripting">::error("Decal: node {} has no decal", uuid);
+    return;
+  }
+
+  const auto& decal = node.get_component<scenes::decal>();
+
+  *out_value = decal_component_data{
+    .albedo = decal.albedo.is_valid() ? decal.albedo->id().value() : 0u,
+    .normal = decal.normal.is_valid() ? decal.normal->id().value() : 0u,
+    .color = decal.color,
+    .opacity = decal.opacity,
+    .normal_strength = decal.normal_strength,
+    .angle_fade_start = decal.angle_fade_start,
+    .angle_fade_end = decal.angle_fade_end,
+    .edge_fade = decal.edge_fade,
+    .sort_order = decal.sort_order
+  };
+}
+
+auto interop::decal_set(std::uint64_t uuid, const decal_component_data* value) -> void {
+  auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid() || !value || !node.has_component<scenes::decal>()) {
+    utility::logger<"scripting">::error("Decal: node {} has no decal", uuid);
+    return;
+  }
+
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto& decal = node.get_component<scenes::decal>();
+
+  decal.albedo = value->albedo != 0u ? assets_module.find_texture(math::uuid::from_value(value->albedo)) : assets::texture2d_handle{};
+  decal.normal = value->normal != 0u ? assets_module.find_texture(math::uuid::from_value(value->normal)) : assets::texture2d_handle{};
+  decal.color = value->color;
+  decal.opacity = std::clamp(value->opacity, 0.0f, 1.0f);
+  decal.normal_strength = std::max(value->normal_strength, 0.0f);
+  decal.angle_fade_start = value->angle_fade_start;
+  decal.angle_fade_end = value->angle_fade_end;
+  decal.edge_fade = std::clamp(value->edge_fade, 0.0f, 1.0f);
+  decal.sort_order = value->sort_order;
+}
+
+auto interop::reflection_probe_get(std::uint64_t uuid, reflection_probe_component_data* out_value) -> void {
+  auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid() || !out_value || !node.has_component<scenes::reflection_probe>()) {
+    utility::logger<"scripting">::error("ReflectionProbe: node {} has no reflection_probe", uuid);
+    return;
+  }
+
+  const auto& probe = node.get_component<scenes::reflection_probe>();
+
+  *out_value = reflection_probe_component_data{
+    .box_extents = probe.box_extents,
+    .blend_distance = probe.blend_distance,
+    .intensity = probe.intensity,
+    .importance = probe.importance,
+    .box_projection = probe.box_projection ? 1u : 0u
+  };
+}
+
+auto interop::reflection_probe_set(std::uint64_t uuid, const reflection_probe_component_data* value) -> void {
+  auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid() || !value || !node.has_component<scenes::reflection_probe>()) {
+    utility::logger<"scripting">::error("ReflectionProbe: node {} has no reflection_probe", uuid);
+    return;
+  }
+
+  auto& probe = node.get_component<scenes::reflection_probe>();
+
+  probe.box_extents = math::vector3{std::max(value->box_extents.x(), 0.001f), std::max(value->box_extents.y(), 0.001f), std::max(value->box_extents.z(), 0.001f)};
+  probe.blend_distance = std::max(value->blend_distance, 0.0f);
+  probe.intensity = std::max(value->intensity, 0.0f);
+  probe.importance = value->importance;
+  probe.box_projection = value->box_projection != 0u;
 }
 
 } // namespace sbx::scripting

@@ -5,6 +5,7 @@
 #include <libsbx/utility/profiler.hpp>
 
 #include <algorithm>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -127,6 +128,36 @@ auto scene_renderer_panel::draw(editor_state& state) -> void {
     ImGui::EndTable();
   }
 
+  ImGui::SeparatorText("Mesh LOD");
+
+  {
+    const auto triangles = scene_renderer_module.last_lod_triangles();
+
+    auto total = std::uint64_t{0u};
+
+    for (const auto count : triangles) {
+      total += count;
+    }
+
+    ImGui::TextDisabled("Camera-view triangles by detail level (crossfading instances count in both).");
+
+    for (auto level = std::size_t{0u}; level < triangles.size(); ++level) {
+      const auto share = total > 0u ? static_cast<float>(triangles[level]) / static_cast<float>(total) : 0.0f;
+
+      ImGui::Text("LOD %zu", level);
+      ImGui::SameLine(80.0f);
+      ImGui::ProgressBar(share, ImVec2{-1.0f, 0.0f}, fmt::format("{} ({:.0f}%)", triangles[level], share * 100.0f).c_str());
+    }
+  }
+
+  ImGui::SeparatorText("Occlusion culling");
+
+  if (sbx::core::engine::has_project() && !sbx::core::engine::project().occlusion_culling()) {
+    ImGui::TextDisabled("Off in Project Settings > Rendering.");
+  } else {
+    ImGui::Text("Hidden instances: %u", scene_renderer_module.last_occlusion_culled());
+  }
+
   ImGui::SeparatorText("Shadow maps");
 
   if (!scene_renderer_module.has_rendered_shadows()) {
@@ -149,6 +180,23 @@ auto scene_renderer_panel::draw(editor_state& state) -> void {
       ImGui::Image(ui_module.texture_id(scene_renderer_module.shadow_map_preview_view(cascade), ui_module.thumbnail_sampler()), ImVec2{size, size});
       ImGui::EndGroup();
     }
+  }
+
+  ImGui::SeparatorText("Local shadow atlas");
+
+  const auto& local_stats = scene_renderer_module.last_local_shadow_stats();
+
+  ImGui::Text("Tiles: %u (%u redrawn, %u cached)", local_stats.tile_count, local_stats.rendered_count, local_stats.tile_count - local_stats.rendered_count);
+
+  if (local_stats.tile_count == 0u) {
+    ImGui::TextDisabled("No shadow-casting spot or point light in view.");
+  } else {
+    auto& ui_module = sbx::core::engine::get_module<sbx::render::ui_module>();
+
+    const auto size = std::max(ImGui::GetContentRegionAvail().x, 32.0f);
+
+    ImGui::TextDisabled("Spot tiles and point light cube faces, %ux%u: dark = closer to the light.", sbx::render::local_shadow_atlas_resolution, sbx::render::local_shadow_atlas_resolution);
+    ImGui::Image(ui_module.texture_id(scene_renderer_module.local_shadow_atlas_preview_view(), ui_module.thumbnail_sampler()), ImVec2{size, size});
   }
 
   ImGui::End();

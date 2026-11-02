@@ -60,9 +60,12 @@ public:
 
   inline static constexpr auto default_max_voices = std::uint32_t{64u};
   inline static constexpr auto default_msaa_samples = std::uint32_t{4u};
+  inline static constexpr auto default_lod_bias = std::float_t{1.0f};
 
   /** @brief Bumped whenever the on-disk format changes; written by @ref save, checked by @ref load. */
-  inline static constexpr auto current_format_version = std::uint32_t{6u}; // v2: added layers/layer_collision_matrix, v3: added physics/time, v4: added audio, v5: scene list replaces startup_scene, v6: added rendering
+  inline static constexpr auto default_occlusion_culling = true;
+
+  inline static constexpr auto current_format_version = std::uint32_t{8u}; // v2: added layers/layer_collision_matrix, v3: added physics/time, v4: added audio, v5: scene list replaces startup_scene, v6: added rendering, v7: added rendering.lod_bias, v8: added rendering.occlusion_culling
 
   project() {
     _layers[0] = "Default";
@@ -253,6 +256,24 @@ public:
     _msaa_samples = samples;
   }
 
+  /** @brief Scales how much simplification error a mesh LOD may show on screen: above 1 switches to coarser levels sooner, below 1 later. */
+  [[nodiscard]] auto lod_bias() const noexcept -> std::float_t {
+    return _lod_bias;
+  }
+
+  auto set_lod_bias(std::float_t bias) noexcept -> void {
+    _lod_bias = bias;
+  }
+
+  /** @brief Whether the camera view skips meshes hidden behind what it drew last frame (two-phase Hi-Z occlusion culling). */
+  [[nodiscard]] auto occlusion_culling() const noexcept -> bool {
+    return _occlusion_culling;
+  }
+
+  auto set_occlusion_culling(bool enabled) noexcept -> void {
+    _occlusion_culling = enabled;
+  }
+
 private:
 
   std::filesystem::path _root{};
@@ -287,6 +308,8 @@ private:
   std::uint32_t _max_voices{default_max_voices};
 
   std::uint32_t _msaa_samples{default_msaa_samples};
+  std::float_t _lod_bias{default_lod_bias};
+  bool _occlusion_culling{default_occlusion_culling};
 
 }; // class project
 

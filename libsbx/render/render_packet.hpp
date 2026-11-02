@@ -3,6 +3,7 @@
 #ifndef LIBSBX_RENDER_RENDER_PACKET_HPP_
 #define LIBSBX_RENDER_RENDER_PACKET_HPP_
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -93,6 +94,21 @@ struct draw_command {
   std::shared_ptr<const scenes::instance_buffer> instances{};
   std::uint32_t culled_offset{0u};
 
+  // Detail levels frustum_cull picks from per instance: level 0 is the submesh, level k its k-th cooked simplification, whose meshopt error is lod_errors[k - 1].
+  std::uint32_t lod_count{1u};
+  std::array<std::float_t, 4u> lod_errors{};
+
+  // Where this command's culled output sits within a cull view, per command list (opaque and shadow caster lists lay out separately):
+  // its lod_count indirect args start at lod_args_offset, and level k's visible transforms (non-instanced only) at lod_culled_offset + k * instance_count.
+  std::uint32_t lod_args_offset{0u};
+  std::uint32_t lod_culled_offset{0u};
+
+  // Camera-view occlusion: this command's first index in the per-instance visibility buffer (opaque list only).
+  std::uint32_t occlusion_offset{0u};
+
+  // Instanced only: how many view blocks of lod_count * instance_count transforms it reserved; the last is the late camera view.
+  std::uint32_t instanced_view_blocks{0u};
+
   // Resolved once, since several passes submit the same command list and residency can't change mid-frame.
   bool resident{false};
 }; // struct draw_command
@@ -145,8 +161,53 @@ struct light_data {
   light_type type{light_type::directional};
   std::float_t inner_cos{0.0f};
   std::float_t outer_cos{0.0f};
-  std::uint32_t padding{0u};
+  std::uint32_t shadow_index{0xFFFFFFFFu}; // index into render_packet::local_shadow_views, 0xFFFFFFFF if the light casts no shadow this frame
 }; // struct light_data
+
+/**
+ * @brief One local light shadow tile, shadow view shadow_cascade_count + its index. Mirrors frame_data.slang's local_shadow_view.
+ */
+struct local_shadow_view {
+  math::matrix4x4 view_projection{math::matrix4x4::identity};
+  math::vector4 atlas_rect{0.0f, 0.0f, 0.0f, 0.0f}; // xy: top-left, zw: size, both in atlas uv
+  math::vector4 bias{0.0f, 0.0f, 0.0f, 0.0f}; // x: depth bias, y: normal bias (both in texels), z: one texel's world size at unit distance, w: unused
+}; // struct local_shadow_view
+
+/**
+ * @brief One projected decal, mirrors frame_data.slang's decal_data.
+ *
+ * The decal is the unit cube [-0.5, 0.5]^3 under its node's world transform, projecting along its -Z.
+ */
+struct decal_data {
+  math::matrix4x4 world_to_decal{math::matrix4x4::identity};
+  math::vector4 center{0.0f, 0.0f, 0.0f, 0.0f}; // xyz: world-space box center
+  math::vector4 axis_x{0.5f, 0.0f, 0.0f, 1.0f}; // xyz: world-space half extent along X, w: normal strength
+  math::vector4 axis_y{0.0f, 0.5f, 0.0f, 0.5f}; // xyz: along Y, w: cosine where the angle fade starts
+  math::vector4 axis_z{0.0f, 0.0f, 0.5f, 0.0f}; // xyz: along Z (back toward the projector), w: cosine where the decal is gone
+  math::vector4 color{1.0f, 1.0f, 1.0f, 1.0f}; // rgb: tint, a: opacity
+  std::uint32_t albedo_index{0xFFFFFFFFu};
+  std::uint32_t normal_index{0xFFFFFFFFu};
+  std::float_t edge_fade{0.1f};
+  std::uint32_t padding{0u};
+}; // struct decal_data
+
+/**
+ * @brief One baked reflection probe, mirrors frame_data.slang's probe_data.
+ *
+ * The box is centered on the capture point and turns with the probe's node, ignoring its scale.
+ */
+struct probe_data {
+  math::matrix4x4 world_to_box{math::matrix4x4::identity};
+  math::vector4 center{0.0f, 0.0f, 0.0f, 0.0f}; // xyz: world-space box center, w: blend distance
+  math::vector4 axis_x{1.0f, 0.0f, 0.0f, 1.0f}; // xyz: world-space half extent along X, w: intensity
+  math::vector4 axis_y{0.0f, 1.0f, 0.0f, 1.0f}; // xyz: along Y, w: 1 for box projection
+  math::vector4 axis_z{0.0f, 0.0f, 1.0f, 0.0f}; // xyz: along Z
+  math::vector4 extents{1.0f, 1.0f, 1.0f, 0.0f}; // xyz: half extents in box space
+  std::uint32_t irradiance_index{0u};
+  std::uint32_t prefiltered_index{0u};
+  std::uint32_t prefiltered_mip_count{0u};
+  std::uint32_t padding{0u};
+}; // struct probe_data
 
 /** @brief One camera-facing quad, vertex-pulled by particle_pass. */
 struct particle_billboard_instance {
@@ -220,6 +281,28 @@ struct render_packet {
   std::vector<math::matrix4x4> joint_matrices{}; // every skinned instance's skinning matrices, concatenated
   std::vector<skin_dispatch> skin_dispatches{};
   bool has_shadow_caster{false}; // lights[0] is the cascaded-shadow-mapped sun
+
+  // Local light shadow tiles: shadow view shadow_cascade_count + i uses local_shadow_views[i] and culls shadow_caster_commands.
+  std::vector<local_shadow_view> local_shadow_views{};
+
+  // Every active decal whose textures are resident, in sort order.
+  std::vector<decal_data> decals{};
+
+  // Every active reflection probe with a resident bake, most important first (higher importance, then smaller box).
+  std::vector<probe_data> probes{};
+
+  // Per local shadow view: 1 if its tile must be redrawn this frame, 0 if the atlas still holds it from last frame.
+  std::vector<std::uint8_t> local_shadow_dirty{};
+
+  // Culled-pool slots the instanced commands reserved, summed over their cull views and LOD levels (see draw_command::culled_offset).
+  std::uint32_t instanced_culled_count{0u};
+
+  // Per cull view: indirect args and non-instanced culled transforms its command list needs (the larger of the opaque and shadow caster lists').
+  std::uint32_t cull_args_stride{0u};
+  std::uint32_t cull_transform_stride{0u};
+
+  // Camera-view instances with an occlusion visibility entry: every transform, then each instanced command's instances.
+  std::uint32_t occlusion_instance_count{0u};
   std::float_t shadow_distance{75.0f};
   std::float_t shadow_depth_bias{1.0f};
   std::float_t shadow_normal_bias{1.0f};

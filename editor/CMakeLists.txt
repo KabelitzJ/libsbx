@@ -58,6 +58,7 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_view_gizmo.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_overlays.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_picking.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/probe_baking.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/widgets/vector_fields.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/widgets/layer_fields.cpp"
   PUBLIC

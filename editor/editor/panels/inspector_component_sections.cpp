@@ -37,10 +37,14 @@
 
 #include <libsbx/canvas/components.hpp>
 
+#include <libsbx/render/scene_renderer_module.hpp>
+
 #include <editor/commands/component_commands.hpp>
 #include <editor/commands/scene_commands.hpp>
 
 #include <editor/panels/inspector_asset_pickers.hpp>
+
+#include <editor/probe_baking.hpp>
 
 #include <editor/commands/prefab_override.hpp>
 
@@ -468,6 +472,41 @@ auto draw_directional_light_section(editor_state& state, sbx::scenes::scene& tar
   bracket_edit(state, target, node, light, pending, "Edit Directional Light");
 }
 
+// The shadow rows spot and point lights share: Casts Shadows, the tile resolution and both biases.
+template<typename Light>
+auto draw_local_light_shadow_rows(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, Light& light, std::optional<Light>& pending, const char* command_name) -> void {
+  {
+    const auto before = light;
+
+    if (ImGui::Checkbox("Casts Shadows", &light.casts_shadows)) {
+      state.push_command(target, std::make_unique<modify_component_command<Light>>(node.id(), before, light, command_name));
+    }
+  }
+
+  ImGui::BeginDisabled(!light.casts_shadows);
+
+  {
+    static constexpr auto resolutions = std::array<std::uint32_t, 4u>{256u, 512u, 1024u, 2048u};
+    static constexpr auto labels = std::array<const char*, 4u>{"256", "512", "1024", "2048"};
+
+    const auto current = std::ranges::find(resolutions, light.shadow_resolution);
+    auto index = current != resolutions.end() ? static_cast<int>(current - resolutions.begin()) : 1;
+
+    if (ImGui::Combo("Shadow Resolution", &index, labels.data(), static_cast<int>(labels.size()))) {
+      const auto before = light;
+      light.shadow_resolution = resolutions[static_cast<std::size_t>(index)];
+      state.push_command(target, std::make_unique<modify_component_command<Light>>(node.id(), before, light, command_name));
+    }
+  }
+
+  ImGui::DragFloat("Shadow Depth Bias", &light.shadow_depth_bias, 0.05f, 0.0f, 10.0f);
+  bracket_edit(state, target, node, light, pending, command_name);
+  ImGui::DragFloat("Shadow Normal Bias", &light.shadow_normal_bias, 0.05f, 0.0f, 3.0f);
+  bracket_edit(state, target, node, light, pending, command_name);
+
+  ImGui::EndDisabled();
+}
+
 auto draw_point_light_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
   if (!draw_component_header<sbx::scenes::point_light>(state, target, node, ICON_MDI_LIGHTBULB_OUTLINE, "Point Light")) {
     return;
@@ -482,6 +521,8 @@ auto draw_point_light_section(editor_state& state, sbx::scenes::scene& target, s
   bracket_edit(state, target, node, light, pending, "Edit Point Light");
   ImGui::DragFloat("Range", &light.range, 0.05f, 0.0f, 10000.0f);
   bracket_edit(state, target, node, light, pending, "Edit Point Light");
+
+  draw_local_light_shadow_rows(state, target, node, light, pending, "Edit Point Light");
 }
 
 auto draw_spot_light_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
@@ -504,6 +545,8 @@ auto draw_spot_light_section(editor_state& state, sbx::scenes::scene& target, sb
   bracket_edit(state, target, node, light, pending, "Edit Spot Light");
   ImGui::SliderAngle("Outer Angle", &light.outer_angle, 0.0f, 90.0f);
   bracket_edit(state, target, node, light, pending, "Edit Spot Light");
+
+  draw_local_light_shadow_rows(state, target, node, light, pending, "Edit Spot Light");
 }
 
 // "Master/SFX/Weapons"; an unknown or nil id is Master, matching how audio_module routes it.
@@ -672,6 +715,118 @@ auto draw_audio_listener_section(editor_state& state, sbx::scenes::scene& target
 
   if (active_listeners > 1u) {
     ImGui::TextColored(ImVec4{1.0f, 0.75f, 0.2f, 1.0f}, ICON_MDI_ALERT " More than one active listener; only one is used.");
+  }
+}
+
+auto draw_decal_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
+  if (!draw_component_header<sbx::scenes::decal>(state, target, node, ICON_MDI_STICKER_OUTLINE, "Decal")) {
+    return;
+  }
+
+  auto& projector = node.get_component<sbx::scenes::decal>();
+  static auto pending = std::optional<sbx::scenes::decal>{};
+
+  {
+    const auto before = projector;
+
+    auto changed = draw_property_row("Albedo", [&] { return draw_texture_picker(state, "##decal_albedo_picker", projector.albedo, assets_module, sbx::graphics::format::r8g8b8a8_srgb); });
+    changed |= draw_property_row("Normal", [&] { return draw_texture_picker(state, "##decal_normal_picker", projector.normal, assets_module, sbx::graphics::format::r8g8b8a8_unorm); });
+
+    if (changed) {
+      state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::decal>>(node.id(), before, projector, "Edit Decal"));
+    }
+  }
+
+  draw_color_field("Color", projector.color);
+  bracket_edit(state, target, node, projector, pending, "Edit Decal");
+  ImGui::SliderFloat("Opacity", &projector.opacity, 0.0f, 1.0f);
+  bracket_edit(state, target, node, projector, pending, "Edit Decal");
+  ImGui::SliderFloat("Normal Strength", &projector.normal_strength, 0.0f, 2.0f);
+  bracket_edit(state, target, node, projector, pending, "Edit Decal");
+
+  // Angles are stored in radians; SliderAngle edits a radians value in degrees.
+  ImGui::SliderAngle("Angle Fade Start", &projector.angle_fade_start, 0.0f, 180.0f);
+  bracket_edit(state, target, node, projector, pending, "Edit Decal");
+  ImGui::SliderAngle("Angle Fade End", &projector.angle_fade_end, 0.0f, 180.0f);
+  bracket_edit(state, target, node, projector, pending, "Edit Decal");
+  ImGui::SliderFloat("Edge Fade", &projector.edge_fade, 0.0f, 1.0f);
+  bracket_edit(state, target, node, projector, pending, "Edit Decal");
+  ImGui::DragInt("Sort Order", &projector.sort_order, 0.1f);
+  bracket_edit(state, target, node, projector, pending, "Edit Decal");
+
+  ImGui::TextDisabled("Projects along the node's -Z; scale the node to size the box.");
+}
+
+auto draw_reflection_probe_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
+  if (!draw_component_header<sbx::scenes::reflection_probe>(state, target, node, ICON_MDI_MIRROR, "Reflection Probe")) {
+    return;
+  }
+
+  auto& probe = node.get_component<sbx::scenes::reflection_probe>();
+  static auto pending = std::optional<sbx::scenes::reflection_probe>{};
+
+  auto extents = std::array<std::float_t, 3u>{probe.box_extents.x(), probe.box_extents.y(), probe.box_extents.z()};
+
+  if (draw_vector3_control("Box Extents", extents, 5.0f, 0.05f, 0.01f, 10000.0f).changed) {
+    probe.box_extents = sbx::math::vector3{extents[0], extents[1], extents[2]};
+  }
+
+  bracket_edit(state, target, node, probe, pending, "Edit Reflection Probe");
+  ImGui::DragFloat("Blend Distance", &probe.blend_distance, 0.05f, 0.0f, 100.0f);
+  bracket_edit(state, target, node, probe, pending, "Edit Reflection Probe");
+  ImGui::DragFloat("Intensity", &probe.intensity, 0.01f, 0.0f, 10.0f);
+  bracket_edit(state, target, node, probe, pending, "Edit Reflection Probe");
+  ImGui::DragInt("Importance", &probe.importance, 0.1f);
+  bracket_edit(state, target, node, probe, pending, "Edit Reflection Probe");
+
+  {
+    const auto before = probe;
+
+    if (ImGui::Checkbox("Box Projection", &probe.box_projection)) {
+      state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::reflection_probe>>(node.id(), before, probe, "Edit Reflection Probe"));
+    }
+  }
+
+  {
+    static constexpr auto resolutions = std::array<std::uint32_t, 3u>{128u, 256u, 512u};
+    static constexpr auto labels = std::array<const char*, 3u>{"128", "256", "512"};
+
+    const auto current = std::ranges::find(resolutions, probe.resolution);
+    auto index = current != resolutions.end() ? static_cast<int>(current - resolutions.begin()) : 0;
+
+    if (ImGui::Combo("Resolution", &index, labels.data(), static_cast<int>(labels.size()))) {
+      const auto before = probe;
+      probe.resolution = resolutions[static_cast<std::size_t>(index)];
+      state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::reflection_probe>>(node.id(), before, probe, "Edit Reflection Probe"));
+    }
+  }
+
+  ImGui::DragFloat("Near Plane", &probe.near_plane, 0.01f, 0.01f, 100.0f);
+  bracket_edit(state, target, node, probe, pending, "Edit Reflection Probe");
+  ImGui::DragFloat("Far Plane", &probe.far_plane, 1.0f, 1.0f, 100000.0f);
+  bracket_edit(state, target, node, probe, pending, "Edit Reflection Probe");
+
+  {
+    const auto before = probe;
+
+    if (draw_property_row("Baked", [&] { return draw_environment_map_picker(state, "##reflection_probe_baked_picker", probe.baked); })) {
+      state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::reflection_probe>>(node.id(), before, probe, "Edit Reflection Probe"));
+    }
+  }
+
+  const auto is_capturing = sbx::core::engine::get_module<sbx::render::scene_renderer_module>().is_capturing();
+
+  ImGui::BeginDisabled(is_capturing);
+
+  if (ImGui::Button(ICON_MDI_CAMERA_IRIS " Bake")) {
+    bake_reflection_probe(state, target, node);
+  }
+
+  ImGui::EndDisabled();
+
+  if (is_capturing) {
+    ImGui::SameLine();
+    ImGui::TextDisabled("Capturing...");
   }
 }
 

@@ -38,8 +38,33 @@ namespace sbx::render {
 inline constexpr auto shadow_cascade_count = std::uint32_t{4u};
 inline constexpr auto shadow_map_resolution = std::uint32_t{2048u};
 
-// frustum_cull_pass culls once per view: view 0 is the camera (opaque_commands), view 1 + c is shadow cascade c (shadow_caster_commands).
-inline constexpr auto cull_view_count = std::uint32_t{1u + shadow_cascade_count};
+// The camera view's second pass under two-phase occlusion culling: instances the depth pyramid revealed after the early depth pass.
+// Passed where a shadow view or 0xFFFFFFFF (the camera) goes; drawing it pushes 0xFFFFFFFF, since shaders see a camera draw.
+inline constexpr auto late_camera_view = std::uint32_t{0xFFFFFFFEu};
+
+// The depth pyramid for occlusion culling: a fixed size, scaled from whatever the render resolution is.
+inline constexpr auto hiz_width = std::uint32_t{1024u};
+inline constexpr auto hiz_height = std::uint32_t{512u};
+inline constexpr auto hiz_mip_count = std::uint32_t{11u}; // down to 1x1
+
+// Detail levels a draw command can pick from: the submesh and up to 4 cooked simplifications. Mirrored by frustum_cull_common.slang.
+inline constexpr auto max_lod_levels = std::uint32_t{5u};
+
+// The local light shadow atlas (spot and point lights): one square depth image their tiles are packed into.
+inline constexpr auto local_shadow_atlas_resolution = std::uint32_t{4096u};
+
+/**
+ * @brief How many views frustum_cull_pass culls this frame.
+ *
+ * View 0 is the camera (opaque_commands); view 1 + s is shadow view s (shadow_caster_commands), where s below shadow_cascade_count is a sun cascade and the rest are the packet's local light shadow tiles.
+ *
+ * @param packet The frame's packet.
+ *
+ * @return The view count.
+ */
+[[nodiscard]] inline auto cull_view_count(const render_packet& packet) -> std::uint32_t {
+  return 1u + shadow_cascade_count + static_cast<std::uint32_t>(packet.local_shadow_views.size());
+}
 
 // PCF quality tier for cascaded shadows; must match shaders/shadows/csm.slang (0 = 4 taps, 1 = 8, 2 = 16).
 inline constexpr auto shadow_pcf_quality = std::uint32_t{0u};
@@ -145,22 +170,42 @@ struct render_context {
   bool show_grid{false};
 
   bool wireframe{false}; // opaque_pass draws with line pipelines
+  bool is_capture{false}; // a cubemap capture face: editor overlays stay out of it
 
   bool has_shadow_caster{false};
   std::array<graphics::image_handle, shadow_cascade_count> shadow_maps{};
   std::array<std::uint32_t, shadow_cascade_count> shadow_map_indices{};
+
+  // Two-phase occlusion culling of the camera view (see frustum_cull_pass); off means a plain frustum cull.
+  bool occlusion_enabled{false};
+  // The late camera view's block in the culled buffers: right after every regular cull view.
+  std::uint32_t late_view_index{0u};
+  graphics::image_handle hiz{};
+  std::uint32_t hiz_index{0u};
+  std::array<std::uint32_t, hiz_mip_count> hiz_storage_indices{};
 }; // struct render_context
+
+/**
+ * @brief Which block of the culled buffers a draw or cull of @p cascade_index uses.
+ *
+ * @param context The frame's render context.
+ * @param cascade_index A shadow view, 0xFFFFFFFF for the camera, or late_camera_view.
+ *
+ * @return 0 for the camera, context.late_view_index for the late camera view, 1 + the shadow view otherwise.
+ */
+[[nodiscard]] auto cull_view_index(const render_context& context, std::uint32_t cascade_index) -> std::uint32_t;
 
 /**
  * @brief Where an instanced draw's visible transforms for a cull view live in the instanced culled pool; frustum_cull_pass writes them there.
  *
  * @param context The frame's render context.
  * @param command The instanced draw command.
- * @param cascade_index The shadow cascade, or 0xFFFFFFFF for the camera view.
+ * @param cascade_index The shadow view (see cull_view_count), or 0xFFFFFFFF for the camera view.
+ * @param level The LOD level.
  *
  * @return The address of the visible transforms.
  */
-auto instanced_transform_address(const render_context& context, const draw_command& command, std::uint32_t cascade_index) -> graphics::buffer::address_type;
+auto instanced_transform_address(const render_context& context, const draw_command& command, std::uint32_t cascade_index, std::uint32_t level) -> graphics::buffer::address_type;
 
 struct push_constants {
   graphics::buffer::address_type frame_address;
@@ -170,7 +215,7 @@ struct push_constants {
   std::uint32_t material_index;
   std::uint32_t sampler_index;
   std::uint32_t clamp_sampler_index;
-  std::uint32_t cascade_index{0xFFFFFFFFu}; // set per cascade by shadow_pass
+  std::uint32_t cascade_index{0xFFFFFFFFu}; // the shadow view being drawn (see cull_view_count), 0xFFFFFFFF for the camera
 
   // Only for shader graph Time/Delta Time nodes; other shaders declare a prefix of this struct.
   std::float_t time{0.0f};
@@ -245,7 +290,7 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
  * @param commands The culled command list (opaque_commands, or shadow_caster_commands per cascade).
  * @param pipelines The pass's pipelines, indexed by draw_command::pipeline_id (bit 0 double-sided, bit 1 unlit).
  * @param resolve_custom_pipeline Resolver for custom-shader materials.
- * @param cascade_index The shadow cascade whose cull view to use, or 0xFFFFFFFF for the camera.
+ * @param cascade_index The shadow view whose cull results to draw (see cull_view_count), or 0xFFFFFFFF for the camera.
  */
 auto submit_draw_commands_indirect(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, const custom_pipeline_resolver& resolve_custom_pipeline = {}, std::uint32_t cascade_index = 0xFFFFFFFFu) -> void;
 

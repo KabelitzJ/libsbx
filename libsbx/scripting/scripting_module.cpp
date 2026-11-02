@@ -186,6 +186,10 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RenderSettings_GetWireframeEnabled", reinterpret_cast<void*>(&interop::render_settings_get_wireframe_enabled));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RenderSettings_GetMsaaSamples", reinterpret_cast<void*>(&interop::render_settings_get_msaa_samples));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RenderSettings_SetMsaaSamples", reinterpret_cast<void*>(&interop::render_settings_set_msaa_samples));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RenderSettings_GetLodBias", reinterpret_cast<void*>(&interop::render_settings_get_lod_bias));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RenderSettings_SetLodBias", reinterpret_cast<void*>(&interop::render_settings_set_lod_bias));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RenderSettings_GetOcclusionCulling", reinterpret_cast<void*>(&interop::render_settings_get_occlusion_culling));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RenderSettings_SetOcclusionCulling", reinterpret_cast<void*>(&interop::render_settings_set_occlusion_culling));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetFovDegrees", reinterpret_cast<void*>(&interop::camera_get_fov_degrees));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_SetFovDegrees", reinterpret_cast<void*>(&interop::camera_set_fov_degrees));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetNearPlane", reinterpret_cast<void*>(&interop::camera_get_near_plane));
@@ -195,6 +199,10 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetExposure", reinterpret_cast<void*>(&interop::camera_get_exposure));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_SetExposure", reinterpret_cast<void*>(&interop::camera_set_exposure));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetPostProcess", reinterpret_cast<void*>(&interop::camera_get_post_process));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Decal_Get", reinterpret_cast<void*>(&interop::decal_get));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Decal_Set", reinterpret_cast<void*>(&interop::decal_set));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ReflectionProbe_Get", reinterpret_cast<void*>(&interop::reflection_probe_get));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ReflectionProbe_Set", reinterpret_cast<void*>(&interop::reflection_probe_set));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_SetPostProcess", reinterpret_cast<void*>(&interop::camera_set_post_process));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Time_DeltaTime", reinterpret_cast<void*>(&interop::time_delta_time));
@@ -951,6 +959,8 @@ auto scripting_module::_register_managed_components() -> void {
   interop::register_managed_component<scenes::audio_source>("Sbx.Core.Components.AudioSource", _core_assembly);
   interop::register_managed_component<scenes::audio_listener>("Sbx.Core.Components.AudioListener", _core_assembly);
   interop::register_managed_component<scenes::camera>("Sbx.Core.Components.CameraSettings", _core_assembly);
+  interop::register_managed_component<scenes::decal>("Sbx.Core.Components.Decal", _core_assembly);
+  interop::register_managed_component<scenes::reflection_probe>("Sbx.Core.Components.ReflectionProbe", _core_assembly);
   interop::register_managed_component<physics::rigidbody>("Sbx.Core.Physics.Rigidbody", _core_assembly);
   interop::register_managed_component<physics::nav_agent>("Sbx.Core.Physics.NavAgent", _core_assembly);
   interop::register_managed_component<physics::character_controller>("Sbx.Core.Physics.CharacterController", _core_assembly);

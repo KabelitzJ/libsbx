@@ -66,6 +66,8 @@ struct graph_resources {
   graphics::image_handle bloom_downsample{};
   graphics::image_handle bloom_upsample{};
   std::array<graphics::image_handle, shadow_cascade_count> shadow_maps{};
+  graphics::image_handle local_shadow_atlas{};
+  graphics::image_handle hiz{};
   graphics::image_handle selection_mask{};
   graphics::image_handle selection_depth{};
   std::array<graphics::image_handle, 2u> jump_flood{};
@@ -79,6 +81,7 @@ struct graph_resources {
   graphics::buffer_handle culled_transform_buffer{};
   graphics::buffer_handle instanced_culled_buffer{};
   graphics::buffer_handle skin_scratch_buffer{};
+  graphics::buffer_handle occlusion_visibility_buffer{};
 }; // struct graph_resources
 
 struct color_attachment_slot {
@@ -99,6 +102,10 @@ struct depth_attachment_slot {
   graphics::depth_stencil_clear_value clear_value{1.0f, 0u};
   graphics::image_handle resolve_image{}; // invalid => no MSAA resolve
   graphics::resolve_mode resolve_mode{graphics::resolve_mode::sample_zero}; // only used with a valid resolve_image
+
+  // Loads last frame's contents instead of clearing on the frame's first use, for a target a pass only partially redraws.
+  // The image must already be in its end-of-frame layout before its first frame.
+  bool preserve_contents{false};
 }; // struct depth_attachment_slot
 
 struct render_attachment_group {
@@ -136,6 +143,7 @@ struct recorded_operation {
   graphics::attachment_store_op store_op{graphics::attachment_store_op::store};
   math::color clear_color{};
   graphics::depth_stencil_clear_value clear_depth{1.0f, 0u};
+  bool preserve_contents{false}; // depth attachments only, see depth_attachment_slot
 }; // struct recorded_operation
 
 class resource_builder {

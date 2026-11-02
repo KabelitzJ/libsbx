@@ -29,6 +29,7 @@ struct vertex_output {
   [[vk::location(1)]] float3 normal : NORMAL;
   [[vk::location(2)]] float2 uv : TEXCOORD;
   [[vk::location(3)]] float4 tangent : TANGENT;
+  [[vk::location(4)]] nointerpolation float lod_fade : LOD_FADE; // lod_fade_of(instance), for apply_lod_fade
   float4 sv_position : SV_Position;
 }; // struct vertex_output
 
@@ -37,6 +38,7 @@ struct fragment_input {
   [[vk::location(1)]] float3 normal : NORMAL;
   [[vk::location(2)]] float2 uv : TEXCOORD;
   [[vk::location(3)]] float4 tangent : TANGENT;
+  [[vk::location(4)]] nointerpolation float lod_fade : LOD_FADE;
   float4 sv_position : SV_Position;
   bool is_front_face : SV_IsFrontFace;
 }; // struct fragment_input
@@ -61,7 +63,7 @@ struct push_data {
   uint material_index;
   uint sampler_index;
   uint clamp_sampler_index;
-  uint cascade_index;
+  uint cascade_index; // shadow view (see shadow_view_projection), 0xFFFFFFFF for the camera
   float time;
   float delta_time;
 }; // struct push_data

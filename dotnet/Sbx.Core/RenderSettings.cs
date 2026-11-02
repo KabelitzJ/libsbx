@@ -23,6 +23,25 @@ namespace Sbx.Core
       set { unsafe { InternalCalls.RenderSettings_SetMsaaSamples(value); } }
     }
 
+    /**
+     * How much on-screen error a mesh's simplified detail levels may show before the renderer uses them: above 1 switches to coarser
+     * levels sooner, below 1 keeps detail longer. Changes the open project's value, like Project Settings > Rendering.
+     */
+    public static float LodBias
+    {
+      get { unsafe { return InternalCalls.RenderSettings_GetLodBias(); } }
+      set { unsafe { InternalCalls.RenderSettings_SetLodBias(value); } }
+    }
+
+    /**
+     * Whether the camera skips meshes hidden behind what it drew last frame. Changes the open project's value, like Project Settings > Rendering.
+     */
+    public static bool OcclusionCulling
+    {
+      get { unsafe { return InternalCalls.RenderSettings_GetOcclusionCulling(); } }
+      set { unsafe { InternalCalls.RenderSettings_SetOcclusionCulling(value); } }
+    }
+
   } // class RenderSettings
 
 } // namespace Sbx.Core

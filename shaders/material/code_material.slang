@@ -18,7 +18,8 @@
 // against a definition later in the file.
 //
 // Vertex colours reach the fragment as context.lighting.color (opaque white for a mesh that sets
-// none). Vertices pass through unchanged, and the depth/shadow passes don't alpha-clip. A file
+// none). LOD crossfades are handled here; a file writing its own entry points passes lod_fade_of(instance)
+// from its vertex stages and calls apply_lod_fade first thing in its fragment stages. Vertices pass through unchanged, and the depth/shadow passes don't alpha-clip. A file
 // that needs either writes all four entry points itself instead, like a generated shader graph
 // file does.
 
@@ -37,6 +38,7 @@ struct code_vertex_output {
   [[vk::location(2)]] float2 uv : TEXCOORD;
   [[vk::location(3)]] float4 tangent : TANGENT;
   [[vk::location(4)]] float4 color : COLOR;
+  [[vk::location(5)]] nointerpolation float lod_fade : LOD_FADE;
   float4 sv_position : SV_Position;
 }; // struct code_vertex_output
 
@@ -46,6 +48,7 @@ struct code_fragment_input {
   [[vk::location(2)]] float2 uv : TEXCOORD;
   [[vk::location(3)]] float4 tangent : TANGENT;
   [[vk::location(4)]] float4 color : COLOR;
+  [[vk::location(5)]] nointerpolation float lod_fade : LOD_FADE;
   float4 sv_position : SV_Position;
   bool is_front_face : SV_IsFrontFace;
 }; // struct code_fragment_input
@@ -65,6 +68,7 @@ code_vertex_output vertex_main(vertex_input input) {
   output.tangent = float4(normalize(mul(instance.normal, float4(v.tangent.xyz, 0.0)).xyz), v.tangent.w);
   output.uv = v.uv;
   output.color = v.color * instance.color;
+  output.lod_fade = lod_fade_of(instance);
   output.sv_position = mul(frame_data.projection, mul(frame_data.view, world_position));
 
   return output;
@@ -72,11 +76,13 @@ code_vertex_output vertex_main(vertex_input input) {
 
 struct depth_vertex_output {
   float2 uv : TEXCOORD;
+  nointerpolation float lod_fade : LOD_FADE;
   float4 sv_position : SV_Position;
 }; // struct depth_vertex_output
 
 struct depth_fragment_input {
   float2 uv : TEXCOORD;
+  nointerpolation float lod_fade : LOD_FADE;
   float4 sv_position : SV_Position;
 }; // struct depth_fragment_input
 
@@ -91,11 +97,12 @@ depth_vertex_output depth_vertex_main(vertex_input input) {
 
   depth_vertex_output output;
   output.uv = v.uv;
+  output.lod_fade = lod_fade_of(instance);
 
   if (push.cascade_index == 0xFFFFFFFFu) {
     output.sv_position = mul(frame_data.projection, mul(frame_data.view, world_position));
   } else {
-    output.sv_position = mul(frame_data.light_view_projections[push.cascade_index], world_position);
+    output.sv_position = mul(shadow_view_projection(frame_data, push.cascade_index), world_position);
   }
 
   return output;
@@ -103,10 +110,13 @@ depth_vertex_output depth_vertex_main(vertex_input input) {
 
 [shader("fragment")]
 void depth_fragment_main(depth_fragment_input input) {
+  apply_lod_fade(input.lod_fade, input.sv_position);
 }
 
 [shader("fragment")]
 Policy::Output fragment_main<Policy : shading_policy>(code_fragment_input input) {
+  apply_lod_fade(input.lod_fade, input.sv_position);
+
   material_context context;
   context.lighting.position = input.position;
   context.lighting.normal = input.normal;

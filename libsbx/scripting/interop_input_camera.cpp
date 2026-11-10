@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/scripting/interop.hpp>
 
+#include <algorithm>
+
 #include <libsbx/utility/logger.hpp>
 
 #include <libsbx/core/engine.hpp>
@@ -574,6 +576,22 @@ auto interop::render_settings_get_msaa_samples() -> std::uint32_t {
 
 auto interop::render_settings_set_msaa_samples(std::uint32_t samples) -> void {
   core::engine::project().set_msaa_samples(samples);
+}
+
+auto interop::render_settings_get_lod_bias() -> std::float_t {
+  return core::engine::project().lod_bias();
+}
+
+auto interop::render_settings_set_lod_bias(std::float_t bias) -> void {
+  core::engine::project().set_lod_bias(std::max(bias, 0.01f));
+}
+
+auto interop::render_settings_get_occlusion_culling() -> managed::bool32 {
+  return core::engine::project().occlusion_culling();
+}
+
+auto interop::render_settings_set_occlusion_culling(bool enabled) -> void {
+  core::engine::project().set_occlusion_culling(enabled);
 }
 
 } // namespace sbx::scripting

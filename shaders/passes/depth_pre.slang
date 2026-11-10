@@ -10,11 +10,13 @@ struct vertex_input {
 
 struct vertex_output {
   float2 uv : TEXCOORD;
+  nointerpolation float lod_fade : LOD_FADE;
   float4 sv_position : SV_Position;
 }; // struct vertex_output
 
 struct fragment_input {
   float2 uv : TEXCOORD;
+  nointerpolation float lod_fade : LOD_FADE;
   float4 sv_position : SV_Position;
 }; // struct fragment_input
 
@@ -34,12 +36,13 @@ vertex_output vertex_main(vertex_input input) {
   vertex vertex = push.vertices[input.vertex_id];
   frame_data frame = push.frame[0];
 
-  float4x4 model = push.transforms[push.transform_offset + input.instance_id].model;
-  float4 world = mul(model, float4(vertex.position, 1.0));
+  transform_data instance = push.transforms[push.transform_offset + input.instance_id];
+  float4 world = mul(instance.model, float4(vertex.position, 1.0));
 
   vertex_output output;
 
   output.uv = vertex.uv;
+  output.lod_fade = lod_fade_of(instance);
   output.sv_position = mul(frame.projection, mul(frame.view, world));
 
   return output;
@@ -47,6 +50,8 @@ vertex_output vertex_main(vertex_input input) {
 
 [shader("fragment")]
 void fragment_main(fragment_input input) {
+  apply_lod_fade(input.lod_fade, input.sv_position);
+
   frame_data frame = push.frame[0];
   material_data material = frame.materials[push.material_index];
 

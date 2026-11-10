@@ -105,6 +105,8 @@ auto project::load(const std::filesystem::path& file) -> project {
 
   if (const auto rendering_node = node["rendering"]) {
     result._msaa_samples = rendering_node["msaa_samples"].as<std::uint32_t>(result._msaa_samples);
+    result._lod_bias = rendering_node["lod_bias"].as<std::float_t>(result._lod_bias);
+    result._occlusion_culling = rendering_node["occlusion_culling"].as<bool>(result._occlusion_culling);
   }
 
   return result;
@@ -296,6 +298,8 @@ auto project::save(const std::filesystem::path& file) const -> void {
 
   emitter << YAML::Key << "rendering" << YAML::Value << YAML::BeginMap;
   emitter << YAML::Key << "msaa_samples" << YAML::Value << _msaa_samples;
+  emitter << YAML::Key << "lod_bias" << YAML::Value << _lod_bias;
+  emitter << YAML::Key << "occlusion_culling" << YAML::Value << _occlusion_culling;
   emitter << YAML::EndMap;
 
   emitter << YAML::EndMap;

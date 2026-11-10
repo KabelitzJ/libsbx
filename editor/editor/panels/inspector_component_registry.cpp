@@ -97,6 +97,12 @@ auto component_entries() -> const std::vector<component_entry>& {
     make_entry<sbx::scenes::spot_light>(ICON_MDI_FLASHLIGHT, "Spot Light", "3D", 0,
       [](editor_state& s, sbx::scenes::scene& t, sbx::scenes::node& n, sbx::assets::assets_module&) { draw_spot_light_section(s, t, n); }),
 
+    make_entry<sbx::scenes::decal>(ICON_MDI_STICKER_OUTLINE, "Decal", "3D", 0,
+      [](editor_state& s, sbx::scenes::scene& t, sbx::scenes::node& n, sbx::assets::assets_module& a) { draw_decal_section(s, t, n, a); }),
+
+    make_entry<sbx::scenes::reflection_probe>(ICON_MDI_MIRROR, "Reflection Probe", "3D", 0,
+      [](editor_state& s, sbx::scenes::scene& t, sbx::scenes::node& n, sbx::assets::assets_module&) { draw_reflection_probe_section(s, t, n); }),
+
     make_entry<sbx::scenes::skybox>(ICON_MDI_EARTH, "Skybox", "3D", 0,
       [](editor_state& s, sbx::scenes::scene& t, sbx::scenes::node& n, sbx::assets::assets_module& a) { draw_skybox_section(s, t, n, a); }),
 

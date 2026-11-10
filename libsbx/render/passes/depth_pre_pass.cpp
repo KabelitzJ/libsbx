@@ -25,8 +25,9 @@
 
 namespace sbx::render {
 
-depth_pre_pass::depth_pre_pass(graphics::samples samples)
-: _samples{samples} {
+depth_pre_pass::depth_pre_pass(graphics::samples samples, bool late)
+: _samples{samples},
+  _late{late} {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& shader_cache = graphics_module.shader_cache();
@@ -146,7 +147,7 @@ auto depth_pre_pass::execute(render_context& context, std::uint32_t group) -> vo
   }
 
   bind_globals(context);
-  submit_draw_commands_indirect(context, context.packet->opaque_commands, _pipelines, [this](const material_shader_source& source, bool is_double_sided) { return _resolve_custom_pipeline(source, is_double_sided); });
+  submit_draw_commands_indirect(context, context.packet->opaque_commands, _pipelines, [this](const material_shader_source& source, bool is_double_sided) { return _resolve_custom_pipeline(source, is_double_sided); }, _late ? late_camera_view : 0xFFFFFFFFu);
 }
 
 auto depth_pre_pass::_copy_scene_depth(render_context& context) -> void {

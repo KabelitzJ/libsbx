@@ -185,6 +185,31 @@ auto project_settings_panel::_draw_rendering_tab() -> void {
   }
 
   ImGui::TextDisabled("Applies immediately; counts the GPU doesn't support aren't listed.");
+
+  ImGui::Spacing();
+
+  auto lod_bias = project.lod_bias();
+
+  if (ImGui::SliderFloat("LOD Bias", &lod_bias, 0.25f, 4.0f, "%.2f", ImGuiSliderFlags_Logarithmic)) {
+    project.set_lod_bias(lod_bias);
+  }
+
+  if (ImGui::IsItemDeactivatedAfterEdit()) {
+    project.save();
+  }
+
+  auto occlusion_culling = project.occlusion_culling();
+
+  if (ImGui::Checkbox("Occlusion Culling", &occlusion_culling)) {
+    project.set_occlusion_culling(occlusion_culling);
+    project.save();
+  }
+
+  ImGui::TextDisabled("Skips meshes hidden behind what the camera drew last frame.");
+
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("How much a mesh's simplified detail levels may differ from the full mesh on screen before they're used.\nHigher switches to coarser levels sooner (faster, more visible); lower keeps detail longer.");
+  }
 }
 
 // Whether @p ancestor is @p candidate or one of its parents, so a drop can't create a cycle.

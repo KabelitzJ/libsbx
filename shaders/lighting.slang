@@ -9,6 +9,7 @@
 #include <clusters/cluster_data.slang>
 #include <shadows/csm.slang>
 #include <shadows/contact.slang>
+#include <shadows/local.slang>
 
 struct lighting_input {
   float3 position;
@@ -106,6 +107,144 @@ struct pbr_lighting_model : lighting_model {
   }
 }; // struct pbr_lighting_model
 
+// The cluster input.sv_position and view-space depth view_z fall in.
+cluster_range find_cluster(lighting_input input, float view_z) {
+  float depth_slice = log2(max(-view_z, 0.0001)) * input.frame_data.cluster_scale + input.frame_data.cluster_bias;
+  uint slice = uint(clamp(depth_slice, 0.0, float(cluster_dimensions.z - 1u)));
+
+  uint2 tile = uint2(input.sv_position.xy / input.frame_data.cluster_tile_size);
+  tile = min(tile, uint2(cluster_dimensions.x - 1u, cluster_dimensions.y - 1u));
+
+  uint cluster_id = tile.x + cluster_dimensions.x * (tile.y + cluster_dimensions.y * slice);
+
+  return input.frame_data.cluster_ranges[cluster_id];
+}
+
+// Projects the cluster's decals onto the surface in sort order: each blends its albedo over `albedo` and bends the world normal `n` toward its normal map.
+// position_dx/position_dy are the world position's screen derivatives, taken by the caller in uniform control flow, since decals are sampled inside per-pixel branches.
+void apply_decals(lighting_input input, cluster_range cluster, float3 vertex_normal, float3 position_dx, float3 position_dy, inout float3 albedo, inout float3 n) {
+  SamplerState sampler = samplers[input.clamp_sampler_index];
+
+  for (uint c = 0u; c < cluster.decal_count; ++c) {
+    decal_data decal = input.frame_data.decals[input.frame_data.cluster_indices[cluster.offset + cluster.light_count + c]];
+
+    float3 local = mul(decal.world_to_decal, float4(input.position, 1.0)).xyz;
+
+    if (any(abs(local) > 0.5)) {
+      continue;
+    }
+
+    // How squarely the surface faces back at the projector, and how far from the box's near and far faces it sits.
+    float facing = dot(vertex_normal, normalize(decal.axis_z.xyz));
+    float angle_weight = saturate((facing - decal.axis_z.w) / max(decal.axis_y.w - decal.axis_z.w, 0.0001));
+    float edge_weight = saturate((0.5 - abs(local.z)) / max(decal.edge_fade * 0.5, 0.0001));
+    float weight = decal.color.a * angle_weight * edge_weight;
+
+    if (weight <= 0.0) {
+      continue;
+    }
+
+    // The texture's +Y is the decal's +Y, so v runs down it.
+    float2 uv = float2(local.x + 0.5, 0.5 - local.y);
+    float2 uv_dx = mul(decal.world_to_decal, float4(position_dx, 0.0)).xy * float2(1.0, -1.0);
+    float2 uv_dy = mul(decal.world_to_decal, float4(position_dy, 0.0)).xy * float2(1.0, -1.0);
+
+    float coverage = weight;
+
+    if (decal.albedo_index != 0xFFFFFFFFu) {
+      float4 texel = textures[decal.albedo_index].SampleGrad(sampler, uv, uv_dx, uv_dy);
+      coverage *= texel.a;
+      albedo = lerp(albedo, texel.rgb * decal.color.rgb, coverage);
+    } else {
+      albedo = lerp(albedo, decal.color.rgb, coverage);
+    }
+
+    if (decal.normal_index == 0xFFFFFFFFu || decal.axis_x.w <= 0.0) {
+      continue;
+    }
+
+    // The decal's tangent frame laid onto the surface: its X projected into the surface plane, and the bitangent from that.
+    float3 t = decal.axis_x.xyz - n * dot(decal.axis_x.xyz, n);
+
+    if (dot(t, t) < 1e-8) {
+      continue;
+    }
+
+    t = normalize(t);
+    float3 b = cross(n, t);
+
+    float3 decal_normal = textures[decal.normal_index].SampleGrad(sampler, uv, uv_dx, uv_dy).rgb * 2.0 - 1.0;
+    float3 bent = normalize(decal_normal.x * t + decal_normal.y * b + decal_normal.z * n);
+
+    n = normalize(lerp(n, bent, saturate(coverage * decal.axis_x.w)));
+  }
+}
+
+// What the cluster's reflection probes contribute to a pixel's ambient light: their irradiance and prefiltered radiance, already weighted, and how much of the ambient they cover (the global environment fills the rest).
+struct probe_lighting {
+  float3 irradiance;
+  float3 prefiltered;
+  float weight;
+}; // struct probe_lighting
+
+// Blends the first two of the cluster's probes (most important first) whose box holds the pixel, each fading in over its blend distance from the box's faces.
+// With box projection, the reflection ray is traced to the box's wall and the capture sampled toward that point, so nearby walls line up with the reflections of them.
+probe_lighting sample_reflection_probes(lighting_input input, cluster_range cluster, float3 n, float3 reflection, float roughness) {
+  probe_lighting result;
+  result.irradiance = float3(0.0, 0.0, 0.0);
+  result.prefiltered = float3(0.0, 0.0, 0.0);
+  result.weight = 0.0;
+
+  SamplerState sampler = samplers[input.sampler_index];
+
+  uint used = 0u;
+
+  for (uint c = 0u; c < cluster.probe_count && used < 2u; ++c) {
+    probe_data probe = input.frame_data.probes[input.frame_data.cluster_indices[cluster.offset + cluster.light_count + cluster.decal_count + c]];
+
+    float3 local = mul(probe.world_to_box, float4(input.position, 1.0)).xyz;
+    float3 inside = probe.extents.xyz - abs(local);
+    float depth = min(inside.x, min(inside.y, inside.z));
+
+    if (depth <= 0.0) {
+      continue;
+    }
+
+    float weight = probe.center.w > 0.0 ? saturate(depth / probe.center.w) : 1.0;
+    float share = weight * (1.0 - result.weight);
+
+    float3 direction = reflection;
+
+    if (probe.axis_y.w != 0.0) {
+      float3 local_direction = mul(probe.world_to_box, float4(reflection, 0.0)).xyz;
+
+      // Keeps axis-parallel rays from dividing by zero; they never reach those walls anyway.
+      float3 safe_direction = float3(abs(local_direction.x) < 1e-5 ? 1e-5 : local_direction.x, abs(local_direction.y) < 1e-5 ? 1e-5 : local_direction.y, abs(local_direction.z) < 1e-5 ? 1e-5 : local_direction.z);
+
+      float3 to_positive = (probe.extents.xyz - local) / safe_direction;
+      float3 to_negative = (-probe.extents.xyz - local) / safe_direction;
+      float3 exits = max(to_positive, to_negative);
+      float distance = min(exits.x, min(exits.y, exits.z));
+
+      float3 hit = local + local_direction * distance;
+
+      direction = hit.x * normalize(probe.axis_x.xyz) + hit.y * normalize(probe.axis_y.xyz) + hit.z * normalize(probe.axis_z.xyz);
+    }
+
+    float level = roughness * float(max(probe.prefiltered_mip_count, 1u) - 1u);
+    float intensity = probe.axis_x.w;
+
+    result.irradiance += share * intensity * cubes[probe.irradiance_index].SampleLevel(sampler, n, 0.0).rgb;
+    result.prefiltered += share * intensity * cubes[probe.prefiltered_index].SampleLevel(sampler, direction, level).rgb;
+    result.weight += share;
+
+    ++used;
+  }
+
+  return result;
+}
+
+// ReceivesShadows is true only for the opaque pass's policy, which is also the only pass decals reach: transparents receive neither.
 lighting_output evaluate_lit_surface<let ReceivesShadows : bool>(lighting_input input, lit_surface s) {
   float3 n = normalize(input.normal);
 
@@ -118,6 +257,10 @@ lighting_output evaluate_lit_surface<let ReceivesShadows : bool>(lighting_input 
   // Taken here, in uniform control flow: the contact shadow call below sits behind per-pixel branches.
   float view_z = mul(input.frame_data.view, float4(input.position, 1.0)).z;
   float depth_slope = fwidth(view_z);
+  float3 position_dx = ddx(input.position);
+  float3 position_dy = ddy(input.position);
+
+  cluster_range cluster = find_cluster(input, view_z);
 
   float3 t = normalize(input.tangent.xyz);
 
@@ -129,6 +272,10 @@ lighting_output evaluate_lit_surface<let ReceivesShadows : bool>(lighting_input 
 
   float3 tangent_normal = s.tangent_space_normal;
   n = normalize(tangent_normal.x * t + tangent_normal.y * b + tangent_normal.z * n);
+
+  if (ReceivesShadows) {
+    apply_decals(input, cluster, vertex_normal, position_dx, position_dy, s.albedo, n);
+  }
 
   float3 v = normalize(input.frame_data.camera_position.xyz - input.position);
 
@@ -167,17 +314,8 @@ lighting_output evaluate_lit_surface<let ReceivesShadows : bool>(lighting_input 
     lo += pbr_lighting_model::direct(surf, l, radiance);
   }
 
-  float depth_slice = log2(max(-view_z, 0.0001)) * input.frame_data.cluster_scale + input.frame_data.cluster_bias;
-  uint slice = uint(clamp(depth_slice, 0.0, float(cluster_dimensions.z - 1u)));
-
-  uint2 tile = uint2(input.sv_position.xy / input.frame_data.cluster_tile_size);
-  tile = min(tile, uint2(cluster_dimensions.x - 1u, cluster_dimensions.y - 1u));
-
-  uint cluster_id = tile.x + cluster_dimensions.x * (tile.y + cluster_dimensions.y * slice);
-  range range = input.frame_data.cluster_ranges[cluster_id];
-
-  for (uint c = 0u; c < range.count; ++c) {
-    light_data light = input.frame_data.lights[input.frame_data.cluster_light_indices[range.offset + c]];
+  for (uint c = 0u; c < cluster.light_count; ++c) {
+    light_data light = input.frame_data.lights[input.frame_data.cluster_indices[cluster.offset + c]];
 
     float3 to_light = light.position.xyz - input.position;
     float distance = length(to_light);
@@ -193,6 +331,10 @@ lighting_output evaluate_lit_surface<let ReceivesShadows : bool>(lighting_input 
       attenuation *= saturate((cos_angle - light.outer_cos) / max(light.inner_cos - light.outer_cos, 0.0001));
     }
 
+    if (ReceivesShadows && s.receives_shadow && light.shadow_index != 0xFFFFFFFFu && attenuation > 0.0) {
+      attenuation *= calculate_local_shadow(input.frame_data, light, input.position, vertex_normal, interleaved_gradient_noise(input.sv_position.xy));
+    }
+
     float3 radiance = light.color.rgb * light.color.a * attenuation;
 
     lo += pbr_lighting_model::direct(surf, l, radiance);
@@ -206,20 +348,31 @@ lighting_output evaluate_lit_surface<let ReceivesShadows : bool>(lighting_input 
   float3 fr = fresnel_schlick_roughness(ndv, f0, s.roughness);
   float3 kd = (1.0 - fr) * (1.0 - s.metallic);
 
+  float3 reflection = reflect(-v, n);
+
+  probe_lighting probes = sample_reflection_probes(input, cluster, n, reflection, s.roughness);
+
   float3 irradiance = (input.frame_data.irradiance_index != 0xFFFFFFFF) ? cubes[input.frame_data.irradiance_index].Sample(sampler, n).rgb : float3(0.03);
+  irradiance = probes.irradiance + (1.0 - probes.weight) * irradiance;
+
   float3 diffuse = irradiance * s.albedo / pi;
 
   float3 specular = float3(0.0, 0.0, 0.0);
 
-  if (input.frame_data.prefiltered_mip_count > 0u && input.frame_data.brdf_lut_index != 0xFFFFFFFF) {
-    float3 reflection = reflect(-v, n);
+  bool has_global_specular = input.frame_data.prefiltered_mip_count > 0u;
 
-    float level = s.roughness * float(input.frame_data.prefiltered_mip_count - 1u);
+  if (input.frame_data.brdf_lut_index != 0xFFFFFFFF && (has_global_specular || probes.weight > 0.0)) {
+    float3 prefiltered = probes.prefiltered;
 
-    float3 prefiltered = cubes[input.frame_data.prefiltered_index].SampleLevel(sampler, reflection, level).rgb;
+    if (has_global_specular) {
+      float level = s.roughness * float(input.frame_data.prefiltered_mip_count - 1u);
+
+      prefiltered += (1.0 - probes.weight) * cubes[input.frame_data.prefiltered_index].SampleLevel(sampler, reflection, level).rgb;
+    }
 
     SamplerState clamp_sampler = samplers[input.clamp_sampler_index];
-    float2 brdf = textures[input.frame_data.brdf_lut_index].Sample(clamp_sampler, float2(ndv, s.roughness)).rg;
+    // Explicit level: whether probes cover the pixel varies per pixel, so this can sit in divergent control flow.
+    float2 brdf = textures[input.frame_data.brdf_lut_index].SampleLevel(clamp_sampler, float2(ndv, s.roughness), 0.0).rg;
 
     specular = prefiltered * (fr * brdf.x + brdf.y);
   }

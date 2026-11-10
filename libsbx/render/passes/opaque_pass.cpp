@@ -118,6 +118,9 @@ auto opaque_pass::declare(graphics_pass_builder& builder, const graph_resources&
     builder.reads_image(shadow_map, graphics::pipeline_stage::fragment_shader, graphics::access::shader_sampled_read, graphics::image_layout::shader_read_only_optimal);
   }
 
+  // Sampled through bindless by spot and point lights (shadows/local.slang).
+  builder.reads_image(resources.local_shadow_atlas, graphics::pipeline_stage::fragment_shader, graphics::access::shader_sampled_read, graphics::image_layout::shader_read_only_optimal);
+
   auto group = render_attachment_group{.extent = resources.extent};
 
   group.colors.push_back(color_attachment_slot{
@@ -146,11 +149,20 @@ auto opaque_pass::execute(render_context& context, std::uint32_t /*group*/) -> v
 
   const auto resolve_custom_pipeline = [this](const material_shader_source& source, bool is_double_sided) { return _resolve_custom_pipeline(source, is_double_sided); };
 
-  submit_draw_commands_indirect(context, context.packet->opaque_commands, _pipelines, resolve_custom_pipeline);
+  // The camera view, then what the occlusion cull found the early depth pass had missed.
+  const auto draw = [&](const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines) {
+    submit_draw_commands_indirect(context, context.packet->opaque_commands, pipelines, resolve_custom_pipeline);
+
+    if (context.occlusion_enabled) {
+      submit_draw_commands_indirect(context, context.packet->opaque_commands, pipelines, resolve_custom_pipeline, late_camera_view);
+    }
+  };
+
+  draw(_pipelines);
 
   // Overlay: retraces edges on top of the fill, depth-biased to avoid z-fighting.
   if (context.wireframe) {
-    submit_draw_commands_indirect(context, context.packet->opaque_commands, _wireframe_pipelines, resolve_custom_pipeline);
+    draw(_wireframe_pipelines);
   }
 }
 

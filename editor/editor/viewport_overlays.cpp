@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/viewport_overlays.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cfloat>
 #include <cmath>
@@ -27,6 +28,7 @@
 #include <libsbx/physics/character_controller.hpp>
 
 #include <libsbx/render/scene_renderer_module.hpp>
+#include <libsbx/render/probes/cubemap_capture.hpp>
 
 #include <editor/editor_module.hpp>
 #include <editor/viewport_camera.hpp>
@@ -112,6 +114,14 @@ auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const I
 
   for (auto&& [entity, transform, light] : scene.query<sbx::scenes::world_transform, sbx::scenes::spot_light>(sbx::ecs::exclude<sbx::scenes::mesh_renderer, sbx::scenes::inactive>).each()) {
     draw_icon(entity, sbx::math::vector3{transform.matrix[3]}, ICON_MDI_FLASHLIGHT);
+  }
+
+  for (auto&& [entity, transform, projector] : scene.query<sbx::scenes::world_transform, sbx::scenes::decal>(sbx::ecs::exclude<sbx::scenes::mesh_renderer, sbx::scenes::inactive>).each()) {
+    draw_icon(entity, sbx::math::vector3{transform.matrix[3]}, ICON_MDI_STICKER_OUTLINE);
+  }
+
+  for (auto&& [entity, transform, probe] : scene.query<sbx::scenes::world_transform, sbx::scenes::reflection_probe>(sbx::ecs::exclude<sbx::scenes::mesh_renderer, sbx::scenes::inactive>).each()) {
+    draw_icon(entity, sbx::math::vector3{transform.matrix[3]}, ICON_MDI_MIRROR);
   }
 
   for (auto&& [entity, transform, light] : scene.query<sbx::scenes::world_transform, sbx::scenes::directional_light>(sbx::ecs::exclude<sbx::scenes::mesh_renderer, sbx::scenes::inactive>).each()) {
@@ -214,6 +224,42 @@ auto draw_audio_source_gizmo(editor_state& state) -> void {
 
   debug_draw.add_wire_sphere(center, source.min_distance, sbx::math::color::cyan(), 32u);
   debug_draw.add_wire_sphere(center, source.max_distance, sbx::math::color::blue(), 48u);
+}
+
+auto draw_volume_gizmos(editor_state& state) -> void {
+  auto& scene = sbx::core::engine::get_module<sbx::scenes::scenes_module>().active_scene();
+
+  auto node = state.selected_node(scene);
+
+  if (!node.is_valid()) {
+    return;
+  }
+
+  auto& debug_draw = sbx::core::engine::get_module<sbx::render::scene_renderer_module>().debug_draw();
+  const auto& world = node.world_matrix();
+
+  // The unit cube under the node's transform, with an arrow along the projection direction.
+  if (node.has_component<sbx::scenes::decal>()) {
+    const auto color = sbx::math::color{1.0f, 0.6f, 0.2f, 1.0f};
+    const auto center = sbx::math::vector3{world[3]};
+
+    debug_draw.add_wire_box(world, sbx::math::vector3{0.5f, 0.5f, 0.5f}, color);
+    debug_draw.add_line(center, center - sbx::math::vector3{world[2]} * 0.5f, color);
+  }
+
+  // The probe's box, which ignores the node's scale, and inside it where the blend reaches full weight.
+  if (node.has_component<sbx::scenes::reflection_probe>()) {
+    const auto& probe = node.get_component<sbx::scenes::reflection_probe>();
+    const auto box = sbx::render::reflection_probe_box(world);
+
+    debug_draw.add_wire_box(box, probe.box_extents, sbx::math::color{0.3f, 0.8f, 1.0f, 1.0f});
+
+    if (probe.blend_distance > 0.0f) {
+      const auto inner = sbx::math::vector3{std::max(probe.box_extents.x() - probe.blend_distance, 0.0f), std::max(probe.box_extents.y() - probe.blend_distance, 0.0f), std::max(probe.box_extents.z() - probe.blend_distance, 0.0f)};
+
+      debug_draw.add_wire_box(box, inner, sbx::math::color{0.3f, 0.8f, 1.0f, 0.4f});
+    }
+  }
 }
 
 auto draw_character_controller_gizmo(editor_state& state) -> void {

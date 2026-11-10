@@ -29,6 +29,13 @@ auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const I
  */
 auto draw_camera_frustum_gizmo(editor_state& state, const ImVec2& viewport_size) -> void;
 
+/**
+ * @brief Debug-draws the selected node's box volumes: a decal's projection box, a reflection probe's box and blend region.
+ *
+ * @param state The editor state.
+ */
+auto draw_volume_gizmos(editor_state& state) -> void;
+
 /** @brief Wire spheres at the selected spatial audio source's min (full volume) and max distance. */
 auto draw_audio_source_gizmo(editor_state& state) -> void;
 

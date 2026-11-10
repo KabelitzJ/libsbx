@@ -6,13 +6,17 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <functional>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 #include <libsbx/utility/logger.hpp>
@@ -30,6 +34,7 @@
 #include <libsbx/math/matrix_cast.hpp>
 #include <libsbx/math/algorithm.hpp>
 #include <libsbx/math/angle.hpp>
+#include <libsbx/math/constants.hpp>
 #include <libsbx/math/frustum.hpp>
 
 #include <libsbx/core/engine.hpp>
@@ -53,6 +58,7 @@
 #include <libsbx/render/passes/ambient_occlusion_pass.hpp>
 #include <libsbx/render/passes/bloom_pass.hpp>
 #include <libsbx/render/passes/frustum_cull_pass.hpp>
+#include <libsbx/render/passes/hiz_pass.hpp>
 #include <libsbx/render/passes/depth_pre_pass.hpp>
 #include <libsbx/render/passes/light_culling_pass.hpp>
 #include <libsbx/render/passes/opaque_pass.hpp>
@@ -71,6 +77,7 @@
 #include <libsbx/render/particles/particle_simulate_pass.hpp>
 #include <libsbx/render/skinning/skin_pass.hpp>
 #include <libsbx/render/shadow/shadow_pass.hpp>
+#include <libsbx/render/shadow/local_shadow_pass.hpp>
 #include <libsbx/render/shadow/cascade.hpp>
 #include <libsbx/render/scene_blit_compositor.hpp>
 
@@ -117,7 +124,58 @@ struct frame_data {
   std::float_t shadow_penumbra_scale;
   std::float_t contact_shadow_length;
   std::uint32_t ambient_occlusion_index;  // 0xFFFFFFFF: off
+  std::uint32_t local_shadow_view_count;
+  graphics::buffer::address_type local_shadow_view_address;
+  std::uint32_t local_shadow_atlas_index;
+  std::uint32_t local_shadow_padding;
+  std::float_t lod_projection_scale;
+  std::float_t lod_error_threshold;
+  std::float_t shadow_lod_error_threshold;
+  std::uint32_t lod_padding;
+  graphics::buffer::address_type occlusion_visibility_address;
+  graphics::buffer::address_type occlusion_culled_counter_address;
+  std::uint32_t hiz_index;
+  std::uint32_t hiz_width;
+  std::uint32_t hiz_height;
+  std::uint32_t hiz_mip_count;
+  std::uint32_t occlusion_enabled;
+  std::uint32_t occlusion_padding;
+  graphics::buffer::address_type decal_address;
+  std::uint32_t decal_count;
+  std::uint32_t decal_padding;
+  graphics::buffer::address_type probe_address;
+  std::uint32_t probe_count;
+  std::uint32_t probe_padding;
 }; // struct frame_data
+
+// A detail level is used while its simplification error stays under this many pixels on screen, times the project's LOD bias.
+inline constexpr auto lod_error_pixels = 1.0f;
+
+// Shadow views accept this much more error: shadows are blurred and seen at an angle, so coarser casters rarely show.
+inline constexpr auto shadow_lod_error_scale = 2.0f;
+
+// Replaces @p buffer (retiring the old one) with one holding @p slot_capacity elements per frame slot, and points each slot's address at its region.
+auto create_slotted_buffer(graphics::buffer_handle& buffer, std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight>& addresses, std::size_t element_size, std::size_t slot_capacity, graphics::buffer_usage usage, graphics::memory_usage memory, std::string_view name) -> void {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& registry = graphics_module.resource_registry();
+
+  if (buffer.is_valid()) {
+    registry.retire(buffer, graphics_module.frame_context().frame_index());
+  }
+
+  buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+    .size = element_size * slot_capacity * graphics::swapchain::max_frames_in_flight,
+    .usage = usage,
+    .memory = memory,
+    .name = std::string{name}
+  });
+
+  const auto base = registry.get<graphics::buffer>(buffer).address();
+
+  for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
+    addresses[slot] = base + slot * slot_capacity * element_size;
+  }
+}
 
 inline constexpr auto skinned_bounds_padding_factor = 0.2f;
 
@@ -126,9 +184,12 @@ struct cluster_aabb {
   math::vector4 max_view;
 }; // struct cluster_aabb
 
+// Mirrors frame_data.slang's cluster_range.
 struct cluster_range {
   std::uint32_t offset;
-  std::uint32_t count;
+  std::uint32_t light_count;
+  std::uint32_t decal_count;
+  std::uint32_t probe_count;
 }; // struct cluster_range
 
 struct billboard_key_hash {
@@ -191,6 +252,8 @@ auto recycle_packet_storage(render_packet& previous) -> render_packet {
   recycle(packet.selected_commands, previous.selected_commands);
   recycle(packet.transforms, previous.transforms);
   recycle(packet.lights, previous.lights);
+  recycle(packet.local_shadow_views, previous.local_shadow_views);
+  recycle(packet.local_shadow_dirty, previous.local_shadow_dirty);
   recycle(packet.particle_billboard_instances, previous.particle_billboard_instances);
   recycle(packet.particle_billboard_commands, previous.particle_billboard_commands);
   recycle(packet.particle_mesh_instances, previous.particle_mesh_instances);
@@ -206,6 +269,63 @@ auto recycle_packet_storage(render_packet& previous) -> render_packet {
 
 auto compute_pipeline_id(const assets::material& material) -> std::uint32_t {
   return (material.is_double_sided() ? 1u : 0u) | (material.shading() == assets::shading_model::unlit ? 2u : 0u);
+}
+
+// The command's detail levels: its submesh, then up to max_lod_levels - 1 of the cooked simplifications, coarsest last.
+auto set_lod_levels(draw_command& command) -> void {
+  command.lod_count = 1u;
+  command.lod_errors = {};
+
+  if (!command.mesh.is_valid() || command.submesh_index >= command.mesh->submeshes().size()) {
+    return;
+  }
+
+  const auto& lods = command.mesh->submeshes()[command.submesh_index].lods;
+  const auto count = std::min(lods.size(), static_cast<std::size_t>(max_lod_levels - 1u));
+
+  for (auto level = std::size_t{0u}; level < count; ++level) {
+    command.lod_errors[level] = lods[level].error;
+  }
+
+  command.lod_count = 1u + static_cast<std::uint32_t>(count);
+}
+
+// Lays out one command list's culled output within a cull view: each command's indirect args (one per level), and for non-instanced commands its visible transforms (instance_count per level).
+// Returns how many args and transforms the list needs per view.
+auto assign_lod_layout(std::vector<draw_command>& commands) -> std::pair<std::uint32_t, std::uint32_t> {
+  auto args = std::uint32_t{0u};
+  auto transforms = std::uint32_t{0u};
+
+  for (auto& command : commands) {
+    set_lod_levels(command);
+
+    command.lod_args_offset = args;
+    args += command.lod_count;
+
+    if (!command.instances) {
+      command.lod_culled_offset = transforms;
+      transforms += command.instance_count * command.lod_count;
+    }
+  }
+
+  return {args, transforms};
+}
+
+// Index range of one detail level of a command's submesh.
+auto lod_index_range(const draw_command& command, std::uint32_t level) -> std::pair<std::uint32_t, std::uint32_t> {
+  if (!command.mesh.is_valid() || command.submesh_index >= command.mesh->submeshes().size()) {
+    return {0u, 0u};
+  }
+
+  const auto& submesh = command.mesh->submeshes()[command.submesh_index];
+
+  if (level == 0u || level - 1u >= submesh.lods.size()) {
+    return {submesh.index_count, submesh.index_offset};
+  }
+
+  const auto& lod = submesh.lods[level - 1u];
+
+  return {lod.index_count, lod.index_offset};
 }
 
 template<typename Key>
@@ -418,10 +538,22 @@ scene_renderer_module::~scene_renderer_module() {
       vkDestroyImageView(graphics_module.logical_device(), view, nullptr);
     }
   }
+
+  if (_local_shadow_atlas_preview_view != VK_NULL_HANDLE) {
+    vkDestroyImageView(graphics_module.logical_device(), _local_shadow_atlas_preview_view, nullptr);
+  }
+
+  for (const auto view : _hiz_mip_views) {
+    if (view != VK_NULL_HANDLE) {
+      vkDestroyImageView(graphics_module.logical_device(), view, nullptr);
+    }
+  }
 }
 
 auto scene_renderer_module::prepare() -> void {
   core::engine::get_module<assets::assets_module>().drain_loader_results();
+
+  _advance_capture();
 
   _work_packet = _build_packet();
 
@@ -763,6 +895,19 @@ auto scene_renderer_module::_build_packet() -> render_packet {
 
   packet.camera = _resolve_camera_data();
 
+  if (_capture_face) {
+    const auto& job = _capture_jobs.front();
+
+    packet.camera.view = cubemap_face_view(job.position, *_capture_face);
+    packet.camera.position = job.position;
+    packet.camera.fov_degrees = 90.0f;
+    packet.camera.near_plane = job.near_plane;
+    packet.camera.far_plane = job.far_plane;
+    packet.camera.is_active = true;
+  }
+
+  _select_local_shadows(scene, packet);
+
   if (scene.has_active_camera()) {
     auto camera_node = scene.active_camera();
 
@@ -898,7 +1043,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     packet.opaque_commands.push_back(std::move(command));
   }
 
-  // Instanced renderers: one command per submesh, reserving culled pool space per cull view.
+  // Instanced renderers: one command per submesh, reserving culled pool space per cull view (so local shadow views must be chosen before this).
   auto instanced_culled = std::uint32_t{0u};
 
   for (const auto [entity, world, renderer] : scene.query<scenes::world_transform, scenes::instanced_mesh_renderer>(ecs::exclude<scenes::inactive>).each()) {
@@ -918,18 +1063,8 @@ auto scene_renderer_module::_build_packet() -> render_packet {
 
     const auto count = renderer.instances->count();
     const auto casts_shadow = renderer.material->casts_shadow();
-    const auto views = casts_shadow ? cull_view_count : 1u;
+    const auto views = casts_shadow ? cull_view_count(packet) : 1u;
     const auto& submeshes = renderer.mesh->submeshes();
-
-    if (instanced_culled + count * views * static_cast<std::uint32_t>(submeshes.size()) > instanced_culled_capacity) {
-      static auto warned = false;
-
-      if (!std::exchange(warned, true)) {
-        utility::logger<"render">::warn("instanced_mesh_renderer: over {} visible-instance slots this frame, skipping the rest", instanced_culled_capacity);
-      }
-
-      continue;
-    }
 
     const auto node_index = static_cast<std::uint32_t>(packet.transforms.size());
     packet.transforms.push_back(transform_data{world.matrix, math::matrix4x4::transposed(math::matrix4x4::inverted(world.matrix))});
@@ -949,7 +1084,10 @@ auto scene_renderer_module::_build_packet() -> render_packet {
       command.instances = renderer.instances;
       command.culled_offset = instanced_culled;
 
-      instanced_culled += count * views;
+      // One block per cull view and detail level, plus the late camera view's.
+      set_lod_levels(command);
+      command.instanced_view_blocks = views + 1u;
+      instanced_culled += count * command.instanced_view_blocks * command.lod_count;
 
       if (casts_shadow) {
         packet.shadow_caster_commands.push_back(command);
@@ -958,6 +1096,8 @@ auto scene_renderer_module::_build_packet() -> render_packet {
       packet.opaque_commands.push_back(std::move(command));
     }
   }
+
+  packet.instanced_culled_count = instanced_culled;
 
   packet.transparent_commands.reserve(_transparent_entries.size());
 
@@ -1131,18 +1271,30 @@ auto scene_renderer_module::_build_packet() -> render_packet {
 
   packet.directional_light_count = static_cast<std::uint32_t>(packet.lights.size());
 
-  for (auto&& [entity, transform, light] : scene.query<scenes::world_transform, scenes::point_light>(ecs::exclude<scenes::inactive>).each()) {
+  // The exact query _select_local_shadows runs, so the iteration order matches _point_shadow_indices.
+  auto point_index = std::size_t{0u};
+
+  for (auto&& [entity, transform, light, id] : scene.query<scenes::world_transform, scenes::point_light, scenes::id>(ecs::exclude<scenes::inactive>).each()) {
     const auto& matrix = transform.matrix;
     auto& out = packet.lights.emplace_back();
+
+    out.shadow_index = point_index < _point_shadow_indices.size() ? _point_shadow_indices[point_index] : 0xFFFFFFFFu;
+    ++point_index;
 
     out.type = light_type::point;
     out.color = math::vector4{light.color.r(), light.color.g(), light.color.b(), light.intensity};
     out.position = math::vector4{matrix[3].x(), matrix[3].y(), matrix[3].z(), light.range};
   }
 
-  for (auto&& [entity, transform, light] : scene.query<scenes::world_transform, scenes::spot_light>(ecs::exclude<scenes::inactive>).each()) {
+  // The exact query _select_local_shadows runs, so the iteration order matches _spot_shadow_indices.
+  auto spot_index = std::size_t{0u};
+
+  for (auto&& [entity, transform, light, id] : scene.query<scenes::world_transform, scenes::spot_light, scenes::id>(ecs::exclude<scenes::inactive>).each()) {
     const auto& matrix = transform.matrix;
     auto& out = packet.lights.emplace_back();
+
+    out.shadow_index = spot_index < _spot_shadow_indices.size() ? _spot_shadow_indices[spot_index] : 0xFFFFFFFFu;
+    ++spot_index;
 
     out.type = light_type::spot;
     out.color = math::vector4{light.color.r(), light.color.g(), light.color.b(), light.intensity};
@@ -1151,6 +1303,9 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     out.inner_cos = std::cos(light.inner_angle);
     out.outer_cos = std::cos(light.outer_angle);
   }
+
+  _gather_decals(packet);
+  _gather_reflection_probes(packet);
 
   const auto delta_time = scenes_module.simulation_delta_time().value();
   const auto time = scenes_module.simulation_time().value();
@@ -1333,6 +1488,27 @@ auto scene_renderer_module::_build_packet() -> render_packet {
   _particle_pool_additive->tick(delta_time);
   _particle_pool_alpha_blend->tick(delta_time);
 
+  // Every list is complete: lay out each one's culled output per view.
+  const auto [opaque_args, opaque_transforms] = assign_lod_layout(packet.opaque_commands);
+  const auto [shadow_args, shadow_transforms] = assign_lod_layout(packet.shadow_caster_commands);
+
+  packet.cull_args_stride = std::max(opaque_args, shadow_args);
+  packet.cull_transform_stride = std::max(opaque_transforms, shadow_transforms);
+
+  // Every camera instance gets its own visibility flag, so no two culls race on one.
+  for (auto& command : packet.opaque_commands) {
+    command.occlusion_offset = packet.occlusion_instance_count;
+    packet.occlusion_instance_count += command.instance_count;
+  }
+
+  // Needs every shadow caster command, so it runs last.
+  _update_local_shadow_cache(packet);
+
+  // A capture face sees the scene as the game does.
+  if (_capture_face) {
+    packet.selected_commands.clear();
+  }
+
   return packet;
 }
 
@@ -1350,9 +1526,13 @@ auto scene_renderer_module::_build_graph() -> void {
   _graph.add_pass<skin_pass>();
   _graph.add_pass<frustum_cull_pass>();
   _graph.add_pass<depth_pre_pass>(_sample_count);
+  _graph.add_pass<hiz_pass>();
+  _graph.add_pass<frustum_cull_pass>(true);
+  _graph.add_pass<depth_pre_pass>(_sample_count, true);
   _graph.add_pass<ambient_occlusion_pass>();
   _graph.add_pass<light_culling_pass>();
   _graph.add_pass<shadow_pass>();
+  _graph.add_pass<local_shadow_pass>();
   _graph.add_pass<opaque_pass>(_sample_count);
   _graph.add_pass<skybox_pass>(_sample_count);
   _graph.add_pass<grid_pass>(_sample_count);
@@ -1401,7 +1581,8 @@ auto scene_renderer_module::record(graphics::command_buffer& command_buffer, mat
 
   const auto& packet = _work_packet;
 
-  const auto scene_extent = (_viewport_extent.x() > 0u && _viewport_extent.y() > 0u) ? _viewport_extent : extent;
+  const auto viewport_extent = (_viewport_extent.x() > 0u && _viewport_extent.y() > 0u) ? _viewport_extent : extent;
+  const auto scene_extent = _capture_face ? math::vector2u{_capture_jobs.front().resolution, _capture_jobs.front().resolution} : viewport_extent;
 
   {
     SBX_STATS_SCOPE("AssetUpdate");
@@ -1414,13 +1595,14 @@ auto scene_renderer_module::record(graphics::command_buffer& command_buffer, mat
   }
 
   auto irradiance_index = 0xFFFFFFFFu;
-  auto brdf_lut_index = 0xFFFFFFFFu;
   auto prefiltered_index = 0xFFFFFFFFu;
   auto prefiltered_mip_count = 0u;
 
+  // Reflection probes need the lookup table even without a sky.
+  const auto brdf_lut_index = assets_module.brdf_lut_index();
+
   if (packet.camera.is_active && packet.environment.is_valid() && assets_module.is_resident(packet.environment)) {
     irradiance_index = packet.environment->irradiance_index();
-    brdf_lut_index = assets_module.brdf_lut_index();
     prefiltered_index = packet.environment->prefiltered_index();
     prefiltered_mip_count = packet.environment->prefiltered_mip_count();
   }
@@ -1429,6 +1611,7 @@ auto scene_renderer_module::record(graphics::command_buffer& command_buffer, mat
     SBX_PROFILE_SCOPE("scene_renderer_module::resize_targets");
     _apply_sample_count();
     _resize_targets(scene_extent);
+    _ensure_frame_capacity(packet);
   }
 
   _has_rendered = packet.camera.is_active;
@@ -1493,6 +1676,21 @@ auto scene_renderer_module::record(graphics::command_buffer& command_buffer, mat
   {
     SBX_PROFILE_SCOPE("render_graph::execute");
     _graph.execute(context);
+  }
+
+  if (_capture_face) {
+    _record_capture_copy(command_buffer);
+  }
+
+  // The culled args and the occlusion counter are read on the host once this slot's fence signals (_prepare_frame); make the GPU's writes visible to it.
+  {
+    auto barrier = VkMemoryBarrier2{};
+    barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+    barrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+    barrier.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
+    barrier.dstStageMask = VK_PIPELINE_STAGE_2_HOST_BIT;
+    barrier.dstAccessMask = VK_ACCESS_2_HOST_READ_BIT;
+    command_buffer.memory_dependency(barrier);
   }
 
   auto& registry = graphics_module.resource_registry();
@@ -1589,56 +1787,13 @@ auto scene_renderer_module::_ensure_resources() -> void {
     _light_addresses[slot] = light_base + slot * light_capacity * memory::stride_v<light_data>;
   }
 
-  _transform_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-    .size = sizeof(transform_data) * transform_capacity * graphics::swapchain::max_frames_in_flight,
-    .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
-    .memory = graphics::memory_usage::host_write,
-    .name = "Instance Transforms"
-  });
-
-  const auto transform_base = registry.get<graphics::buffer>(_transform_buffer).address();
-
-  for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
-    _transform_addresses[slot] = transform_base + slot * transform_capacity * sizeof(transform_data);
-  }
-
-  _culled_indirect_args_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-    .size = sizeof(VkDrawIndexedIndirectCommand) * max_opaque_draw_commands * cull_view_count * graphics::swapchain::max_frames_in_flight,
-    .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage | graphics::buffer_usage::indirect,
-    .memory = graphics::memory_usage::host_write,
-    .name = "Culled Draw Args"
-  });
-
-  const auto culled_indirect_args_base = registry.get<graphics::buffer>(_culled_indirect_args_buffer).address();
-
-  for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
-    _culled_indirect_args_addresses[slot] = culled_indirect_args_base + slot * cull_view_count * max_opaque_draw_commands * sizeof(VkDrawIndexedIndirectCommand);
-  }
-  _culled_transform_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-    .size = sizeof(transform_data) * transform_capacity * cull_view_count * graphics::swapchain::max_frames_in_flight,
-    .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
-    .memory = graphics::memory_usage::device_local,
-    .name = "Culled Instance Transforms"
-  });
-
-  const auto culled_transform_base = registry.get<graphics::buffer>(_culled_transform_buffer).address();
-
-  for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
-    _culled_transform_addresses[slot] = culled_transform_base + slot * cull_view_count * transform_capacity * sizeof(transform_data);
-  }
-
-  _instanced_culled_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-    .size = sizeof(transform_data) * instanced_culled_capacity * graphics::swapchain::max_frames_in_flight,
-    .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
-    .memory = graphics::memory_usage::device_local,
-    .name = "Culled Instanced Transforms"
-  });
-
-  const auto instanced_culled_base = registry.get<graphics::buffer>(_instanced_culled_buffer).address();
-
-  for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
-    _instanced_culled_addresses[slot] = instanced_culled_base + slot * instanced_culled_capacity * sizeof(transform_data);
-  }
+  create_slotted_buffer(_transform_buffer, _transform_addresses, sizeof(transform_data), _transform_slot_capacity, graphics::buffer_usage::device_address | graphics::buffer_usage::storage, graphics::memory_usage::host_write, "Instance Transforms");
+  create_slotted_buffer(_culled_indirect_args_buffer, _culled_indirect_args_addresses, sizeof(VkDrawIndexedIndirectCommand), _culled_indirect_args_slot_capacity, graphics::buffer_usage::device_address | graphics::buffer_usage::storage | graphics::buffer_usage::indirect, graphics::memory_usage::host_write, "Culled Draw Args");
+  create_slotted_buffer(_culled_transform_buffer, _culled_transform_addresses, sizeof(transform_data), _culled_transform_slot_capacity, graphics::buffer_usage::device_address | graphics::buffer_usage::storage, graphics::memory_usage::device_local, "Culled Instance Transforms");
+  create_slotted_buffer(_instanced_culled_buffer, _instanced_culled_addresses, sizeof(transform_data), _instanced_culled_slot_capacity, graphics::buffer_usage::device_address | graphics::buffer_usage::storage, graphics::memory_usage::device_local, "Culled Instanced Transforms");
+  create_slotted_buffer(_local_shadow_view_buffer, _local_shadow_view_addresses, sizeof(local_shadow_view), _local_shadow_view_slot_capacity, graphics::buffer_usage::device_address | graphics::buffer_usage::storage, graphics::memory_usage::host_write, "Local Shadow Views");
+  create_slotted_buffer(_decal_buffer, _decal_addresses, sizeof(decal_data), _decal_slot_capacity, graphics::buffer_usage::device_address | graphics::buffer_usage::storage, graphics::memory_usage::host_write, "Decals");
+  create_slotted_buffer(_probe_buffer, _probe_addresses, sizeof(probe_data), _probe_slot_capacity, graphics::buffer_usage::device_address | graphics::buffer_usage::storage, graphics::memory_usage::host_write, "Reflection Probes");
 
   _joint_palette_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
     .size = sizeof(math::matrix4x4) * joint_palette_capacity * graphics::swapchain::max_frames_in_flight,
@@ -1693,7 +1848,7 @@ auto scene_renderer_module::_ensure_resources() -> void {
   }
 
   _cluster_light_index_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-    .size = memory::stride_v<std::uint32_t> * cluster_light_index_capacity * graphics::swapchain::max_frames_in_flight,
+    .size = memory::stride_v<std::uint32_t> * cluster_index_capacity * graphics::swapchain::max_frames_in_flight,
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
     .memory = graphics::memory_usage::device_local,
     .name = "Cluster Light Indices"
@@ -1702,7 +1857,7 @@ auto scene_renderer_module::_ensure_resources() -> void {
   const auto cluster_light_index_base = registry.get<graphics::buffer>(_cluster_light_index_buffer).address();
 
   for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
-    _cluster_light_index_addresses[slot] = cluster_light_index_base + slot * cluster_light_index_capacity * memory::stride_v<std::uint32_t>;
+    _cluster_light_index_addresses[slot] = cluster_light_index_base + slot * cluster_index_capacity * memory::stride_v<std::uint32_t>;
   }
 
   _cluster_counter_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
@@ -1733,6 +1888,94 @@ auto scene_renderer_module::_ensure_resources() -> void {
     const auto grayscale = VkComponentMapping{VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_ONE};
     _shadow_map_preview_views[cascade] = registry.get<graphics::image>(_shadow_map_images[cascade]).create_view(graphics::image_view_type::two_dimensional, 0u, 1u, 0u, 1u, grayscale);
   }
+
+  _local_shadow_atlas_image = registry.emplace<graphics::image>(graphics::image::create_info{
+    .extent = math::vector3u{local_shadow_atlas_resolution, local_shadow_atlas_resolution, 1u},
+    .format = graphics::format::d32_sfloat,
+    .usage = graphics::image_usage::depth_stencil_attachment | graphics::image_usage::sampled,
+    .samples = graphics::samples::count_1,
+    .name = "Local Shadow Atlas"
+  });
+
+  _local_shadow_atlas_index = bindless_table.reserve_sampled_image();
+  bindless_table.write_sampled_image(_local_shadow_atlas_index, registry.get<graphics::image>(_local_shadow_atlas_image).view());
+
+  const auto& atlas = registry.get<graphics::image>(_local_shadow_atlas_image);
+
+  const auto grayscale = VkComponentMapping{VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_ONE};
+  _local_shadow_atlas_preview_view = atlas.create_view(graphics::image_view_type::two_dimensional, 0u, 1u, 0u, 1u, grayscale);
+
+  // local_shadow_pass keeps the atlas between frames (preserve_contents), so the graph's first barrier expects the layout a frame ends in.
+  // No tile is cached yet, so the undefined contents are never sampled before being drawn.
+  auto commands = graphics::command_buffer{graphics::queue::type::graphics, true};
+
+  auto to_read = graphics::command_buffer::image_transition_data{};
+  to_read.image = atlas.handle();
+  to_read.src_stage_mask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+  to_read.src_access_mask = 0u;
+  to_read.dst_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+  to_read.dst_access_mask = VK_ACCESS_2_SHADER_READ_BIT;
+  to_read.old_layout = graphics::image_layout::undefined;
+  to_read.new_layout = graphics::image_layout::shader_read_only_optimal;
+  to_read.aspect_mask = VK_IMAGE_ASPECT_DEPTH_BIT;
+  commands.transition_image_layout(to_read);
+
+  commands.submit_idle();
+
+  // Occlusion culling: a fixed-size farthest-depth pyramid, sampled as a whole and written level by level.
+  _hiz_image = registry.emplace<graphics::image>(graphics::image::create_info{
+    .extent = math::vector3u{hiz_width, hiz_height, 1u},
+    .format = graphics::format::r32_sfloat,
+    .usage = graphics::image_usage::storage | graphics::image_usage::sampled,
+    .mip_levels = hiz_mip_count,
+    .samples = graphics::samples::count_1,
+    .name = "HiZ"
+  });
+
+  const auto& hiz = registry.get<graphics::image>(_hiz_image);
+
+  _hiz_index = bindless_table.reserve_sampled_image();
+  bindless_table.write_sampled_image(_hiz_index, hiz.view());
+
+  for (auto level = std::uint32_t{0u}; level < hiz_mip_count; ++level) {
+    _hiz_mip_views[level] = hiz.create_view(graphics::image_view_type::two_dimensional, level, 1u, 0u, 1u);
+    _hiz_storage_indices[level] = bindless_table.register_storage_image(_hiz_mip_views[level]);
+  }
+
+  _create_occlusion_visibility_buffer();
+
+  _occlusion_counter_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+    .size = memory::stride_v<std::uint32_t> * graphics::swapchain::max_frames_in_flight,
+    .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
+    .memory = graphics::memory_usage::host_read,
+    .name = "Occlusion Culled Counter"
+  });
+
+  const auto occlusion_counter_base = registry.get<graphics::buffer>(_occlusion_counter_buffer).address();
+
+  for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
+    _occlusion_counter_addresses[slot] = occlusion_counter_base + slot * memory::stride_v<std::uint32_t>;
+  }
+}
+
+auto scene_renderer_module::_create_occlusion_visibility_buffer() -> void {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& registry = graphics_module.resource_registry();
+
+  if (_occlusion_visibility_buffer.is_valid()) {
+    registry.retire(_occlusion_visibility_buffer, graphics_module.frame_context().frame_index());
+  }
+
+  // One region shared by every frame: each frame's early cull reads what the previous frame's late cull wrote, and the graph orders them across frames.
+  // A fresh buffer's flags are arbitrary, which only moves instances between the early and late draws for a frame.
+  _occlusion_visibility_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+    .size = memory::stride_v<std::uint32_t> * _occlusion_visibility_capacity,
+    .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
+    .memory = graphics::memory_usage::device_local,
+    .name = "Occlusion Visibility"
+  });
+
+  _occlusion_visibility_address = registry.get<graphics::buffer>(_occlusion_visibility_buffer).address();
 }
 
 auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void {
@@ -1966,6 +2209,582 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
   _graph.compile(_build_graph_resources());
 }
 
+auto scene_renderer_module::_select_local_shadows(scenes::scene& scene, render_packet& packet) -> void {
+  // The PCF footprint plus one texel of filtering, kept inside every tile by widening its fov.
+  static constexpr auto filter_margin_texels = 4.0f;
+
+  // A point light's cube faces, in the order shadows/local.slang picks them by major axis: +X, -X, +Y, -Y, +Z, -Z.
+  static constexpr auto face_directions = std::array<std::array<std::float_t, 3u>, 6u>{{{1.0f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}};
+  static constexpr auto face_ups = std::array<std::array<std::float_t, 3u>, 6u>{{{0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}}};
+
+  struct candidate {
+    bool is_point;
+    std::size_t light; // index in its own query order (_spot_shadow_indices or _point_shadow_indices)
+    std::uint64_t identity; // the node's id: ties in tile size place lights in the same spot every frame, so their cached tiles stay valid
+    std::float_t score;
+    std::uint32_t resolution;
+    std::uint32_t tile_count;
+    math::vector3 position;
+    math::vector3 direction;
+    std::float_t outer_angle;
+    std::float_t range;
+    std::float_t depth_bias;
+    std::float_t normal_bias;
+  }; // struct candidate
+
+  _spot_shadow_indices.clear();
+  _point_shadow_indices.clear();
+  _local_shadow_bounds.clear();
+
+  const auto& camera = packet.camera;
+
+  const auto aspect = (_viewport_extent.x() > 0u && _viewport_extent.y() > 0u) ? static_cast<std::float_t>(_viewport_extent.x()) / static_cast<std::float_t>(_viewport_extent.y()) : 16.0f / 9.0f;
+  const auto camera_projection = math::matrix4x4::perspective(math::degree{camera.fov_degrees}, aspect, camera.near_plane, camera.far_plane);
+  const auto planes = math::extract_frustum_planes(camera_projection * camera.view);
+
+  const auto touches_view = [&](const math::vector3& position, std::float_t range) {
+    return std::ranges::all_of(planes, [&](const auto& plane) {
+      return plane.x() * position.x() + plane.y() * position.y() + plane.z() * position.z() + plane.w() >= -range;
+    });
+  };
+
+  const auto score_of = [&](std::float_t intensity, std::float_t range, const math::vector3& position) {
+    return intensity * range / std::max((position - camera.position).length(), 1.0f);
+  };
+
+  auto candidates = std::vector<candidate>{};
+
+  for (auto&& [entity, transform, light, id] : scene.query<scenes::world_transform, scenes::spot_light, scenes::id>(ecs::exclude<scenes::inactive>).each()) {
+    const auto light_index = _spot_shadow_indices.size();
+    _spot_shadow_indices.push_back(0xFFFFFFFFu);
+
+    const auto position = math::vector3{transform.matrix[3]};
+
+    if (!camera.is_active || !light.casts_shadows || light.range <= 0.0f || light.outer_angle <= 0.0f || !touches_view(position, light.range)) {
+      continue;
+    }
+
+    const auto& matrix = transform.matrix;
+
+    candidates.push_back(candidate{
+      .is_point = false,
+      .light = light_index,
+      .identity = id.value(),
+      .score = score_of(light.intensity, light.range, position),
+      .resolution = std::bit_ceil(std::clamp(light.shadow_resolution, 256u, 2048u)),
+      .tile_count = 1u,
+      .position = position,
+      .direction = math::vector3::normalized(math::vector3{-matrix[2].x(), -matrix[2].y(), -matrix[2].z()}),
+      .outer_angle = light.outer_angle,
+      .range = light.range,
+      .depth_bias = light.shadow_depth_bias,
+      .normal_bias = light.shadow_normal_bias
+    });
+  }
+
+  for (auto&& [entity, transform, light, id] : scene.query<scenes::world_transform, scenes::point_light, scenes::id>(ecs::exclude<scenes::inactive>).each()) {
+    const auto light_index = _point_shadow_indices.size();
+    _point_shadow_indices.push_back(0xFFFFFFFFu);
+
+    const auto position = math::vector3{transform.matrix[3]};
+
+    if (!camera.is_active || !light.casts_shadows || light.range <= 0.0f || !touches_view(position, light.range)) {
+      continue;
+    }
+
+    candidates.push_back(candidate{
+      .is_point = true,
+      .light = light_index,
+      .identity = id.value(),
+      .score = score_of(light.intensity, light.range, position),
+      .resolution = std::bit_ceil(std::clamp(light.shadow_resolution, 256u, 2048u)),
+      .tile_count = 6u,
+      .position = position,
+      .direction = math::vector3{0.0f, 0.0f, -1.0f},
+      .outer_angle = 0.0f,
+      .range = light.range,
+      .depth_bias = light.shadow_depth_bias,
+      .normal_bias = light.shadow_normal_bias
+    });
+  }
+
+  std::ranges::stable_sort(candidates, std::ranges::greater{}, &candidate::score);
+
+  // The most important lights first, while their tiles' total area still fits.
+  auto selected = std::vector<candidate>{};
+  auto used_area = std::uint64_t{0u};
+  const auto atlas_area = std::uint64_t{local_shadow_atlas_resolution} * local_shadow_atlas_resolution;
+
+  for (const auto& entry : candidates) {
+    const auto area = std::uint64_t{entry.tile_count} * entry.resolution * entry.resolution;
+
+    if (used_area + area <= atlas_area) {
+      used_area += area;
+      selected.push_back(entry);
+    }
+  }
+
+  // Shelf packing, largest first: power-of-two squares sorted this way fill the power-of-two atlas without gaps.
+  // Placement ignores score, so a set of lights that doesn't change keeps its tiles where they were.
+  std::ranges::sort(selected, [](const candidate& lhs, const candidate& rhs) {
+    return lhs.resolution != rhs.resolution ? lhs.resolution > rhs.resolution : lhs.identity < rhs.identity;
+  });
+
+  const auto atlas_size = static_cast<std::float_t>(local_shadow_atlas_resolution);
+
+  auto x = 0u;
+  auto y = 0u;
+  auto shelf_height = 0u;
+
+  // Where the next tile of a given size goes, advancing the shelf cursor; nullopt once the atlas is full.
+  const auto allocate = [&](std::uint32_t size, std::uint32_t& cursor_x, std::uint32_t& cursor_y, std::uint32_t& cursor_shelf) -> std::optional<math::vector2u> {
+    if (cursor_x + size > local_shadow_atlas_resolution) {
+      cursor_x = 0u;
+      cursor_y += cursor_shelf;
+      cursor_shelf = 0u;
+    }
+
+    if (cursor_y + size > local_shadow_atlas_resolution) {
+      return std::nullopt;
+    }
+
+    const auto origin = math::vector2u{cursor_x, cursor_y};
+
+    cursor_x += size;
+    cursor_shelf = std::max(cursor_shelf, size);
+
+    return origin;
+  };
+
+  for (const auto& entry : selected) {
+    // All of a light's tiles or none: a point light needs every face.
+    auto trial_x = x;
+    auto trial_y = y;
+    auto trial_shelf = shelf_height;
+    auto origins = std::vector<math::vector2u>{};
+
+    for (auto tile = 0u; tile < entry.tile_count; ++tile) {
+      if (const auto origin = allocate(entry.resolution, trial_x, trial_y, trial_shelf)) {
+        origins.push_back(*origin);
+      }
+    }
+
+    if (origins.size() != entry.tile_count) {
+      continue;
+    }
+
+    x = trial_x;
+    y = trial_y;
+    shelf_height = trial_shelf;
+
+    const auto resolution = static_cast<std::float_t>(entry.resolution);
+    const auto first_view = static_cast<std::uint32_t>(packet.local_shadow_views.size());
+
+    (entry.is_point ? _point_shadow_indices : _spot_shadow_indices)[entry.light] = first_view;
+
+    // Widened so a PCF kernel at the edge of the cone or cube face still samples inside the tile.
+    const auto base_half_fov = entry.is_point ? math::pif * 0.25f : std::min(entry.outer_angle, 1.5f);
+    const auto half_fov = std::atan(std::tan(base_half_fov) * (1.0f + 2.0f * filter_margin_texels / resolution));
+    const auto near_plane = std::max(0.05f, entry.range * 0.01f);
+    const auto projection = math::matrix4x4::perspective(math::angle{math::radian{2.0f * half_fov}}, 1.0f, near_plane, entry.range);
+
+    for (auto tile = 0u; tile < entry.tile_count; ++tile) {
+      auto direction = entry.direction;
+      auto up = std::abs(direction.y()) > 0.99f ? math::vector3{1.0f, 0.0f, 0.0f} : math::vector3{0.0f, 1.0f, 0.0f};
+
+      if (entry.is_point) {
+        direction = math::vector3{face_directions[tile][0], face_directions[tile][1], face_directions[tile][2]};
+        up = math::vector3{face_ups[tile][0], face_ups[tile][1], face_ups[tile][2]};
+      }
+
+      const auto view = math::matrix4x4::look_at(entry.position, entry.position + direction, up);
+      const auto& origin = origins[tile];
+
+      packet.local_shadow_views.push_back(local_shadow_view{
+        .view_projection = projection * view,
+        .atlas_rect = math::vector4{static_cast<std::float_t>(origin.x()) / atlas_size, static_cast<std::float_t>(origin.y()) / atlas_size, resolution / atlas_size, resolution / atlas_size},
+        .bias = math::vector4{entry.depth_bias, entry.normal_bias, 2.0f * std::tan(half_fov) / resolution, 0.0f}
+      });
+
+      _local_shadow_bounds.push_back(math::vector4{entry.position, entry.range});
+    }
+  }
+}
+
+auto scene_renderer_module::_update_local_shadow_cache(render_packet& packet) -> void {
+  const auto& views = packet.local_shadow_views;
+
+  packet.local_shadow_dirty.assign(views.size(), 0u);
+
+  auto current_keys = std::unordered_set<std::uint64_t>{};
+  current_keys.reserve(views.size());
+
+  // The casters a light's sphere reaches, hashed once per light (a point light's faces share it); a skinned caster changes every frame.
+  auto content = std::size_t{0u};
+  auto is_dynamic = false;
+  auto content_bounds = std::optional<math::vector4>{};
+
+  const auto hash_matrix = [](std::size_t& seed, const math::matrix4x4& matrix) {
+    for (auto column = 0u; column < 4u; ++column) {
+      for (auto row = 0u; row < 4u; ++row) {
+        utility::hash_combine(seed, matrix[column][row]);
+      }
+    }
+  };
+
+  for (auto tile = std::size_t{0u}; tile < views.size(); ++tile) {
+    const auto& bounds = _local_shadow_bounds[tile];
+
+    if (content_bounds != bounds) {
+      content_bounds = bounds;
+      content = 0u;
+      is_dynamic = false;
+
+      const auto light_position = math::vector3{bounds.x(), bounds.y(), bounds.z()};
+
+      for (const auto& command : packet.shadow_caster_commands) {
+        const auto mesh_generation = command.mesh.is_valid() ? command.mesh.generation() : 0u;
+        const auto material_generation = command.material.is_valid() ? command.material.generation() : 0u;
+
+        // Instanced draws have no per-instance bounds here, so they count for every light.
+        if (command.instances) {
+          utility::hash_combine(content, reinterpret_cast<std::uintptr_t>(command.instances.get()), mesh_generation, material_generation, command.submesh_index, command.resident);
+
+          if (command.transform_offset < packet.transforms.size()) {
+            hash_matrix(content, packet.transforms[command.transform_offset].model);
+          }
+
+          continue;
+        }
+
+        const auto local_center = command.local_bounds.center();
+        const auto local_radius = ((command.local_bounds.max() - command.local_bounds.min()) * 0.5f).length();
+
+        for (auto instance = std::uint32_t{0u}; instance < command.instance_count; ++instance) {
+          const auto index = static_cast<std::size_t>(command.transform_offset) + instance;
+
+          if (index >= packet.transforms.size()) {
+            break;
+          }
+
+          const auto& model = packet.transforms[index].model;
+          const auto world_center = model * math::vector4{local_center, 1.0f};
+          const auto scale = std::max({math::vector3{model[0]}.length(), math::vector3{model[1]}.length(), math::vector3{model[2]}.length()});
+
+          if ((math::vector3{world_center.x(), world_center.y(), world_center.z()} - light_position).length() > local_radius * scale + bounds.w()) {
+            continue;
+          }
+
+          if (command.vertex_address_override != 0u) {
+            is_dynamic = true;
+          }
+
+          utility::hash_combine(content, mesh_generation, material_generation, command.submesh_index, command.resident);
+          hash_matrix(content, model);
+        }
+      }
+    }
+
+    auto key = content;
+    hash_matrix(key, views[tile].view_projection);
+    utility::hash_combine(key, views[tile].atlas_rect.x(), views[tile].atlas_rect.y(), views[tile].atlas_rect.z());
+
+    // Clean only if last frame left exactly this content in exactly this rect.
+    packet.local_shadow_dirty[tile] = (is_dynamic || !_local_shadow_keys.contains(key)) ? 1u : 0u;
+    current_keys.insert(key);
+  }
+
+  _local_shadow_keys = std::move(current_keys);
+
+  _local_shadow_stats = local_shadow_stats{
+    .tile_count = static_cast<std::uint32_t>(views.size()),
+    .rendered_count = static_cast<std::uint32_t>(std::ranges::count(packet.local_shadow_dirty, std::uint8_t{1u}))
+  };
+}
+
+auto scene_renderer_module::request_cubemap_capture(const math::vector3& position, std::uint32_t resolution, std::float_t near_plane, std::float_t far_plane, cubemap_capture_callback on_complete) -> void {
+  _capture_jobs.push_back(capture_job{position, std::clamp(resolution, 16u, 2048u), near_plane, far_plane, std::move(on_complete)});
+}
+
+auto scene_renderer_module::_advance_capture() -> void {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& registry = graphics_module.resource_registry();
+
+  _capture_face.reset();
+
+  if (_capture_jobs.empty()) {
+    return;
+  }
+
+  // Every face is recorded and submitted (the render thread is idle); wait for the GPU, then hand them over.
+  if (_capture_next_face == cubemap_face_count) {
+    graphics_module.logical_device().wait_idle();
+
+    auto job = std::move(_capture_jobs.front());
+    _capture_jobs.pop_front();
+    _capture_next_face = 0u;
+
+    auto capture = cubemap_capture{};
+    capture.resolution = job.resolution;
+    capture.pixels.resize(static_cast<std::size_t>(job.resolution) * job.resolution * cubemap_face_count);
+
+    const auto* halves = static_cast<const std::uint16_t*>(registry.get<graphics::buffer>(_capture_readback_buffer).mapped());
+
+    for (auto index = std::size_t{0u}; index < capture.pixels.size(); ++index) {
+      capture.pixels[index] = math::color{half_to_float(halves[index * 4u + 0u]), half_to_float(halves[index * 4u + 1u]), half_to_float(halves[index * 4u + 2u]), half_to_float(halves[index * 4u + 3u])};
+    }
+
+    if (job.on_complete) {
+      job.on_complete(std::move(capture));
+    }
+
+    if (_capture_jobs.empty()) {
+      return;
+    }
+  }
+
+  const auto resolution = _capture_jobs.front().resolution;
+
+  if (_capture_readback_resolution != resolution) {
+    if (_capture_readback_buffer.is_valid()) {
+      registry.retire(_capture_readback_buffer, graphics_module.frame_context().frame_index());
+    }
+
+    _capture_readback_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+      .size = static_cast<std::size_t>(resolution) * resolution * cubemap_face_count * 4u * sizeof(std::uint16_t),
+      .usage = graphics::buffer_usage::transfer_destination,
+      .memory = graphics::memory_usage::host_read,
+      .name = "Cubemap Capture Readback"
+    });
+
+    _capture_readback_resolution = resolution;
+  }
+
+  _capture_face = _capture_next_face++;
+}
+
+auto scene_renderer_module::_record_capture_copy(graphics::command_buffer& command_buffer) -> void {
+  auto& registry = core::engine::get_module<graphics::graphics_module>().resource_registry();
+
+  auto& color = registry.get<graphics::image>(_color_image);
+  auto& readback = registry.get<graphics::buffer>(_capture_readback_buffer);
+
+  const auto resolution = _capture_readback_resolution;
+
+  // The graph leaves color read-only for tonemap_pass; borrow it for the copy and hand it back the same way.
+  auto to_source = graphics::command_buffer::image_transition_data{};
+  to_source.image = color;
+  to_source.src_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+  to_source.src_access_mask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+  to_source.dst_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+  to_source.dst_access_mask = VK_ACCESS_2_TRANSFER_READ_BIT;
+  to_source.old_layout = graphics::image_layout::shader_read_only_optimal;
+  to_source.new_layout = graphics::image_layout::transfer_source_optimal;
+  command_buffer.transition_image_layout(to_source);
+
+  auto region = VkBufferImageCopy{};
+  region.bufferOffset = static_cast<VkDeviceSize>(*_capture_face) * resolution * resolution * 4u * sizeof(std::uint16_t);
+  region.imageSubresource = VkImageSubresourceLayers{VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};
+  region.imageExtent = VkExtent3D{resolution, resolution, 1u};
+
+  vkCmdCopyImageToBuffer(command_buffer.handle(), color.handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, readback.handle(), 1u, &region);
+
+  auto to_read = graphics::command_buffer::image_transition_data{};
+  to_read.image = color;
+  to_read.src_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+  to_read.src_access_mask = VK_ACCESS_2_TRANSFER_READ_BIT;
+  to_read.dst_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+  to_read.dst_access_mask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+  to_read.old_layout = graphics::image_layout::transfer_source_optimal;
+  to_read.new_layout = graphics::image_layout::shader_read_only_optimal;
+  command_buffer.transition_image_layout(to_read);
+
+  auto to_host = VkMemoryBarrier2{};
+  to_host.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+  to_host.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+  to_host.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+  to_host.dstStageMask = VK_PIPELINE_STAGE_2_HOST_BIT;
+  to_host.dstAccessMask = VK_ACCESS_2_HOST_READ_BIT;
+  command_buffer.memory_dependency(to_host);
+}
+
+auto scene_renderer_module::_gather_decals(render_packet& packet) -> void {
+  auto& scene = core::engine::get_module<scenes::scenes_module>().active_scene();
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+  const auto texture_index = [&](const assets::texture2d_handle& texture) {
+    return texture.is_valid() && assets_module.is_resident(texture) ? texture->index() : 0xFFFFFFFFu;
+  };
+
+  struct sorted_decal {
+    std::int32_t sort_order;
+    math::uuid id;
+    decal_data data;
+  }; // struct sorted_decal
+
+  auto decals = std::vector<sorted_decal>{};
+
+  for (auto&& [entity, transform, decal, id] : scene.query<scenes::world_transform, scenes::decal, scenes::id>(ecs::exclude<scenes::inactive>).each()) {
+    // Waits for a set texture rather than flashing the bare tint while it streams in.
+    if ((decal.albedo.is_valid() && !assets_module.is_resident(decal.albedo)) || (decal.normal.is_valid() && !assets_module.is_resident(decal.normal))) {
+      continue;
+    }
+
+    const auto& matrix = transform.matrix;
+
+    auto data = decal_data{};
+    data.world_to_decal = math::matrix4x4::inverted(matrix);
+    data.center = math::vector4{math::vector3{matrix[3]}, 1.0f};
+    data.axis_x = math::vector4{math::vector3{matrix[0]} * 0.5f, std::max(decal.normal_strength, 0.0f)};
+    data.axis_y = math::vector4{math::vector3{matrix[1]} * 0.5f, std::cos(std::clamp(decal.angle_fade_start, 0.0f, decal.angle_fade_end))};
+    data.axis_z = math::vector4{math::vector3{matrix[2]} * 0.5f, std::cos(std::clamp(decal.angle_fade_end, 0.0f, math::pif))};
+    data.color = math::vector4{decal.color.r(), decal.color.g(), decal.color.b(), decal.color.a() * std::clamp(decal.opacity, 0.0f, 1.0f)};
+    data.albedo_index = texture_index(decal.albedo);
+    data.normal_index = texture_index(decal.normal);
+    data.edge_fade = std::clamp(decal.edge_fade, 0.0f, 1.0f);
+
+    decals.push_back(sorted_decal{decal.sort_order, static_cast<math::uuid>(id), data});
+  }
+
+  // Ties break by id, so equal sort orders don't swap from one frame to the next.
+  std::ranges::sort(decals, [](const sorted_decal& lhs, const sorted_decal& rhs) {
+    return lhs.sort_order != rhs.sort_order ? lhs.sort_order < rhs.sort_order : lhs.id < rhs.id;
+  });
+
+  packet.decals.reserve(decals.size());
+
+  for (const auto& entry : decals) {
+    packet.decals.push_back(entry.data);
+  }
+}
+
+auto scene_renderer_module::_gather_reflection_probes(render_packet& packet) -> void {
+  auto& scene = core::engine::get_module<scenes::scenes_module>().active_scene();
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+  struct sorted_probe {
+    std::int32_t importance;
+    std::float_t volume;
+    math::uuid id;
+    probe_data data;
+  }; // struct sorted_probe
+
+  auto probes = std::vector<sorted_probe>{};
+
+  for (auto&& [entity, transform, probe, id] : scene.query<scenes::world_transform, scenes::reflection_probe, scenes::id>(ecs::exclude<scenes::inactive>).each()) {
+    if (!probe.baked.is_valid() || !assets_module.is_resident(probe.baked)) {
+      continue;
+    }
+
+    const auto& environment = *probe.baked;
+
+    if (environment.irradiance_index() == assets::environment_map::invalid_index || environment.prefiltered_index() == assets::environment_map::invalid_index) {
+      continue;
+    }
+
+    const auto box = reflection_probe_box(transform.matrix);
+    const auto extents = math::vector3{std::max(probe.box_extents.x(), 0.001f), std::max(probe.box_extents.y(), 0.001f), std::max(probe.box_extents.z(), 0.001f)};
+
+    auto data = probe_data{};
+    data.world_to_box = math::matrix4x4::inverted(box);
+    data.center = math::vector4{math::vector3{box[3]}, std::max(probe.blend_distance, 0.0f)};
+    data.axis_x = math::vector4{math::vector3{box[0]} * extents.x(), std::max(probe.intensity, 0.0f)};
+    data.axis_y = math::vector4{math::vector3{box[1]} * extents.y(), probe.box_projection ? 1.0f : 0.0f};
+    data.axis_z = math::vector4{math::vector3{box[2]} * extents.z(), 0.0f};
+    data.extents = math::vector4{extents, 0.0f};
+    data.irradiance_index = environment.irradiance_index();
+    data.prefiltered_index = environment.prefiltered_index();
+    data.prefiltered_mip_count = environment.prefiltered_mip_count();
+
+    probes.push_back(sorted_probe{probe.importance, extents.x() * extents.y() * extents.z(), static_cast<math::uuid>(id), data});
+  }
+
+  // A smaller box at equal importance is the more specific one, like a room inside a courtyard's probe.
+  std::ranges::sort(probes, [](const sorted_probe& lhs, const sorted_probe& rhs) {
+    if (lhs.importance != rhs.importance) {
+      return lhs.importance > rhs.importance;
+    }
+
+    if (lhs.volume != rhs.volume) {
+      return lhs.volume < rhs.volume;
+    }
+
+    return lhs.id < rhs.id;
+  });
+
+  packet.probes.reserve(probes.size());
+
+  for (const auto& entry : probes) {
+    packet.probes.push_back(entry.data);
+  }
+}
+
+auto scene_renderer_module::_ensure_frame_capacity(const render_packet& packet) -> void {
+  // Every cull view, plus the late camera view after them.
+  const auto view_count = static_cast<std::size_t>(cull_view_count(packet));
+  const auto transform_count = packet.transforms.size();
+  const auto args_stride = static_cast<std::size_t>(packet.cull_args_stride);
+  const auto transform_stride = static_cast<std::size_t>(packet.cull_transform_stride);
+
+  auto replaced_tracked = false;
+
+  // Grows by half again beyond what's needed, so a scene that keeps growing doesn't reallocate every frame.
+  const auto grow = [](std::size_t& capacity, std::size_t needed) {
+    if (needed <= capacity) {
+      return false;
+    }
+
+    capacity = std::max(needed, capacity + capacity / 2u);
+    return true;
+  };
+
+  if (grow(_transform_slot_capacity, transform_count)) {
+    create_slotted_buffer(_transform_buffer, _transform_addresses, sizeof(transform_data), _transform_slot_capacity, graphics::buffer_usage::device_address | graphics::buffer_usage::storage, graphics::memory_usage::host_write, "Instance Transforms");
+  }
+
+  if (grow(_culled_indirect_args_slot_capacity, (view_count + 1u) * args_stride)) {
+    // The recorded slots point into the old buffer.
+    for (auto& layout : _lod_stat_layouts) {
+      layout.clear();
+    }
+
+    create_slotted_buffer(_culled_indirect_args_buffer, _culled_indirect_args_addresses, sizeof(VkDrawIndexedIndirectCommand), _culled_indirect_args_slot_capacity, graphics::buffer_usage::device_address | graphics::buffer_usage::storage | graphics::buffer_usage::indirect, graphics::memory_usage::host_write, "Culled Draw Args");
+    replaced_tracked = true;
+  }
+
+  if (grow(_culled_transform_slot_capacity, (view_count + 1u) * transform_stride)) {
+    create_slotted_buffer(_culled_transform_buffer, _culled_transform_addresses, sizeof(transform_data), _culled_transform_slot_capacity, graphics::buffer_usage::device_address | graphics::buffer_usage::storage, graphics::memory_usage::device_local, "Culled Instance Transforms");
+    replaced_tracked = true;
+  }
+
+  if (grow(_instanced_culled_slot_capacity, packet.instanced_culled_count)) {
+    create_slotted_buffer(_instanced_culled_buffer, _instanced_culled_addresses, sizeof(transform_data), _instanced_culled_slot_capacity, graphics::buffer_usage::device_address | graphics::buffer_usage::storage, graphics::memory_usage::device_local, "Culled Instanced Transforms");
+    replaced_tracked = true;
+  }
+
+  if (grow(_occlusion_visibility_capacity, packet.occlusion_instance_count)) {
+    _create_occlusion_visibility_buffer();
+    replaced_tracked = true;
+  }
+
+  if (grow(_probe_slot_capacity, packet.probes.size())) {
+    create_slotted_buffer(_probe_buffer, _probe_addresses, sizeof(probe_data), _probe_slot_capacity, graphics::buffer_usage::device_address | graphics::buffer_usage::storage, graphics::memory_usage::host_write, "Reflection Probes");
+  }
+
+  if (grow(_decal_slot_capacity, packet.decals.size())) {
+    create_slotted_buffer(_decal_buffer, _decal_addresses, sizeof(decal_data), _decal_slot_capacity, graphics::buffer_usage::device_address | graphics::buffer_usage::storage, graphics::memory_usage::host_write, "Decals");
+  }
+
+  if (grow(_local_shadow_view_slot_capacity, packet.local_shadow_views.size())) {
+    create_slotted_buffer(_local_shadow_view_buffer, _local_shadow_view_addresses, sizeof(local_shadow_view), _local_shadow_view_slot_capacity, graphics::buffer_usage::device_address | graphics::buffer_usage::storage, graphics::memory_usage::host_write, "Local Shadow Views");
+  }
+
+  // The graph's barriers name the cull buffers by handle.
+  if (replaced_tracked) {
+    _graph.compile(_build_graph_resources());
+  }
+}
+
 auto scene_renderer_module::_build_graph_resources() const -> graph_resources {
   return graph_resources{
     .extent = _target_extent,
@@ -1984,6 +2803,8 @@ auto scene_renderer_module::_build_graph_resources() const -> graph_resources {
     .bloom_downsample = _bloom_downsample_image,
     .bloom_upsample = _bloom_upsample_image,
     .shadow_maps = _shadow_map_images,
+    .local_shadow_atlas = _local_shadow_atlas_image,
+    .hiz = _hiz_image,
     .selection_mask = _selection_mask_image,
     .selection_depth = _selection_depth_image,
     .jump_flood = _jump_flood_images,
@@ -1995,7 +2816,8 @@ auto scene_renderer_module::_build_graph_resources() const -> graph_resources {
     .culled_indirect_args_buffer = _culled_indirect_args_buffer,
     .culled_transform_buffer = _culled_transform_buffer,
     .instanced_culled_buffer = _instanced_culled_buffer,
-    .skin_scratch_buffer = _skin_scratch_buffer
+    .skin_scratch_buffer = _skin_scratch_buffer,
+    .occlusion_visibility_buffer = _occlusion_visibility_buffer
   };
 }
 
@@ -2016,14 +2838,43 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
     light_buffer.write(context.packet->lights.data(), light_count * memory::stride_v<light_data>, context.slot * light_capacity * memory::stride_v<light_data>);
   }
 
-  const auto instance_count = std::min(static_cast<std::uint32_t>(context.packet->transforms.size()), transform_capacity);
+  // _ensure_frame_capacity sized every per-slot region for this packet.
+  const auto instance_count = static_cast<std::uint32_t>(context.packet->transforms.size());
+  const auto view_count = cull_view_count(*context.packet);
+  const auto command_stride = context.packet->cull_args_stride;
+
+  // The late camera view sits after every regular cull view.
+  const auto occlusion_enabled = context.packet->camera.is_active && (core::engine::has_project() ? core::engine::project().occlusion_culling() : core::project::default_occlusion_culling);
+  context.occlusion_enabled = occlusion_enabled;
+  context.late_view_index = view_count;
+  context.hiz = _hiz_image;
+  context.hiz_index = _hiz_index;
+  context.hiz_storage_indices = _hiz_storage_indices;
 
   if (instance_count > 0u) {
     auto& transform_buffer = registry.get<graphics::buffer>(_transform_buffer);
 
     SBX_PROFILE_SCOPE("scene_renderer_module::write_transforms");
 
-    transform_buffer.write(context.packet->transforms.data(), instance_count * sizeof(transform_data), context.slot * transform_capacity * sizeof(transform_data));
+    transform_buffer.write(context.packet->transforms.data(), instance_count * sizeof(transform_data), context.slot * _transform_slot_capacity * sizeof(transform_data));
+  }
+
+  const auto& local_shadow_views = context.packet->local_shadow_views;
+
+  if (!local_shadow_views.empty()) {
+    registry.get<graphics::buffer>(_local_shadow_view_buffer).write(local_shadow_views.data(), local_shadow_views.size() * sizeof(local_shadow_view), context.slot * _local_shadow_view_slot_capacity * sizeof(local_shadow_view));
+  }
+
+  const auto& decals = context.packet->decals;
+
+  if (!decals.empty()) {
+    registry.get<graphics::buffer>(_decal_buffer).write(decals.data(), decals.size() * sizeof(decal_data), context.slot * _decal_slot_capacity * sizeof(decal_data));
+  }
+
+  const auto& probes = context.packet->probes;
+
+  if (!probes.empty()) {
+    registry.get<graphics::buffer>(_probe_buffer).write(probes.data(), probes.size() * sizeof(probe_data), context.slot * _probe_slot_capacity * sizeof(probe_data));
   }
 
   auto& culled_indirect_args_buffer = registry.get<graphics::buffer>(_culled_indirect_args_buffer);
@@ -2031,44 +2882,94 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   const auto reset_culled_indirect_args = [&](const std::vector<draw_command>& commands, std::uint32_t view) {
     SBX_PROFILE_SCOPE("scene_renderer_module::reset_culled_indirect_args");
 
-    const auto command_count = std::min(static_cast<std::uint32_t>(commands.size()), max_opaque_draw_commands);
-
-    if (command_count == 0u) {
+    if (commands.empty()) {
       return;
     }
 
-    auto indirect_commands = std::vector<VkDrawIndexedIndirectCommand>{};
-    indirect_commands.reserve(command_count);
+    // One per command and detail level, at the slots assign_lod_layout gave them; frustum_cull fills instanceCount.
+    auto indirect_commands = std::vector<VkDrawIndexedIndirectCommand>(command_stride, VkDrawIndexedIndirectCommand{});
 
-    for (auto index = std::uint32_t{0u}; index < command_count; ++index) {
-      const auto& command = commands[index];
+    for (const auto& command : commands) {
+      for (auto level = std::uint32_t{0u}; level < command.lod_count; ++level) {
+        const auto [index_count, first_index] = lod_index_range(command, level);
 
-      auto indirect_command = VkDrawIndexedIndirectCommand{};
-
-      if (command.mesh.is_valid() && command.submesh_index < command.mesh->submeshes().size()) {
-        const auto& submesh = command.mesh->submeshes()[command.submesh_index];
-        indirect_command.indexCount = submesh.index_count;
-        indirect_command.firstIndex = submesh.index_offset;
+        auto& indirect_command = indirect_commands[command.lod_args_offset + level];
+        indirect_command.indexCount = index_count;
+        indirect_command.firstIndex = first_index;
       }
-
-      indirect_command.instanceCount = 0u;
-      indirect_command.vertexOffset = 0;
-      indirect_command.firstInstance = 0u;
-
-      indirect_commands.push_back(indirect_command);
     }
 
-    const auto offset = (context.slot * cull_view_count + view) * max_opaque_draw_commands * sizeof(VkDrawIndexedIndirectCommand);
+    const auto offset = (context.slot * _culled_indirect_args_slot_capacity + static_cast<std::size_t>(view) * command_stride) * sizeof(VkDrawIndexedIndirectCommand);
 
-    culled_indirect_args_buffer.write(indirect_commands.data(), command_count * sizeof(VkDrawIndexedIndirectCommand), offset);
+    culled_indirect_args_buffer.write(indirect_commands.data(), indirect_commands.size() * sizeof(VkDrawIndexedIndirectCommand), offset);
   };
 
+  // Before this slot's camera-view args are overwritten: the frame that last used it has finished, so its instance counts are final.
+  {
+    const auto* args = static_cast<const std::byte*>(culled_indirect_args_buffer.mapped());
+
+    auto triangles = std::array<std::uint64_t, max_lod_levels>{};
+
+    for (const auto& entry : _lod_stat_layouts[context.slot]) {
+      auto indirect_command = VkDrawIndexedIndirectCommand{};
+      std::memcpy(&indirect_command, args + entry.args_index * sizeof(VkDrawIndexedIndirectCommand), sizeof(indirect_command));
+
+      triangles[entry.level] += static_cast<std::uint64_t>(indirect_command.instanceCount) * entry.triangles_per_instance;
+    }
+
+    for (auto level = std::size_t{0u}; level < max_lod_levels; ++level) {
+      _lod_triangles[level].store(triangles[level], std::memory_order_relaxed);
+    }
+
+    auto& layout = _lod_stat_layouts[context.slot];
+    layout.clear();
+
+    // The camera view, and with occlusion culling the late camera view's additions.
+    for (const auto view : {0u, occlusion_enabled ? view_count : 0xFFFFFFFFu}) {
+      if (view == 0xFFFFFFFFu) {
+        continue;
+      }
+
+      for (const auto& command : context.packet->opaque_commands) {
+        for (auto level = std::uint32_t{0u}; level < command.lod_count; ++level) {
+          layout.push_back(lod_stat_entry{
+            .args_index = context.slot * _culled_indirect_args_slot_capacity + static_cast<std::size_t>(view) * command_stride + command.lod_args_offset + level,
+            .level = level,
+            .triangles_per_instance = lod_index_range(command, level).first / 3u
+          });
+        }
+      }
+    }
+  }
+
   reset_culled_indirect_args(context.packet->opaque_commands, 0u);
+
+  if (occlusion_enabled) {
+    reset_culled_indirect_args(context.packet->opaque_commands, view_count);
+  }
+
+  // Like the LOD stats: the frame that last used this slot has finished, so its count is final.
+  {
+    auto& occlusion_counter_buffer = registry.get<graphics::buffer>(_occlusion_counter_buffer);
+    auto* counter = static_cast<std::byte*>(occlusion_counter_buffer.mapped()) + context.slot * memory::stride_v<std::uint32_t>;
+
+    auto culled = std::uint32_t{0u};
+    std::memcpy(&culled, counter, sizeof(culled));
+    _occlusion_culled.store(culled, std::memory_order_relaxed);
+
+    const auto reset = std::uint32_t{0u};
+    std::memcpy(counter, &reset, sizeof(reset));
+  }
 
   if (context.packet->has_shadow_caster) {
     for (auto cascade = std::uint32_t{0u}; cascade < shadow_cascade_count; ++cascade) {
       reset_culled_indirect_args(context.packet->shadow_caster_commands, 1u + cascade);
     }
+  }
+
+  // Local light tiles cull independently of the sun, so they don't depend on has_shadow_caster.
+  for (auto tile = shadow_cascade_count; tile + 1u < view_count; ++tile) {
+    reset_culled_indirect_args(context.packet->shadow_caster_commands, 1u + tile);
   }
 
   const auto joint_count = std::min(static_cast<std::uint32_t>(context.packet->joint_matrices.size()), joint_palette_capacity);
@@ -2160,6 +3061,29 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   data.shadow_penumbra_scale = std::tan(math::to_radians(math::degree{context.packet->shadow_angular_diameter}).value() * 0.5f);
   data.contact_shadow_length = context.packet->contact_shadow_length;
   data.ambient_occlusion_index = context.packet->camera.post_process.ambient_occlusion.enabled ? _ambient_occlusion_index : 0xFFFFFFFFu;
+  data.local_shadow_view_count = static_cast<std::uint32_t>(local_shadow_views.size());
+  data.local_shadow_view_address = _local_shadow_view_addresses[context.slot];
+  data.local_shadow_atlas_index = _local_shadow_atlas_index;
+
+  // An error of e world units at distance d covers e * lod_projection_scale / d pixels.
+  const auto lod_bias = core::engine::has_project() ? core::engine::project().lod_bias() : core::project::default_lod_bias;
+  data.lod_projection_scale = static_cast<std::float_t>(context.extent.y()) / (2.0f * std::tan(math::to_radians(math::degree{camera.fov_degrees}).value() * 0.5f));
+  data.lod_error_threshold = lod_error_pixels * std::max(lod_bias, 0.01f);
+  data.shadow_lod_error_threshold = data.lod_error_threshold * shadow_lod_error_scale;
+
+  data.occlusion_visibility_address = _occlusion_visibility_address;
+  data.occlusion_culled_counter_address = _occlusion_counter_addresses[context.slot];
+  data.hiz_index = _hiz_index;
+  data.hiz_width = hiz_width;
+  data.hiz_height = hiz_height;
+  data.hiz_mip_count = hiz_mip_count;
+  data.occlusion_enabled = occlusion_enabled ? 1u : 0u;
+
+  data.decal_address = _decal_addresses[context.slot];
+  data.decal_count = static_cast<std::uint32_t>(decals.size());
+
+  data.probe_address = _probe_addresses[context.slot];
+  data.probe_count = static_cast<std::uint32_t>(probes.size());
 
   auto& frame_buffer = registry.get<graphics::buffer>(_frame_buffer);
   frame_buffer.write(&data, sizeof(frame_data), context.slot * memory::stride_v<frame_data>);
@@ -2170,8 +3094,9 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   context.instance_count = instance_count;
   context.sampler_index = _sampler_index;
   context.clamp_sampler_index = _clamp_sampler_index;
-  context.show_grid = _grid_enabled;
-  context.wireframe = _wireframe_enabled;
+  context.show_grid = _grid_enabled && !_capture_face;
+  context.wireframe = _wireframe_enabled && !_capture_face;
+  context.is_capture = _capture_face.has_value();
   context.inverse_view_projection = math::matrix4x4::inverted(projection * context.packet->camera.view);
 
   context.cluster_aabb_address = _cluster_aabb_addresses[context.slot];
@@ -2181,10 +3106,10 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
 
   context.culled_indirect_args_buffer = _culled_indirect_args_buffer;
   context.culled_indirect_args_address = _culled_indirect_args_addresses[context.slot];
-  context.culled_indirect_args_slot_offset = context.slot * cull_view_count * max_opaque_draw_commands;
+  context.culled_indirect_args_slot_offset = static_cast<std::uint32_t>(context.slot * _culled_indirect_args_slot_capacity);
   context.culled_transform_address = _culled_transform_addresses[context.slot];
-  context.culled_indirect_args_view_stride = max_opaque_draw_commands;
-  context.culled_transform_view_stride = transform_capacity;
+  context.culled_indirect_args_view_stride = command_stride;
+  context.culled_transform_view_stride = context.packet->cull_transform_stride;
   context.instanced_culled_address = _instanced_culled_addresses[context.slot];
 
   const auto particle_write_index = static_cast<std::uint32_t>(context.frame_index % 2u);

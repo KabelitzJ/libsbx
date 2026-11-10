@@ -350,6 +350,10 @@ struct point_light {
   math::color color{1.0f, 1.0f, 1.0f, 1.0f};
   std::float_t intensity{25.0f}; // Higher than directional's 1.0: shader applies inverse-square falloff to this, so it needs headroom to still read at a few units' distance.
   std::float_t range{10.0f};
+  bool casts_shadows{false}; // Six atlas tiles (one per cube face) while there's room; see spot_light::casts_shadows.
+  std::float_t shadow_depth_bias{1.0f}; // See spot_light::shadow_depth_bias.
+  std::float_t shadow_normal_bias{1.0f}; // See spot_light::shadow_normal_bias.
+  std::uint32_t shadow_resolution{512u}; // Each face's tile side in texels: 256, 512, 1024 or 2048.
 }; // struct point_light
 
 struct spot_light {
@@ -358,7 +362,46 @@ struct spot_light {
   std::float_t range{10.0f};
   std::float_t inner_angle{0.4f}; // radians
   std::float_t outer_angle{0.6f}; // radians
+  bool casts_shadows{false}; // Rendered into the local shadow atlas while there's room; the most important lights win.
+  std::float_t shadow_depth_bias{1.0f}; // In shadow-map texels, along the light direction.
+  std::float_t shadow_normal_bias{1.0f}; // 1.0 = just enough receiver offset to cover the PCF footprint on a flat surface.
+  std::uint32_t shadow_resolution{512u}; // The atlas tile's side in texels: 256, 512, 1024 or 2048.
 }; // struct spot_light
+
+/**
+ * @brief Projects textures onto the opaque surfaces inside its box: the unit cube under the node's world transform, projecting along the node's -Z.
+ *
+ * Scale the node to size the box. Transparent surfaces don't receive decals.
+ */
+struct decal {
+  assets::texture2d_handle albedo{}; // sRGB, its alpha masks the decal; none projects the color alone
+  assets::texture2d_handle normal{}; // tangent-space normal map, in the decal's X/Y
+  math::color color{1.0f, 1.0f, 1.0f, 1.0f}; // multiplies albedo
+  std::float_t opacity{1.0f};
+  std::float_t normal_strength{1.0f};
+  std::float_t angle_fade_start{1.0472f}; // radians between the surface normal and the decal's +Z where fading starts
+  std::float_t angle_fade_end{1.3963f}; // radians where the decal is gone
+  std::float_t edge_fade{0.1f}; // fraction of the box depth faded out at its near and far faces
+  std::int32_t sort_order{0}; // higher draws over lower
+}; // struct decal
+
+/**
+ * @brief Captures the scene around it into an environment map that surfaces inside its box reflect instead of the sky.
+ *
+ * The box is centered on the node and turns with it; its size ignores the node's scale.
+ * Bake it in the editor to fill `baked`.
+ */
+struct reflection_probe {
+  math::vector3 box_extents{5.0f, 5.0f, 5.0f}; // half extents along the node's axes
+  std::float_t blend_distance{1.0f}; // how far inside the box the probe fades in from its faces
+  std::float_t intensity{1.0f};
+  std::int32_t importance{1}; // where boxes overlap, higher wins; equal importance prefers the smaller box
+  std::uint32_t resolution{128u}; // 128, 256 or 512 pixels per captured face
+  bool box_projection{true}; // corrects reflections for the box's walls, for rooms; off treats the capture as infinitely far, for open areas
+  std::float_t near_plane{0.1f};
+  std::float_t far_plane{1000.0f};
+  assets::environment_map_handle baked{};
+}; // struct reflection_probe
 
 struct skybox {
   assets::environment_map_handle environment{};

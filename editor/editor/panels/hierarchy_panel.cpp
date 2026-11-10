@@ -57,6 +57,8 @@ auto icon_for(const sbx::scenes::node& node) -> const char* {
   if (node.has_component<sbx::scenes::directional_light>()) return ICON_MDI_WHITE_BALANCE_SUNNY;
   if (node.has_component<sbx::scenes::point_light>()) return ICON_MDI_LIGHTBULB_OUTLINE;
   if (node.has_component<sbx::scenes::spot_light>()) return ICON_MDI_FLASHLIGHT;
+  if (node.has_component<sbx::scenes::decal>()) return ICON_MDI_STICKER_OUTLINE;
+  if (node.has_component<sbx::scenes::reflection_probe>()) return ICON_MDI_MIRROR;
   if (node.has_component<sbx::scenes::skybox>()) return ICON_MDI_EARTH;
   if (node.has_component<sbx::scenes::audio_source>()) return ICON_MDI_VOLUME_HIGH;
   if (node.has_component<sbx::scenes::mesh_renderer>()) return ICON_MDI_CUBE_OUTLINE;

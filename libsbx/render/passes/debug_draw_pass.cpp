@@ -93,7 +93,7 @@ auto debug_draw_pass::declare(graphics_pass_builder& builder, const graph_resour
 auto debug_draw_pass::should_execute(const render_context& context, std::uint32_t /*group*/) const -> bool {
   auto& scene_renderer_module = core::engine::get_module<render::scene_renderer_module>();
 
-  return context.packet->camera.is_active && !scene_renderer_module.debug_draw().vertices().empty();
+  return context.packet->camera.is_active && !context.is_capture && !scene_renderer_module.debug_draw().vertices().empty();
 }
 
 auto debug_draw_pass::execute(render_context& context, std::uint32_t /*group*/) -> void {

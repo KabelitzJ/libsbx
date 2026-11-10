@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+#include <fmt/format.h>
+
 #include <vulkan/vulkan.h>
 
 #include <libsbx/graphics/frame_context.hpp>
@@ -20,7 +22,7 @@
 
 namespace sbx::render {
 
-shadow_pass::shadow_pass() {
+auto create_shadow_caster_pipelines(std::string_view name) -> std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u> {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& shader_cache = graphics_module.shader_cache();
@@ -33,7 +35,7 @@ shadow_pass::shadow_pass() {
 
   const auto& shader = shader_cache.get({"engine://shaders/passes/shadow.slang", entry_points});
 
-  const auto make = [&](graphics::cull_mode cull, const std::string& name) {
+  const auto make = [&](graphics::cull_mode cull, const std::string& pipeline_name) {
     return pipeline_cache.get(graphics::graphics_pipeline::create_info{
       .shader = shader,
       .color_formats = {},
@@ -45,21 +47,23 @@ shadow_pass::shadow_pass() {
       .depth_write = true,
       .depth_compare = graphics::compare_operation::less_or_equal,
       .samples = graphics::samples::count_1,
-      .name = name
+      .name = pipeline_name
     });
   };
 
-  // Back-face culling like the color pass: culling front faces would drop open meshes' entire light-facing surface. csm.slang's normal offset and bias handle acne.
-  _pipelines[0] = make(graphics::cull_mode::back, "Shadow Cascade");
-  _pipelines[1] = make(graphics::cull_mode::none, "Shadow Cascade Double-Sided");
-  _pipelines[2] = _pipelines[0]; // shading model doesn't affect depth
-  _pipelines[3] = _pipelines[1];
+  // Back-face culling like the color pass: culling front faces would drop open meshes' entire light-facing surface. The receiver normal offset and bias handle acne.
+  auto pipelines = std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>{};
+  pipelines[0] = make(graphics::cull_mode::back, std::string{name});
+  pipelines[1] = make(graphics::cull_mode::none, fmt::format("{} Double-Sided", name));
+  pipelines[2] = pipelines[0];
+  pipelines[3] = pipelines[1];
+
+  return pipelines;
 }
 
-auto shadow_pass::_resolve_custom_pipeline(const material_shader_source& source, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline> {
-  // Like Unity's fallback shadow caster: no depth entry points draws the undisplaced mesh with the built-in pipeline, so it still occludes and casts.
+auto resolve_shadow_caster_pipeline(const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, const material_shader_source& source, bool is_double_sided, std::string_view name) -> memory::observer_ptr<graphics::graphics_pipeline> {
   if (!source.has_depth_entry_points) {
-    return _pipelines[is_double_sided ? 1u : 0u];
+    return pipelines[is_double_sided ? 1u : 0u];
   }
 
   const auto entry_points = std::array<graphics::shader_compiler::entry_point_request, 2u>{
@@ -77,8 +81,11 @@ auto shadow_pass::_resolve_custom_pipeline(const material_shader_source& source,
     .depth_write = true,
     .depth_compare = graphics::compare_operation::less_or_equal,
     .samples = graphics::samples::count_1,
-  }, "Shadow Cascade");
+  }, name);
 }
+
+shadow_pass::shadow_pass()
+: _pipelines{create_shadow_caster_pipelines("Shadow Cascade")} { }
 
 auto shadow_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {
   builder.reads_buffer(resources.culled_indirect_args_buffer, graphics::pipeline_stage::draw_indirect, graphics::access::indirect_command_read);
@@ -114,7 +121,7 @@ auto shadow_pass::execute(render_context& context, std::uint32_t cascade) -> voi
   const auto shadow_extent = math::vector2u{shadow_map_resolution, shadow_map_resolution};
 
   bind_globals(context, shadow_extent);
-  submit_draw_commands_indirect(context, context.packet->shadow_caster_commands, _pipelines, [this](const material_shader_source& source, bool is_double_sided) { return _resolve_custom_pipeline(source, is_double_sided); }, cascade);
+  submit_draw_commands_indirect(context, context.packet->shadow_caster_commands, _pipelines, [this](const material_shader_source& source, bool is_double_sided) { return resolve_shadow_caster_pipeline(_pipelines, source, is_double_sided, "Shadow Cascade"); }, cascade);
 }
 
 } // namespace sbx::render

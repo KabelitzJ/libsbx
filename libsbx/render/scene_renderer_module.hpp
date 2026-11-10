@@ -4,7 +4,9 @@
 #define LIBSBX_RENDER_SCENE_RENDERER_MODULE_HPP_
 
 #include <array>
+#include <atomic>
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <optional>
 #include <span>
@@ -38,6 +40,7 @@
 #include <libsbx/render/compositor.hpp>
 #include <libsbx/render/debug/debug_draw.hpp>
 #include <libsbx/render/particles/particle_pool.hpp>
+#include <libsbx/render/probes/cubemap_capture.hpp>
 
 namespace sbx::render {
 
@@ -89,6 +92,24 @@ public:
    */
   auto set_camera_override(std::optional<camera_data> override) -> void {
     _camera_override = override;
+  }
+
+  /**
+   * @brief Queues a cubemap capture of the scene from @p position, rendered one face per frame in place of the normal view, without the grid, debug draw or selection outline.
+   *
+   * The scene keeps simulating meanwhile, and the viewport shows the faces while they render.
+   *
+   * @param position The capture point.
+   * @param resolution Each face's side in pixels.
+   * @param near_plane The faces' near plane.
+   * @param far_plane The faces' far plane.
+   * @param on_complete Called on the main thread with the linear HDR faces, once all six are back from the GPU.
+   */
+  auto request_cubemap_capture(const math::vector3& position, std::uint32_t resolution, std::float_t near_plane, std::float_t far_plane, cubemap_capture_callback on_complete) -> void;
+
+  /** @brief Whether a requested cubemap capture hasn't completed yet. */
+  [[nodiscard]] auto is_capturing() const noexcept -> bool {
+    return !_capture_jobs.empty();
   }
 
   /**
@@ -152,6 +173,41 @@ public:
    */
   [[nodiscard]] auto shadow_map_preview_view(std::uint32_t cascade) const noexcept -> VkImageView {
     return _shadow_map_preview_views[cascade];
+  }
+
+  /** @brief A grayscale-swizzled view of the spot/point light shadow atlas, for ImGui. */
+  [[nodiscard]] auto local_shadow_atlas_preview_view() const noexcept -> VkImageView {
+    return _local_shadow_atlas_preview_view;
+  }
+
+  struct local_shadow_stats {
+    std::uint32_t tile_count{0u};
+    std::uint32_t rendered_count{0u}; // the rest were reused from the previous frame
+  }; // struct local_shadow_stats
+
+  /**
+   * @brief Triangles the camera view drew per mesh detail level, read back from the GPU's cull results a few frames late.
+   *
+   * @return Level 0 (full detail) first.
+   */
+  [[nodiscard]] auto last_lod_triangles() const -> std::array<std::uint64_t, max_lod_levels> {
+    auto result = std::array<std::uint64_t, max_lod_levels>{};
+
+    for (auto level = std::size_t{0u}; level < max_lod_levels; ++level) {
+      result[level] = _lod_triangles[level].load(std::memory_order_relaxed);
+    }
+
+    return result;
+  }
+
+  /** @brief Camera-view instances the occlusion cull found hidden behind the depth pyramid, read back a few frames late; 0 with occlusion culling off. */
+  [[nodiscard]] auto last_occlusion_culled() const noexcept -> std::uint32_t {
+    return _occlusion_culled.load(std::memory_order_relaxed);
+  }
+
+  /** @brief How many spot/point light shadow tiles the last built frame had, and how many it redraws. */
+  [[nodiscard]] auto last_local_shadow_stats() const noexcept -> const local_shadow_stats& {
+    return _local_shadow_stats;
   }
 
   /**
@@ -241,14 +297,8 @@ public:
 private:
 
   inline static constexpr auto light_capacity = std::uint32_t{256u};
-  inline static constexpr auto transform_capacity = std::uint32_t{16384u};
-  inline static constexpr auto cluster_light_index_capacity = std::uint32_t{65536u};
-
-  // Upper bound on draw commands per cull view per frame; overflow is skipped.
-  inline static constexpr auto max_opaque_draw_commands = std::uint32_t{8192u};
-
-  // Visible instanced instances per frame across all cull views; further renderers are skipped for the frame (logged once).
-  inline static constexpr auto instanced_culled_capacity = std::uint32_t{262144u};
+  // Lights, decals and probes of every cluster together; mirrors cull_lights.slang's max_cluster_indices.
+  inline static constexpr auto cluster_index_capacity = std::uint32_t{131072u};
 
   // Totals across every skinned instance per frame; overflow isn't drawn.
   inline static constexpr auto joint_palette_capacity = std::uint32_t{4096u};
@@ -268,6 +318,60 @@ private:
   [[nodiscard]] auto _build_graph_resources() const -> graph_resources;
 
   auto _prepare_frame(render_context& context) -> void;
+
+  /**
+   * @brief Grows the per-frame buffers whose size depends on the scene (transforms, the cull pools, the local shadow views) to fit @p packet, recompiling the graph if a graph-tracked buffer was replaced.
+   *
+   * @param packet The frame about to be recorded.
+   */
+  auto _ensure_frame_capacity(const render_packet& packet) -> void;
+
+  /**
+   * @brief Collects every active decal into @p packet, in sort order.
+   *
+   * @param packet The packet being built.
+   */
+  auto _gather_decals(render_packet& packet) -> void;
+
+  /**
+   * @brief Collects every active reflection probe with a resident bake into @p packet, most important first.
+   *
+   * @param packet The packet being built.
+   */
+  auto _gather_reflection_probes(render_packet& packet) -> void;
+
+  /** @brief Hands the front capture job its faces once all six are recorded, then picks the face this frame renders, if any. */
+  auto _advance_capture() -> void;
+
+  /**
+   * @brief Copies this frame's resolved HDR color into the capture readback buffer, at the face it rendered.
+   *
+   * @param command_buffer The frame's command buffer, after the graph executed.
+   */
+  auto _record_capture_copy(graphics::command_buffer& command_buffer) -> void;
+
+  /** @brief Replaces the occlusion visibility buffer (retiring the old one) with one of _occlusion_visibility_capacity flags. */
+  auto _create_occlusion_visibility_buffer() -> void;
+
+  /**
+   * @brief Picks the spot lights that get a shadow tile this frame and packs their tiles into the local shadow atlas.
+   *
+   * Shadow-casting lights whose range touches the camera frustum compete by `intensity * range / distance`; the best are taken while their tiles' total area fits the atlas, then shelf-packed largest first.
+   * Fills packet.local_shadow_views and _spot_shadow_indices; runs before any instanced command reserves culled space per cull view.
+   *
+   * @param scene The scene.
+   * @param packet The packet being built; its camera must already be set.
+   */
+  auto _select_local_shadows(scenes::scene& scene, render_packet& packet) -> void;
+
+  /**
+   * @brief Marks which local shadow tiles must be redrawn: a tile is reused when its view, atlas rect and every caster its light can reach are unchanged since last frame.
+   *
+   * Instanced casters count for every light; a skinned caster in range redraws the tile every frame.
+   *
+   * @param packet The finished packet; fills local_shadow_dirty.
+   */
+  auto _update_local_shadow_cache(render_packet& packet) -> void;
 
   [[nodiscard]] auto _build_packet() -> render_packet;
 
@@ -343,6 +447,23 @@ private:
   render_packet _work_packet{};
   bool _has_rendered{false};
   std::optional<camera_data> _camera_override{};
+
+  struct capture_job {
+    math::vector3 position;
+    std::uint32_t resolution;
+    std::float_t near_plane;
+    std::float_t far_plane;
+    cubemap_capture_callback on_complete;
+  }; // struct capture_job
+
+  // The front job is the one rendering: _capture_next_face faces of it are recorded, and this frame renders _capture_face if set.
+  std::deque<capture_job> _capture_jobs{};
+  std::uint32_t _capture_next_face{0u};
+  std::optional<std::uint32_t> _capture_face{};
+
+  // Six faces of RGBA16F, filled by copies of the resolved HDR color.
+  graphics::buffer_handle _capture_readback_buffer{};
+  std::uint32_t _capture_readback_resolution{0u};
 
   struct skinned_entry {
     ecs::entity entity{};
@@ -428,17 +549,38 @@ private:
   graphics::buffer_handle _light_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _light_addresses{};
 
+  // These buffers hold one region per frame slot, *_slot_capacity elements each, and grow (never shrink) to fit the scene; see _ensure_frame_capacity.
   graphics::buffer_handle _transform_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _transform_addresses{};
+  std::size_t _transform_slot_capacity{4096u};
 
-  // frustum_cull_pass output, consumed by depth_pre_pass and opaque_pass instead of _transform_buffer.
+  // frustum_cull_pass output, consumed by the depth and shadow passes and opaque_pass instead of _transform_buffer: per slot, one block per cull view.
   graphics::buffer_handle _culled_indirect_args_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _culled_indirect_args_addresses{};
+  std::size_t _culled_indirect_args_slot_capacity{4096u};
 
   graphics::buffer_handle _culled_transform_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _culled_transform_addresses{};
+  std::size_t _culled_transform_slot_capacity{16384u};
+
   graphics::buffer_handle _instanced_culled_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _instanced_culled_addresses{};
+  std::size_t _instanced_culled_slot_capacity{65536u};
+
+  // Local light shadow tiles (view-projection, atlas rect, bias), read through frame_data.local_shadow_views.
+  graphics::buffer_handle _local_shadow_view_buffer{};
+  std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _local_shadow_view_addresses{};
+  std::size_t _local_shadow_view_slot_capacity{64u};
+
+  // render_packet::decals, read through frame_data.decals.
+  graphics::buffer_handle _decal_buffer{};
+  std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _decal_addresses{};
+  std::size_t _decal_slot_capacity{64u};
+
+  // render_packet::probes, read through frame_data.probes.
+  graphics::buffer_handle _probe_buffer{};
+  std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _probe_addresses{};
+  std::size_t _probe_slot_capacity{32u};
 
   // Written by the CPU every frame; one region per frame in flight so the previous frame's GPU read doesn't race.
   graphics::buffer_handle _joint_palette_buffer{};
@@ -462,6 +604,51 @@ private:
 
   std::array<graphics::image_handle, shadow_cascade_count> _shadow_map_images{};
   std::array<std::uint32_t, shadow_cascade_count> _shadow_map_indices{};
+
+  graphics::image_handle _local_shadow_atlas_image{};
+  std::uint32_t _local_shadow_atlas_index{0u};
+
+  // Per spot / point light in query order: its first index into render_packet::local_shadow_views, or 0xFFFFFFFF.
+  std::vector<std::uint32_t> _spot_shadow_indices{};
+  std::vector<std::uint32_t> _point_shadow_indices{};
+
+  // Per local shadow view: its light's position and range, the sphere whose casters decide whether the tile changed.
+  std::vector<math::vector4> _local_shadow_bounds{};
+
+  // The content keys of the tiles the atlas holds after the last built frame; a tile whose key is in here isn't redrawn.
+  std::unordered_set<std::uint64_t> _local_shadow_keys{};
+  local_shadow_stats _local_shadow_stats{};
+
+  VkImageView _local_shadow_atlas_preview_view{VK_NULL_HANDLE};
+
+  // Occlusion culling's depth pyramid: one sampled index for the whole chain, one storage view and index per level.
+  graphics::image_handle _hiz_image{};
+  std::uint32_t _hiz_index{0u};
+  std::array<VkImageView, hiz_mip_count> _hiz_mip_views{};
+  std::array<std::uint32_t, hiz_mip_count> _hiz_storage_indices{};
+
+  // Per camera-view instance: whether the last late cull saw it (see render_packet::occlusion_instance_count).
+  graphics::buffer_handle _occlusion_visibility_buffer{};
+  graphics::buffer::address_type _occlusion_visibility_address{0u};
+  std::size_t _occlusion_visibility_capacity{65536u};
+
+  // Per frame slot: how many instances the late cull hid, read back like the LOD stats.
+  graphics::buffer_handle _occlusion_counter_buffer{};
+  std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _occlusion_counter_addresses{};
+  std::atomic<std::uint32_t> _occlusion_culled{0u};
+
+  // One camera-view indirect arg a frame slot drew: where it sits in the args buffer and what one instance of it costs.
+  struct lod_stat_entry {
+    std::size_t args_index;
+    std::uint32_t level;
+    std::uint32_t triangles_per_instance;
+  }; // struct lod_stat_entry
+
+  // Per frame slot, the camera-view args it wrote; read back when the slot comes around again, since that frame has finished by then.
+  std::array<std::vector<lod_stat_entry>, graphics::swapchain::max_frames_in_flight> _lod_stat_layouts{};
+
+  // Written on the render thread, read by the editor on the main thread.
+  std::array<std::atomic<std::uint64_t>, max_lod_levels> _lod_triangles{};
 
   render::debug_draw _debug_draw{};
 

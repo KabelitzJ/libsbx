@@ -34,9 +34,6 @@ class LibsbxConan(ConanFile):
             self.options.rm_safe("fPIC")
             
         self.options["imgui/*"].use_wchar32 = True
-        # Without this Tracy queues every event (including one per new/delete from editor/memory.cpp) in memory until a
-        # profiler connects -- the debug editor grew by GBs per minute with no Tracy window open. On demand, it records
-        # nothing until one connects.
         self.options["tracy/*"].on_demand = True
 
     def layout(self):
@@ -60,7 +57,7 @@ class LibsbxConan(ConanFile):
         self.requires("glfw/3.3.8", transitive_headers=True)
         self.requires("gtest/1.17.0")
         self.requires("imgui-node-editor/0.9.2-docking")
-        self.requires("imgui/1.92.8-docking", transitive_headers=True)
+        self.requires("imgui/1.92.9b-docking", transitive_headers=True)
         self.requires("imguizmo/1.10-docking", transitive_headers=True)
         self.requires("implot/0.17-docking", transitive_headers=True)
         self.requires("lz4/1.10.0")

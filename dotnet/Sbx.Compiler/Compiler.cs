@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Reflection.PortableExecutable;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -40,19 +42,25 @@ namespace Sbx.Compiler
         }
 
         // Caller-supplied references (Sbx.Core.dll) plus the installed shared framework's own
-        // assemblies — resolves off whatever runtime is already hosting this process, no
-        // dependency on a separately-installed Microsoft.NETCore.App.Ref pack.
+        // managed assemblies — resolves off whatever runtime is already hosting this process, no
+        // dependency on a separately-installed Microsoft.NETCore.App.Ref pack. The runtime directory
+        // also holds native DLLs (coreclr.dll, clrjit.dll, *.Native.dll, …) that carry no managed
+        // metadata; feeding those to Roslyn produces error CS0009 and fails the compilation, so skip
+        // anything without a managed PE header.
         var frameworkDlls = Directory.GetFiles(System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory(), "*.dll");
-        var references = new MetadataReference[referenceCount + frameworkDlls.Length];
+        var references = new List<MetadataReference>(referenceCount + frameworkDlls.Length);
 
         for (var i = 0; i < referenceCount; i++)
         {
-          references[i] = MetadataReference.CreateFromFile(referencePaths[i].ToString());
+          references.Add(MetadataReference.CreateFromFile(referencePaths[i].ToString()));
         }
 
-        for (var i = 0; i < frameworkDlls.Length; i++)
+        foreach (var dll in frameworkDlls)
         {
-          references[referenceCount + i] = MetadataReference.CreateFromFile(frameworkDlls[i]);
+          if (IsManagedAssembly(dll))
+          {
+            references.Add(MetadataReference.CreateFromFile(dll));
+          }
         }
 
         var options = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary);
@@ -94,6 +102,24 @@ namespace Sbx.Compiler
 
         onDiagnostic(true, file, 0, 0, message);
 
+        return false;
+      }
+    }
+
+    // A .dll in the runtime directory is only a valid Roslyn reference if it actually carries a
+    // managed PE header; the native runtime DLLs do not. Anything that fails to open as a PE image
+    // is treated as non-managed and skipped.
+    private static bool IsManagedAssembly(string path)
+    {
+      try
+      {
+        using var stream = File.OpenRead(path);
+        using var peReader = new PEReader(stream);
+
+        return peReader.HasMetadata && peReader.PEHeaders.CorHeader != null;
+      }
+      catch
+      {
         return false;
       }
     }

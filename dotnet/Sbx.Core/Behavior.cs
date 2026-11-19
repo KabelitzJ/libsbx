@@ -110,6 +110,27 @@ namespace Sbx.Core
 
     }
 
+    /** Called on an animated node's scripts for each animation event its clips play past, after the frame's poses are evaluated. */
+    public virtual void OnAnimationEvent(AnimationEvent animationEvent)
+    {
+
+    }
+
+    /**
+     * Called on an animated node's scripts with ApplyRootMotion on, after the frame's poses: overriding it takes the root motion over, and the engine no longer applies it.
+     * Read Animator.DeltaPosition and DeltaRotation and move the node (or CharacterController.Move) yourself.
+     */
+    public virtual void OnAnimatorMove()
+    {
+
+    }
+
+    /** Called on an animated node's scripts before its pose is evaluated, when its Animator has IK chains or a look-at joint: the place to set IK goals for the frame. */
+    public virtual void OnAnimatorIK(int layer)
+    {
+
+    }
+
     /** Called on every running script after a scene loads (after its own scripts' OnCreate). */
     public virtual void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
@@ -156,6 +177,49 @@ namespace Sbx.Core
     private void DispatchTriggerExit(ulong otherUuid, float normalX, float normalY, float normalZ, float pointX, float pointY, float pointZ)
     {
       OnTriggerExit(new Collision(Node.Get(otherUuid)!, new Vector3(normalX, normalY, normalZ), new Vector3(pointX, pointY, pointZ)));
+    }
+
+    private void DispatchAnimationEvent(float floatParameter, int intParameter, uint layer, float weight)
+    {
+      unsafe
+      {
+        var name = (string?)InternalCalls.AnimationEvent_GetName() ?? string.Empty;
+        var stringParameter = (string?)InternalCalls.AnimationEvent_GetStringParameter() ?? string.Empty;
+        var clipName = (string?)InternalCalls.AnimationEvent_GetClipName() ?? string.Empty;
+
+        OnAnimationEvent(new AnimationEvent(name, floatParameter, intParameter, stringParameter, clipName, (int)layer, weight));
+      }
+    }
+
+    private void DispatchAnimatorIK()
+    {
+      OnAnimatorIK(0);
+    }
+
+    private void DispatchAnimatorMove()
+    {
+      if (!OverridesAnimatorMove(GetType()))
+      {
+        return;
+      }
+
+      unsafe { InternalCalls.Animator_MarkRootMotionHandled(); }
+
+      OnAnimatorMove();
+    }
+
+    private static readonly System.Collections.Generic.Dictionary<Type, bool> s_animatorMoveOverrides = new();
+
+    private static bool OverridesAnimatorMove(Type type)
+    {
+      if (!s_animatorMoveOverrides.TryGetValue(type, out var overrides))
+      {
+        var method = type.GetMethod(nameof(OnAnimatorMove), System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+        overrides = method != null && method.DeclaringType != typeof(Behavior);
+        s_animatorMoveOverrides[type] = overrides;
+      }
+
+      return overrides;
     }
 
     private void DispatchSceneLoaded(uint handle, uint mode)

@@ -51,6 +51,8 @@
 #include <editor/widgets/prefab_override_menu.hpp>
 #include <editor/widgets/property_row.hpp>
 #include <editor/widgets/vector_fields.hpp>
+#include <editor/widgets/layer_fields.hpp>
+#include <editor/widgets/text_field.hpp>
 #include <editor/widgets/asset_path.hpp>
 
 namespace editor {
@@ -342,6 +344,17 @@ auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::scene& target,
   if (changed) {
     state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::mesh_renderer>>(node.id(), before, renderer, "Edit Mesh Renderer"));
   }
+
+  if (renderer.mesh.is_valid()) {
+    static auto pending = std::optional<sbx::scenes::mesh_renderer>{};
+
+    ImGui::DragFloat("LOD Bias", &renderer.lod_bias, 0.01f, 0.01f, 10.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+    bracket_edit(state, target, node, renderer, pending, "Edit Mesh Renderer");
+
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Above 1 keeps this object's detail longer, below 1 switches it to coarser levels sooner. Multiplies the mesh's and the project's LOD bias.");
+    }
+  }
 }
 
 auto draw_animator_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
@@ -382,23 +395,216 @@ auto draw_animator_section(editor_state& state, sbx::scenes::scene& target, sbx:
     }
   }
 
-  const auto& states = anim.graph->states();
+  {
+    const auto before = anim;
 
-  const auto current_state_it = std::ranges::find(states, anim.current_state_id, &sbx::assets::animation_state::id);
-  ImGui::Text("Current State: %s", current_state_it != states.end() ? current_state_it->name.c_str() : "(none)");
-
-  // Always drawn so the row height doesn't change as transitions start and stop.
-  const auto is_transitioning = anim.transition_target_state_id.has_value();
-  auto overlay = std::string{"Not transitioning"};
-  auto alpha = 0.0f;
-
-  if (is_transitioning) {
-    const auto target_state_it = std::ranges::find(states, *anim.transition_target_state_id, &sbx::assets::animation_state::id);
-    alpha = (anim.transition_duration > 0.0f) ? std::clamp(anim.transition_time / anim.transition_duration, 0.0f, 1.0f) : 1.0f;
-    overlay = fmt::format("-> {} ({:.0f}%)", target_state_it != states.end() ? target_state_it->name.c_str() : "(none)", alpha * 100.0f);
+    if (ImGui::Checkbox("Apply Root Motion", &anim.apply_root_motion)) {
+      anim.root_motion_joint_index = -1;
+      state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::animator>>(node.id(), before, anim, "Edit Animator"));
+    }
   }
 
-  ImGui::ProgressBar(alpha, ImVec2{-1.0f, 0.0f}, overlay.c_str());
+  if (anim.apply_root_motion) {
+    const auto& joints = mesh->skeleton()->joints();
+
+    // Picked from the skeleton; empty lets the animator find the joint the clips move.
+    if (ImGui::BeginCombo("Root Joint", anim.root_motion_joint.empty() ? "(automatic)" : anim.root_motion_joint.c_str())) {
+      const auto pick = [&](const std::string& name) {
+        const auto before = anim;
+        anim.root_motion_joint = name;
+        anim.root_motion_joint_index = -1;
+        state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::animator>>(node.id(), before, anim, "Edit Animator"));
+      };
+
+      if (ImGui::Selectable("(automatic)", anim.root_motion_joint.empty()) && !anim.root_motion_joint.empty()) {
+        pick(std::string{});
+      }
+
+      for (const auto& joint : joints) {
+        if (ImGui::Selectable(joint.name.c_str(), joint.name == anim.root_motion_joint) && joint.name != anim.root_motion_joint) {
+          pick(joint.name);
+        }
+      }
+
+      ImGui::EndCombo();
+    }
+
+    if (anim.root_motion_joint_index >= 0 && static_cast<std::size_t>(anim.root_motion_joint_index) < joints.size()) {
+      ImGui::TextDisabled("Moving by: %s", joints[static_cast<std::size_t>(anim.root_motion_joint_index)].name.c_str());
+    } else if (anim.root_motion_joint_index == -2) {
+      ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " No joint carries root motion; pick one.");
+    }
+
+    const auto before = anim;
+
+    auto toggled = ImGui::Checkbox("Bake Vertical Into Pose", &anim.bake_vertical_root_motion);
+    toggled |= ImGui::Checkbox("Bake Rotation Into Pose", &anim.bake_root_rotation);
+
+    if (toggled) {
+      state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::animator>>(node.id(), before, anim, "Edit Animator"));
+    }
+  }
+
+  if (ImGui::TreeNodeEx("IK", ImGuiTreeNodeFlags_None)) {
+    const auto& joints = mesh->skeleton()->joints();
+
+    const auto push_edit = [&](const sbx::scenes::animator& before) {
+      state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::animator>>(node.id(), before, anim, "Edit Animator"));
+    };
+
+    // A joint picker over the skeleton; picking re-resolves on the next evaluation.
+    const auto joint_combo = [&](const char* label, std::string& name, const char* none_label) -> bool {
+      auto changed = false;
+
+      if (ImGui::BeginCombo(label, name.empty() ? none_label : name.c_str())) {
+        if (ImGui::Selectable(none_label, name.empty()) && !name.empty()) {
+          name.clear();
+          changed = true;
+        }
+
+        for (const auto& joint : joints) {
+          if (ImGui::Selectable(joint.name.c_str(), joint.name == name) && joint.name != name) {
+            name = joint.name;
+            changed = true;
+          }
+        }
+
+        ImGui::EndCombo();
+      }
+
+      return changed;
+    };
+
+    auto removed = std::optional<std::size_t>{};
+
+    for (auto index = std::size_t{0u}; index < anim.ik_chains.size(); ++index) {
+      auto& chain = anim.ik_chains[index];
+
+      ImGui::PushID(static_cast<int>(index));
+      ImGui::SeparatorText(chain.name.empty() ? "(unnamed chain)" : chain.name.c_str());
+
+      draw_text_field("Name", chain.name);
+      bracket_edit(state, target, node, anim, pending, "Edit Animator");
+
+      {
+        const auto before = anim;
+
+        if (joint_combo("End Joint", chain.end_joint, "(none)")) {
+          chain.joints = {-1, -1, -1};
+          push_edit(before);
+        }
+      }
+
+      if (chain.joints[0] >= 0 && chain.joints[2] >= 0 && static_cast<std::size_t>(chain.joints[2]) < joints.size()) {
+        ImGui::TextDisabled("%s > %s > %s", joints[static_cast<std::size_t>(chain.joints[0])].name.c_str(), joints[static_cast<std::size_t>(chain.joints[1])].name.c_str(), joints[static_cast<std::size_t>(chain.joints[2])].name.c_str());
+      } else if (chain.joints[0] == -2) {
+        ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " Needs an end joint with a parent and grandparent.");
+      }
+
+      {
+        const auto before = anim;
+
+        if (ImGui::Checkbox("Foot Placement", &chain.foot_placement)) {
+          push_edit(before);
+        }
+      }
+
+      if (ImGui::Button(ICON_MDI_TRASH_CAN " Remove Chain")) {
+        removed = index;
+      }
+
+      ImGui::PopID();
+    }
+
+    if (removed) {
+      const auto before = anim;
+      anim.ik_chains.erase(anim.ik_chains.begin() + static_cast<std::ptrdiff_t>(*removed));
+      push_edit(before);
+    }
+
+    if (ImGui::Button(ICON_MDI_PLUS " IK Chain")) {
+      const auto before = anim;
+      anim.ik_chains.push_back(sbx::scenes::animator_ik_chain{.name = fmt::format("Chain {}", anim.ik_chains.size())});
+      push_edit(before);
+    }
+
+    if (std::ranges::any_of(anim.ik_chains, &sbx::scenes::animator_ik_chain::foot_placement)) {
+      ImGui::SeparatorText("Foot Placement");
+
+      ImGui::DragFloat("Ground Search", &anim.foot_reach, 0.01f, 0.05f, 5.0f, "%.2f m");
+      bracket_edit(state, target, node, anim, pending, "Edit Animator");
+
+      {
+        const auto before = anim;
+
+        if (draw_layer_mask_field(state, "Ground Layers", anim.foot_ground_layers)) {
+          push_edit(before);
+        }
+      }
+
+      ImGui::TextDisabled("Feet follow the ground's height relative to the node, and the hips drop so the lower foot reaches.");
+    }
+
+    ImGui::SeparatorText("Look At");
+
+    {
+      const auto before = anim;
+
+      if (joint_combo("Head Joint", anim.look_at_joint, "(none)")) {
+        anim.look_at_joint_index = -1;
+        push_edit(before);
+      }
+    }
+
+    if (!anim.look_at_joint.empty()) {
+      auto spine = static_cast<int>(anim.look_at_spine_joints);
+
+      if (ImGui::SliderInt("Spine Joints", &spine, 0, 6)) {
+        anim.look_at_spine_joints = static_cast<std::uint32_t>(spine);
+      }
+
+      bracket_edit(state, target, node, anim, pending, "Edit Animator");
+
+      ImGui::SliderAngle("Max Turn", &anim.look_at_clamp, 0.0f, 180.0f);
+      bracket_edit(state, target, node, anim, pending, "Edit Animator");
+
+      ImGui::TextDisabled("Scripts aim it with Animator.SetLookAt; the head's forward is the model's +Z.");
+    }
+
+    ImGui::TreePop();
+  }
+
+  // Live playback per layer; layers appear once the animator has evaluated.
+  const auto& layers = anim.graph->layers();
+
+  for (auto index = std::size_t{0u}; index < std::min(layers.size(), anim.layers.size()); ++index) {
+    const auto& states = layers[index].states;
+    const auto& runtime = anim.layers[index];
+
+    ImGui::PushID(static_cast<int>(index));
+
+    const auto current_state_it = std::ranges::find(states, runtime.current_state_id, &sbx::assets::animation_state::id);
+    ImGui::Text("%s: %s", layers[index].name.c_str(), current_state_it != states.end() ? current_state_it->name.c_str() : "(none)");
+
+    if (index > 0u) {
+      ImGui::SameLine();
+      ImGui::TextDisabled("(weight %.2f)", runtime.weight);
+    }
+
+    // Always drawn so the row height doesn't change as transitions start and stop.
+    auto overlay = std::string{"Not transitioning"};
+    auto alpha = 0.0f;
+
+    if (runtime.transition_target_state_id.has_value()) {
+      const auto target_state_it = std::ranges::find(states, *runtime.transition_target_state_id, &sbx::assets::animation_state::id);
+      alpha = (runtime.transition_duration > 0.0f) ? std::clamp(runtime.transition_time / runtime.transition_duration, 0.0f, 1.0f) : 1.0f;
+      overlay = fmt::format("-> {} ({:.0f}%)", target_state_it != states.end() ? target_state_it->name.c_str() : "(none)", alpha * 100.0f);
+    }
+
+    ImGui::ProgressBar(alpha, ImVec2{-1.0f, 0.0f}, overlay.c_str());
+
+    ImGui::PopID();
+  }
 
   // For testing: set parameter values live, like gameplay code would. States and transitions are edited in the graph editor.
   if (!anim.parameters.empty() && ImGui::TreeNodeEx("Parameters", ImGuiTreeNodeFlags_DefaultOpen)) {

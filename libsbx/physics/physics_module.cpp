@@ -485,6 +485,21 @@ auto physics_module::fixed_update() -> void {
 
   _was_simulating = true;
 
+  // Root motion the animator handed to controllers since the last step, so animated characters still collide, climb steps and slide along walls.
+  {
+    auto moving = std::vector<std::pair<scenes::node, math::vector3>>{};
+
+    for (auto&& [entity, controller] : scene.query<character_controller>(ecs::exclude<scenes::inactive>).each()) {
+      if (controller.pending_motion != math::vector3::zero) {
+        moving.emplace_back(scene.node_of(entity), std::exchange(controller.pending_motion, math::vector3::zero));
+      }
+    }
+
+    for (const auto& [node, motion] : moving) {
+      move_character(scene, node, motion);
+    }
+  }
+
   const auto dt = core::engine::fixed_delta_time().value();
 
   // Each node's world pose is composed at most once this step.

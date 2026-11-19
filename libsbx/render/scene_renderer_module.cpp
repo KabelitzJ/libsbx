@@ -283,8 +283,11 @@ auto set_lod_levels(draw_command& command) -> void {
   const auto& lods = command.mesh->submeshes()[command.submesh_index].lods;
   const auto count = std::min(lods.size(), static_cast<std::size_t>(max_lod_levels - 1u));
 
+  // As in Godot: a bias above 1 makes every level look less accurate than it is, so detail is kept longer.
+  const auto bias = std::max(command.lod_bias * command.mesh->lod_bias(), 0.01f);
+
   for (auto level = std::size_t{0u}; level < count; ++level) {
-    command.lod_errors[level] = lods[level].error;
+    command.lod_errors[level] = lods[level].error * bias;
   }
 
   command.lod_count = 1u + static_cast<std::uint32_t>(count);
@@ -326,170 +329,6 @@ auto lod_index_range(const draw_command& command, std::uint32_t level) -> std::p
   const auto& lod = submesh.lods[level - 1u];
 
   return {lod.index_count, lod.index_offset};
-}
-
-template<typename Key>
-auto bracket_keys(const std::vector<Key>& keys, std::float_t time) -> std::pair<std::size_t, std::size_t> {
-  if (keys.size() == 1u || time <= keys.front().time) {
-    return {0u, 0u};
-  }
-
-  if (time >= keys.back().time) {
-    const auto last = keys.size() - 1u;
-    return {last, last};
-  }
-
-  for (auto index = std::size_t{0u}; index + 1u < keys.size(); ++index) {
-    if (time >= keys[index].time && time <= keys[index + 1u].time) {
-      return {index, index + 1u};
-    }
-  }
-
-  return {0u, 0u};
-}
-
-auto sample_vector3_track(const std::vector<assets::animation_key<math::vector3>>& keys, std::float_t time) -> math::vector3 {
-  const auto [a, b] = bracket_keys(keys, time);
-
-  if (a == b) {
-    return keys[a].value;
-  }
-
-  const auto span = keys[b].time - keys[a].time;
-  const auto t = (span > 0.0f) ? (time - keys[a].time) / span : 0.0f;
-
-  return math::vector3{
-    math::mix(keys[a].value.x(), keys[b].value.x(), t),
-    math::mix(keys[a].value.y(), keys[b].value.y(), t),
-    math::mix(keys[a].value.z(), keys[b].value.z(), t)
-  };
-}
-
-auto sample_rotation_track(const std::vector<assets::animation_key<math::quaternion>>& keys, std::float_t time) -> math::quaternion {
-  const auto [a, b] = bracket_keys(keys, time);
-
-  if (a == b) {
-    return keys[a].value;
-  }
-
-  const auto span = keys[b].time - keys[a].time;
-  const auto t = (span > 0.0f) ? (time - keys[a].time) / span : 0.0f;
-
-  return math::quaternion::slerp(keys[a].value, keys[b].value, t);
-}
-
-auto compose_trs(const math::vector3& translation, const math::quaternion& rotation, const math::vector3& scale) -> math::matrix4x4 {
-  const auto translation_matrix = math::matrix4x4::translated(math::matrix4x4::identity, translation);
-  const auto scale_matrix = math::matrix4x4::scaled(math::matrix4x4::identity, scale);
-
-  return translation_matrix * math::matrix_cast<math::matrix4x4>(rotation) * scale_matrix;
-}
-
-auto mix_vector3(const math::vector3& start, const math::vector3& end, std::float_t t) -> math::vector3 {
-  return math::vector3{
-    math::mix(start.x(), end.x(), t),
-    math::mix(start.y(), end.y(), t),
-    math::mix(start.z(), end.z(), t)
-  };
-}
-
-auto sample_clip_trs(const assets::animation_clip& clip, std::float_t time, const std::vector<assets::skeleton::joint>& joints, std::vector<math::vector3>& translations, std::vector<math::quaternion>& rotations, std::vector<math::vector3>& scales) -> void {
-  for (const auto& channel : clip.channels()) {
-    if (channel.joint_index >= joints.size()) {
-      continue;
-    }
-
-    if (!channel.translation_keys.empty()) {
-      translations[channel.joint_index] = sample_vector3_track(channel.translation_keys, time);
-    }
-
-    if (!channel.rotation_keys.empty()) {
-      rotations[channel.joint_index] = sample_rotation_track(channel.rotation_keys, time);
-    }
-
-    if (!channel.scale_keys.empty()) {
-      scales[channel.joint_index] = sample_vector3_track(channel.scale_keys, time);
-    }
-  }
-}
-
-auto advance_local_time(std::float_t time, std::float_t delta_time, std::float_t speed, std::float_t duration, bool loop) -> std::float_t {
-  time += delta_time * speed;
-
-  if (duration <= 0.0f) {
-    return 0.0f;
-  }
-
-  if (loop) {
-    time = std::fmod(time, duration);
-
-    if (time < 0.0f) {
-      time += duration;
-    }
-
-    return time;
-  }
-
-  return std::clamp(time, 0.0f, duration);
-}
-
-[[nodiscard]] auto find_animation_state(const assets::animation_graph& graph, std::uint32_t state_id) -> const assets::animation_state* {
-  const auto& states = graph.states();
-  const auto entry = std::ranges::find(states, state_id, &assets::animation_state::id);
-  return (entry != states.end()) ? &*entry : nullptr;
-}
-
-[[nodiscard]] auto evaluate_animation_condition(const assets::animation_condition& condition, const std::vector<std::pair<std::string, assets::animation_parameter_value>>& parameters) -> bool {
-  const auto entry = std::ranges::find(parameters, condition.parameter_name, [](const auto& pair) { return std::string_view{pair.first}; });
-
-  if (entry == parameters.end()) {
-    return false;
-  }
-
-  const auto& value = entry->second;
-
-  if (const auto* trigger = std::get_if<assets::animation_trigger>(&value)) {
-    return trigger->set;
-  }
-
-  return std::visit([&condition](const auto& current) -> bool {
-    using current_type = std::decay_t<decltype(current)>;
-
-    if constexpr (std::is_same_v<current_type, assets::animation_trigger>) {
-      return false;
-    } else {
-      const auto* expected = std::get_if<current_type>(&condition.expected);
-
-      if (expected == nullptr) {
-        return false;
-      }
-
-      switch (condition.comparator) {
-        case assets::animation_condition_comparator::equals: return current == *expected;
-        case assets::animation_condition_comparator::not_equals: return !(current == *expected);
-        case assets::animation_condition_comparator::greater: return current > *expected;
-        case assets::animation_condition_comparator::greater_or_equal: return current >= *expected;
-        case assets::animation_condition_comparator::less: return current < *expected;
-        case assets::animation_condition_comparator::less_or_equal: return current <= *expected;
-      }
-
-      return false;
-    }
-  }, value);
-}
-
-auto reconcile_animator_parameters(const assets::animation_graph& graph, scenes::animator& animator) -> void {
-  for (const auto& parameter : graph.parameters()) {
-    const auto exists = std::ranges::any_of(animator.parameters, [&parameter](const auto& entry) { return entry.first == parameter.name; });
-
-    if (!exists) {
-      animator.parameters.emplace_back(parameter.name, parameter.default_value);
-    }
-  }
-
-  std::erase_if(animator.parameters, [&graph](const auto& entry) {
-    return !std::ranges::any_of(graph.parameters(), [&entry](const auto& parameter) { return parameter.name == entry.first; });
-  });
 }
 
 scene_renderer_module::scene_renderer_module() {
@@ -681,176 +520,6 @@ auto scene_renderer_module::_extract_gpu_particle_emitter(render_packet& packet,
   packet.particle_emitters.push_back(particle_emitter_snapshot{pool_index, runtime.slot, data});
 }
 
-auto scene_renderer_module::_resolve_state_clip(const scenes::mesh_renderer& renderer, const assets::animation_state* state) const -> assets::animation_clip_handle {
-  if (state == nullptr || !renderer.mesh.is_valid()) {
-    return assets::animation_clip_handle{};
-  }
-
-  for (const auto& clip : renderer.mesh->animation_clips()) {
-    if (clip.is_valid() && clip->name() == state->clip_name) {
-      return clip;
-    }
-  }
-
-  return assets::animation_clip_handle{};
-}
-
-auto scene_renderer_module::_advance_animator_state(const scenes::mesh_renderer& renderer, const assets::animation_graph& graph, scenes::animator& animator, std::float_t delta_time) -> void {
-  reconcile_animator_parameters(graph, animator);
-
-  const auto* current_state = find_animation_state(graph, animator.current_state_id);
-
-  if (!animator.current_clip.is_valid()) {
-    animator.current_clip = _resolve_state_clip(renderer, current_state);
-  }
-
-  if (!animator.transition_target_state_id.has_value()) {
-    if (animator.playing && current_state != nullptr) {
-      const auto duration = animator.current_clip.is_valid() ? animator.current_clip->duration() : 0.0f;
-      animator.current_time = advance_local_time(animator.current_time, delta_time, current_state->speed, duration, current_state->loop);
-    }
-
-    for (const auto& transition : graph.transitions()) {
-      if (transition.from_state.has_value() && *transition.from_state != animator.current_state_id) {
-        continue;
-      }
-
-      if (transition.has_exit_time) {
-        const auto duration = animator.current_clip.is_valid() ? animator.current_clip->duration() : 0.0f;
-        const auto normalized_time = (duration > 0.0f) ? (animator.current_time / duration) : 0.0f;
-
-        if (normalized_time < transition.exit_time) {
-          continue;
-        }
-      }
-
-      const auto conditions_pass = std::ranges::all_of(transition.conditions, [&animator](const auto& condition) {
-        return evaluate_animation_condition(condition, animator.parameters);
-      });
-
-      if (!conditions_pass) {
-        continue;
-      }
-
-      animator.transition_target_state_id = transition.to_state;
-      animator.transition_time = 0.0f;
-      animator.transition_target_time = 0.0f;
-      animator.transition_duration = transition.duration;
-      animator.transition_target_clip = _resolve_state_clip(renderer, find_animation_state(graph, transition.to_state));
-
-      break;
-    }
-  } else {
-    const auto* target_state = find_animation_state(graph, *animator.transition_target_state_id);
-
-    if (animator.playing) {
-      const auto source_duration = animator.current_clip.is_valid() ? animator.current_clip->duration() : 0.0f;
-      const auto target_duration = animator.transition_target_clip.is_valid() ? animator.transition_target_clip->duration() : 0.0f;
-
-      animator.current_time = advance_local_time(animator.current_time, delta_time, current_state != nullptr ? current_state->speed : 1.0f, source_duration, current_state == nullptr || current_state->loop);
-      animator.transition_target_time = advance_local_time(animator.transition_target_time, delta_time, target_state != nullptr ? target_state->speed : 1.0f, target_duration, target_state == nullptr || target_state->loop);
-      animator.transition_time += delta_time;
-    }
-
-    const auto alpha = (animator.transition_duration > 0.0f) ? std::clamp(animator.transition_time / animator.transition_duration, 0.0f, 1.0f) : 1.0f;
-
-    if (alpha >= 1.0f) {
-      animator.current_state_id = *animator.transition_target_state_id;
-      animator.current_time = animator.transition_target_time;
-      animator.current_clip = animator.transition_target_clip;
-
-      animator.transition_target_state_id.reset();
-      animator.transition_time = 0.0f;
-      animator.transition_target_time = 0.0f;
-      animator.transition_duration = 0.0f;
-      animator.transition_target_clip = assets::animation_clip_handle{};
-    }
-  }
-
-  for (auto& [name, value] : animator.parameters) {
-    if (auto* trigger = std::get_if<assets::animation_trigger>(&value)) {
-      trigger->set = false;
-    }
-  }
-}
-
-auto scene_renderer_module::_evaluate_skeleton_pose(const assets::skeleton& skeleton, const scenes::mesh_renderer& renderer, memory::observer_ptr<scenes::animator> animator, scenes::skeleton_pose& pose, std::float_t delta_time, pose_scratch& scratch) -> void {
-  const auto& joints = skeleton.joints();
-  const auto joint_count = joints.size();
-
-  pose.joint_world_matrices.resize(joint_count);
-  pose.skinning_matrices.resize(joint_count);
-
-  const auto* graph = (animator != nullptr && animator->graph.is_valid()) ? animator->graph.get() : nullptr;
-
-  if (graph != nullptr) {
-    _advance_animator_state(renderer, *graph, *animator, delta_time);
-  }
-
-  auto& translations = scratch.translations;
-  auto& rotations = scratch.rotations;
-  auto& scales = scratch.scales;
-
-  translations.resize(joint_count);
-  rotations.resize(joint_count);
-  scales.resize(joint_count);
-
-  for (auto index = std::size_t{0u}; index < joint_count; ++index) {
-    const auto& joint = joints[index];
-    translations[index] = joint.bind_local_translation;
-    rotations[index] = joint.bind_local_rotation;
-    scales[index] = joint.bind_local_scale;
-  }
-
-  const auto* clip = (graph != nullptr && animator->current_clip.is_valid()) ? animator->current_clip.get() : nullptr;
-
-  if (clip != nullptr) {
-    sample_clip_trs(*clip, animator->current_time, joints, translations, rotations, scales);
-  }
-
-  if (graph != nullptr && animator->transition_target_state_id.has_value() && animator->transition_target_clip.is_valid()) {
-    const auto alpha = (animator->transition_duration > 0.0f) ? std::clamp(animator->transition_time / animator->transition_duration, 0.0f, 1.0f) : 1.0f;
-
-    auto& target_translations = scratch.target_translations;
-    auto& target_rotations = scratch.target_rotations;
-    auto& target_scales = scratch.target_scales;
-
-    target_translations.resize(joint_count);
-    target_rotations.resize(joint_count);
-    target_scales.resize(joint_count);
-
-    for (auto index = std::size_t{0u}; index < joint_count; ++index) {
-      const auto& joint = joints[index];
-      target_translations[index] = joint.bind_local_translation;
-      target_rotations[index] = joint.bind_local_rotation;
-      target_scales[index] = joint.bind_local_scale;
-    }
-
-    sample_clip_trs(*animator->transition_target_clip, animator->transition_target_time, joints, target_translations, target_rotations, target_scales);
-
-    for (auto index = std::size_t{0u}; index < joint_count; ++index) {
-      translations[index] = mix_vector3(translations[index], target_translations[index], alpha);
-      rotations[index] = math::quaternion::slerp(rotations[index], target_rotations[index], alpha);
-      scales[index] = mix_vector3(scales[index], target_scales[index], alpha);
-    }
-  }
-
-  auto& locals = scratch.locals;
-  locals.resize(joint_count);
-
-  for (auto index = std::size_t{0u}; index < joint_count; ++index) {
-    locals[index] = compose_trs(translations[index], rotations[index], scales[index]);
-  }
-
-  for (auto index = std::size_t{0u}; index < joint_count; ++index) {
-    const auto parent_index = joints[index].parent_index;
-
-    pose.joint_world_matrices[index] = (parent_index < 0) ? locals[index] : pose.joint_world_matrices[static_cast<std::size_t>(parent_index)] * locals[index];
-
-    pose.skinning_matrices[index] = pose.joint_world_matrices[index] * joints[index].inverse_bind_matrix;
-  }
-}
-
 auto scene_renderer_module::_resolve_camera_data() -> camera_data {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();
@@ -993,14 +662,15 @@ auto scene_renderer_module::_build_packet() -> render_packet {
       if (material->alpha() == assets::alpha_mode::blend) {
         _transparent_entries.push_back(transparent_entry{renderer.mesh, index, material, compute_pipeline_id(*material), instance});
       } else {
-        auto& bucket = _opaque_buckets[mesh_key{renderer.mesh->id(), index, material->id()}];
+        auto& bucket = _opaque_buckets[mesh_key{renderer.mesh->id(), index, material->id(), renderer.lod_bias}];
 
-        // Refreshed once per bucket: its instances share mesh and material, and a reused bucket may hold last frame's handles.
+        // Refreshed once per bucket: its instances share mesh, material and LOD bias, and a reused bucket may hold last frame's handles.
         if (bucket.transforms.empty()) {
           bucket.mesh = renderer.mesh;
           bucket.submesh_index = index;
           bucket.material = material;
           bucket.pipeline_id = compute_pipeline_id(*material);
+          bucket.lod_bias = renderer.lod_bias;
         }
 
         bucket.transforms.push_back(instance);
@@ -1033,6 +703,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     command.pipeline_id = bucket.pipeline_id;
     command.resident = assets_module.is_resident(bucket.mesh) && assets_module.is_resident(bucket.material);
     command.local_bounds = bucket.mesh->submeshes()[bucket.submesh_index].bounds;
+    command.lod_bias = bucket.lod_bias;
 
     packet.transforms.insert(packet.transforms.end(), bucket.transforms.begin(), bucket.transforms.end());
 
@@ -1083,6 +754,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
       command.local_bounds = submeshes[index].bounds;
       command.instances = renderer.instances;
       command.culled_offset = instanced_culled;
+      command.lod_bias = renderer.lod_bias;
 
       // One block per cull view and detail level, plus the late camera view's.
       set_lod_levels(command);
@@ -1133,44 +805,16 @@ auto scene_renderer_module::_build_packet() -> render_packet {
   }
 
   auto skin_scratch_cursor = std::uint32_t{0u};
-  const auto animation_delta_time = scenes_module.simulation_delta_time().value();
 
   // prepare() runs before this packet's frame begins, so this is the frame_index record() will see.
   const auto& frame_context = core::engine::get_module<graphics::graphics_module>().frame_context();
   const auto skin_scratch_address = _skin_scratch_addresses[utility::fast_mod(frame_context.frame_index(), graphics::swapchain::max_frames_in_flight)];
 
-  _skinned_entries.clear();
-
+  // animation_module posed these in post_update; a pose added since (a mesh just assigned) has no matrices until next frame.
   for (const auto [entity, world, renderer, pose] : scene.query<scenes::world_transform, scenes::mesh_renderer, scenes::skeleton_pose>(ecs::exclude<scenes::inactive>).each()) {
-    if (!renderer.mesh.is_valid() || !pose.skeleton.is_valid()) {
+    if (!renderer.mesh.is_valid() || !pose.skeleton.is_valid() || pose.skinning_matrices.size() != pose.skeleton->joints().size()) {
       continue;
     }
-
-    _skinned_entries.push_back(skinned_entry{entity, memory::make_observer(world), memory::make_observer(renderer), memory::make_observer(pose), scene.node_of(entity).try_get_component<scenes::animator>()});
-  }
-
-  // Poses are independent per entity, so they evaluate in parallel; the packet appends below stay serial.
-  static constexpr auto poses_per_chunk = std::size_t{4u};
-
-  _pose_scratch.resize(std::max(_pose_scratch.size(), (_skinned_entries.size() + poses_per_chunk - 1u) / poses_per_chunk));
-
-  core::engine::get_module<async::async_module>().pool().parallel_for_chunks(0u, _skinned_entries.size(), poses_per_chunk, [&](std::size_t begin, std::size_t end) {
-    SBX_PROFILE_SCOPE("Skeleton poses");
-
-    auto& scratch = _pose_scratch[begin / poses_per_chunk];
-
-    for (auto index = begin; index < end; ++index) {
-      auto& entry = _skinned_entries[index];
-
-      _evaluate_skeleton_pose(*entry.pose->skeleton, *entry.renderer, entry.animator, *entry.pose, animation_delta_time, scratch);
-    }
-  });
-
-  for (auto& entry : _skinned_entries) {
-    const auto entity = entry.entity;
-    const auto& world = *entry.world;
-    auto& renderer = *entry.renderer;
-    const auto& pose = *entry.pose;
 
     const auto instance_vertex_count = renderer.mesh->vertex_count();
 
@@ -1217,6 +861,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
       command.vertex_address_override = output_vertex_address;
       command.resident = assets_module.is_resident(renderer.mesh) && assets_module.is_resident(material);
       command.local_bounds = submeshes[index].bounds.inflated(skinned_bounds_padding_factor);
+      command.lod_bias = renderer.lod_bias;
 
       packet.transforms.push_back(transform_data{world.matrix, math::matrix4x4::transposed(math::matrix4x4::inverted(world.matrix))});
 
@@ -3068,7 +2713,8 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   // An error of e world units at distance d covers e * lod_projection_scale / d pixels.
   const auto lod_bias = core::engine::has_project() ? core::engine::project().lod_bias() : core::project::default_lod_bias;
   data.lod_projection_scale = static_cast<std::float_t>(context.extent.y()) / (2.0f * std::tan(math::to_radians(math::degree{camera.fov_degrees}).value() * 0.5f));
-  data.lod_error_threshold = lod_error_pixels * std::max(lod_bias, 0.01f);
+  // Above 1 tolerates less error, keeping detail longer.
+  data.lod_error_threshold = lod_error_pixels / std::max(lod_bias, 0.01f);
   data.shadow_lod_error_threshold = data.lod_error_threshold * shadow_lod_error_scale;
 
   data.occlusion_visibility_address = _occlusion_visibility_address;

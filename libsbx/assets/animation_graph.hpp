@@ -30,11 +30,51 @@ struct animation_parameter {
   animation_parameter_value default_value{0.0f};
 }; // struct animation_parameter
 
+/** @brief How a blend motion weighs its children. */
+enum class animation_blend_type : std::uint8_t {
+  linear_1d, // by one float parameter between neighbouring thresholds
+  freeform_directional_2d, // by two float parameters, children placed by direction and speed (walk/run in every direction)
+  freeform_cartesian_2d, // by two float parameters, children placed on independent axes
+  direct // each child weighted by its own float parameter
+}; // enum class animation_blend_type
+
+enum class animation_motion_kind : std::uint8_t {
+  clip,
+  blend
+}; // enum class animation_motion_kind
+
+// Children past this many in one blend are ignored.
+inline constexpr auto max_blend_children = std::size_t{32u};
+
+/**
+ * @brief What a state plays: a clip, or a blend of child motions (Unity's blend tree), nested to any depth.
+ *
+ * Every clip in a state's tree plays at the same normalized time, so cycles of different lengths (walk, run) stay in step.
+ */
+struct animation_motion {
+  animation_motion_kind kind{animation_motion_kind::clip};
+
+  // kind == clip: resolved by name against the animated mesh's clips.
+  std::string clip_name{};
+
+  // kind == blend.
+  animation_blend_type blend_type{animation_blend_type::linear_1d};
+  std::string parameter_x{};
+  std::string parameter_y{};
+  std::vector<animation_motion> children{};
+
+  // Where this motion sits in its parent blend: its threshold (linear_1d), position (2D), or weight parameter (direct).
+  std::float_t threshold{0.0f};
+  math::vector2 position{0.0f, 0.0f};
+  std::string direct_parameter{};
+}; // struct animation_motion
+
 struct animation_state {
   std::uint32_t id{0u};
   std::string name{};
-  std::string clip_name{};
+  animation_motion motion{};
   std::float_t speed{1.0f};
+  std::string speed_parameter{}; // a float parameter multiplying speed, empty for none
   bool loop{true};
   math::vector2 editor_position{0.0f, 0.0f};
 }; // struct animation_state
@@ -63,6 +103,41 @@ struct animation_transition {
   std::vector<animation_condition> conditions{};
 }; // struct animation_transition
 
+enum class animation_layer_blend_mode : std::uint8_t {
+  override, // replaces the layers below, by weight
+  additive // adds its motion's difference from the motion's first frame onto the layers below
+}; // enum class animation_layer_blend_mode
+
+/**
+ * @brief One state machine of a graph; layers above the first blend over the ones below, limited to the joints in their mask.
+ *
+ * Every layer reads the graph's shared parameters.
+ */
+struct animation_layer {
+  std::string name{"Base Layer"};
+  std::vector<animation_state> states{};
+  std::vector<animation_transition> transitions{};
+  std::uint32_t entry_state_id{0u};
+  std::float_t weight{1.0f}; // the default weight; the base layer always has full weight
+  animation_layer_blend_mode blend_mode{animation_layer_blend_mode::override};
+  std::vector<std::string> mask{}; // names of the joints this layer drives, matched against the animated skeleton; empty drives every joint
+
+  /**
+   * @brief An id no state of this layer uses yet.
+   *
+   * @return One past the highest state id.
+   */
+  [[nodiscard]] auto next_state_id() const noexcept -> std::uint32_t {
+    auto next = std::uint32_t{0u};
+
+    for (const auto& state : states) {
+      next = std::max(next, state.id + 1u);
+    }
+
+    return next;
+  }
+}; // struct animation_layer
+
 class animation_graph final : public loadable {
 
   friend class asset_residency;
@@ -72,9 +147,7 @@ public:
   struct create_info {
     std::string name{"animation_graph"};
     std::vector<animation_parameter> parameters{};
-    std::vector<animation_state> states{};
-    std::vector<animation_transition> transitions{};
-    std::uint32_t entry_state_id{0u};
+    std::vector<animation_layer> layers{}; // the first is the base layer
   }; // struct create_info
 
   animation_graph() = default;
@@ -82,12 +155,10 @@ public:
   explicit animation_graph(const create_info& create_info)
   : _name{create_info.name},
     _parameters{create_info.parameters},
-    _states{create_info.states},
-    _transitions{create_info.transitions},
-    _entry_state_id{create_info.entry_state_id} { }
+    _layers{create_info.layers} { }
 
   [[nodiscard]] auto is_valid() const noexcept -> bool {
-    return !_states.empty();
+    return !_layers.empty() && !_layers.front().states.empty();
   }
 
   [[nodiscard]] auto id() const noexcept -> const math::uuid& {
@@ -102,35 +173,15 @@ public:
     return _parameters;
   }
 
-  [[nodiscard]] auto states() const noexcept -> const std::vector<animation_state>& {
-    return _states;
-  }
-
-  [[nodiscard]] auto transitions() const noexcept -> const std::vector<animation_transition>& {
-    return _transitions;
-  }
-
-  [[nodiscard]] auto entry_state_id() const noexcept -> std::uint32_t {
-    return _entry_state_id;
-  }
-
-  [[nodiscard]] auto next_state_id() const noexcept -> std::uint32_t {
-    auto next = std::uint32_t{0u};
-
-    for (const auto& state : _states) {
-      next = std::max(next, state.id + 1u);
-    }
-
-    return next;
+  [[nodiscard]] auto layers() const noexcept -> const std::vector<animation_layer>& {
+    return _layers;
   }
 
 private:
 
   std::string _name{"animation_graph"};
   std::vector<animation_parameter> _parameters{};
-  std::vector<animation_state> _states{};
-  std::vector<animation_transition> _transitions{};
-  std::uint32_t _entry_state_id{0u};
+  std::vector<animation_layer> _layers{};
   math::uuid _id{math::uuid::nil()};
 
 }; // class animation_graph

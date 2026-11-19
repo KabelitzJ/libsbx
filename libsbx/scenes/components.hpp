@@ -4,6 +4,7 @@
 #define LIBSBX_SCENES_COMPONENTS_HPP_
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -186,6 +187,7 @@ struct camera {
 struct mesh_renderer {
   assets::mesh_handle mesh{};
   std::vector<assets::material_handle> materials{};
+  std::float_t lod_bias{1.0f}; // multiplies the mesh's and the project's LOD bias: above 1 keeps detail longer, below 1 switches to coarser levels sooner
 }; // struct mesh_renderer
 
 /**
@@ -199,6 +201,7 @@ struct mesh_renderer {
 struct instanced_mesh_renderer {
   assets::mesh_handle mesh{};
   assets::material_handle material{};
+  std::float_t lod_bias{1.0f}; // see mesh_renderer::lod_bias
   std::shared_ptr<const instance_buffer> instances{};
 }; // struct instanced_mesh_renderer
 
@@ -227,42 +230,109 @@ inline auto sync_materials_with_mesh(mesh_renderer& renderer) -> void {
 }
 
 /**
- * @brief Drives a skinned mesh_renderer's pose by sampling one animation_clip over time.
+ * @brief A live instance of an assets::animation_graph: which state is currently playing (and, mid-transition, which one it's crossfading into), plus this instance's own parameter values (seeded from the graph's defaults by set_graph, then driven by gameplay or the Inspector).
  *
- * Sampled and evaluated once per frame by render::scene_renderer_module (render cadence, not
- * fixed_update -- it feeds render_packet directly and needs no physics-step determinism, the same
- * reasoning that keeps GPU-path particle_emitter bookkeeping there instead of particles_module).
+ * Each graph layer plays in its own animator_layer. State times are normalized (0 to 1 over one cycle of the state's motion), so every clip of a blend tree plays in step.
+ * The clips of a state's motion tree are resolved once, by name, against the owning node's mesh_renderer, and cached in leaf order until the state or the graph changes.
+ * animation::animation_module advances and samples it once per frame in post_update, together with the skeleton_pose it drives.
  */
-/**
- * @brief A live instance of an assets::animation_graph: which state is currently playing (and,
- * mid-transition, which one it's crossfading into), plus this instance's own parameter values
- * (seeded from the graph's defaults by set_graph, then driven by gameplay/the Inspector).
- *
- * current_clip/transition_target_clip are resolved once, by name, against the owning node's
- * mesh_renderer -- not re-resolved every frame (see assets::animation_state::clip_name's doc
- * comment). render::scene_renderer_module owns advancing/sampling this, at render cadence, same
- * as it owns skeleton_pose evaluation.
- */
-struct animator {
-  assets::animation_graph_handle graph{};
-  std::vector<std::pair<std::string, assets::animation_parameter_value>> parameters{}; // small N -> linear scan, same convention as static_vector-sized data elsewhere in the engine
-  bool playing{true};
-
+/** @brief One graph layer's playback inside an animator: its current state, an in-flight transition, and its weight. */
+struct animator_layer {
   std::uint32_t current_state_id{0u};
   std::float_t current_time{0.0f};
-  assets::animation_clip_handle current_clip{};
+  std::vector<assets::animation_clip_handle> current_clips{};
 
   std::optional<std::uint32_t> transition_target_state_id{};
   std::float_t transition_time{0.0f};
   std::float_t transition_target_time{0.0f};
   std::float_t transition_duration{0.0f};
-  assets::animation_clip_handle transition_target_clip{};
+  std::vector<assets::animation_clip_handle> transition_target_clips{};
+
+  // Whether the state hasn't advanced since it started, so an event at its very first frame still fires.
+  bool current_fresh{true};
+  bool target_fresh{false};
+
+  // Seeded from the layer's default weight; scripts change it at runtime. Ignored on the base layer.
+  std::float_t weight{1.0f};
+
+  // The layer's mask resolved against the animated skeleton, one weight per joint; empty until resolved.
+  std::vector<std::float_t> joint_weights{};
+}; // struct animator_layer
+
+/**
+ * @brief A two-bone limb an animator can bend toward a goal: the end joint (a foot or a hand), its parent (knee, elbow) and grandparent (hip, shoulder).
+ *
+ * Goals are world-space and set by scripts (Animator.SetIKPosition and friends); they persist until changed. A foot-placement chain plants itself on the ground when no script goal outweighs it.
+ */
+struct animator_ik_chain {
+  std::string name{}; // how scripts refer to it, e.g. "LeftFoot"
+  std::string end_joint{};
+  bool foot_placement{false};
+
+  // Runtime-only, not persisted.
+  math::vector3 target_position{0.0f, 0.0f, 0.0f};
+  math::quaternion target_rotation{math::quaternion::identity};
+  math::vector3 hint_position{0.0f, 0.0f, 0.0f}; // where the middle joint should point, e.g. in front of the knee
+  std::float_t position_weight{0.0f};
+  std::float_t rotation_weight{0.0f};
+  bool has_hint{false};
+  std::array<std::int32_t, 3u> joints{-1, -1, -1}; // root, middle, end; -1 until resolved, -2 when missing
+}; // struct animator_ik_chain
+
+struct animator {
+  assets::animation_graph_handle graph{};
+  std::vector<std::pair<std::string, assets::animation_parameter_value>> parameters{}; // small N -> linear scan, same convention as static_vector-sized data elsewhere in the engine
+  bool playing{true};
+
+  // Root motion: the base layer's root joint motion moves the node (or its character controller) instead of the mesh drifting away from it.
+  bool apply_root_motion{false};
+  std::string root_motion_joint{}; // empty picks the first joint whose translation the clips animate
+  bool bake_vertical_root_motion{true}; // keeps vertical root motion in the pose instead of moving the node up and down
+  bool bake_root_rotation{false}; // keeps the root's turning in the pose instead of turning the node
+
+  // IK, applied after the layers and root motion.
+  std::vector<animator_ik_chain> ik_chains{};
+  std::string look_at_joint{}; // the head; empty for no look-at
+  std::uint32_t look_at_spine_joints{2u}; // how many joints above the head share the turn
+  std::float_t look_at_clamp{1.2217f}; // radians the head turns at most, about 70 degrees
+  std::float_t foot_reach{0.5f}; // how far above and below each foot the ground is searched
+  layer_mask foot_ground_layers{}; // what counts as ground; leave the character's own layer out
+
+  // One per graph layer, the base layer first; grown and seeded lazily while the graph streams in.
+  std::vector<animator_layer> layers{};
+
+  // Runtime-only, not persisted: this frame's root motion in the node's own space (yaw about its up axis), and the resolved root joint (-1 until resolved, or none).
+  math::vector3 root_motion_delta_position{0.0f, 0.0f, 0.0f};
+  math::quaternion root_motion_delta_rotation{math::quaternion::identity};
+  std::int32_t root_motion_joint_index{-1};
+
+  // Runtime-only, not persisted: the look-at goal (world space), the resolved head joint, and the pelvis drop foot placement eases toward.
+  math::vector3 look_at_target{0.0f, 0.0f, 0.0f};
+  std::float_t look_at_weight{0.0f};
+  std::int32_t look_at_joint_index{-1};
+  std::float_t foot_pelvis_offset{0.0f};
 
   /**
-   * @brief Points this instance at a new graph, resetting to its entry state and reseeding
-   * parameters from the graph's own defaults. Clips are re-resolved lazily (see current_clip's
-   * doc comment above) the next time render::scene_renderer_module evaluates this instance, since
-   * that needs the owning node's mesh_renderer, which this component doesn't have access to.
+   * @brief An IK chain by name.
+   *
+   * @param name The chain's name.
+   *
+   * @return The chain, or null.
+   */
+  [[nodiscard]] auto find_ik_chain(std::string_view name) -> animator_ik_chain* {
+    const auto entry = std::ranges::find(ik_chains, name, [](const animator_ik_chain& chain) { return std::string_view{chain.name}; });
+    return entry != ik_chains.end() ? &*entry : nullptr;
+  }
+
+  // The graph generation the clip and mask caches were resolved against; an edited graph re-resolves them.
+  std::uint64_t resolved_generation{0u};
+
+  /**
+   * @brief Points this instance at a new graph, resetting to its entry state and reseeding parameters from the graph's own defaults.
+   *
+   * Clips are re-resolved lazily the next time animation::animation_module evaluates this instance, since that needs the owning node's mesh_renderer.
+   *
+   * @param new_graph The graph, or an invalid handle to clear it.
    */
   auto set_graph(assets::animation_graph_handle new_graph) -> void {
     graph = std::move(new_graph);
@@ -275,18 +345,23 @@ struct animator {
         parameters.emplace_back(parameter.name, parameter.default_value);
       }
 
-      current_state_id = graph->entry_state_id();
-    } else {
-      current_state_id = 0u;
     }
 
-    current_time = 0.0f;
-    current_clip = assets::animation_clip_handle{};
-    transition_target_state_id.reset();
-    transition_time = 0.0f;
-    transition_target_time = 0.0f;
-    transition_duration = 0.0f;
-    transition_target_clip = assets::animation_clip_handle{};
+    layers.clear();
+    resolved_generation = 0u;
+    root_motion_joint_index = -1;
+  }
+
+  /**
+   * @brief Sets a layer's weight; the base layer's is ignored.
+   *
+   * @param layer The layer index.
+   * @param weight The weight, clamped to [0, 1].
+   */
+  auto set_layer_weight(std::size_t layer, std::float_t weight) -> void {
+    if (layer < layers.size()) {
+      layers[layer].weight = std::clamp(weight, 0.0f, 1.0f);
+    }
   }
 
   [[nodiscard]] auto find_parameter(std::string_view name) -> assets::animation_parameter_value* {
@@ -323,11 +398,8 @@ struct animator {
 /**
  * @brief The evaluated joint pose of a skinned mesh_renderer, recomputed every frame.
  *
- * joint_world_matrices/skinning_matrices are scratch storage -- scene_renderer_module owns both
- * the evaluation (walking @ref skeleton's topologically-sorted joints) and the upload of
- * skinning_matrices into that frame's render_packet::joint_matrices, from which skin_pass reads
- * via a shared per-frame palette buffer (see render_packet::skin_dispatch). A skeleton_pose with
- * no animator (or a paused one) still needs evaluating once to seed the bind pose.
+ * animation::animation_module evaluates it in post_update (walking @ref skeleton's topologically sorted joints); scene_renderer_module uploads skinning_matrices into the frame's render_packet::joint_matrices, which skin_pass reads.
+ * A skeleton_pose with no animator (or a paused one) is still evaluated, to seed the bind pose.
  */
 struct skeleton_pose {
   assets::skeleton_handle skeleton{};

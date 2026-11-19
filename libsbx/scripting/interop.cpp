@@ -14,6 +14,8 @@
 #include <libsbx/core/engine.hpp>
 #include <libsbx/core/project.hpp>
 
+#include <libsbx/math/vector4.hpp>
+
 #include <libsbx/assets/animation_graph.hpp>
 #include <libsbx/assets/assets_module.hpp>
 
@@ -24,7 +26,10 @@
 #include <libsbx/physics/nav/navmesh.hpp>
 
 #include <libsbx/scenes/components.hpp>
+#include <libsbx/scenes/scenes_module.hpp>
 #include <libsbx/scenes/scene_serializer.hpp>
+
+#include <libsbx/animation/pose_evaluation.hpp>
 
 #include <libsbx/scripting/scripting_module.hpp>
 
@@ -523,10 +528,187 @@ auto interop::animator_get_current_state_name(std::uint64_t uuid) -> managed::st
     return managed::string::create("");
   }
 
-  const auto& states = animator.graph->states();
-  const auto entry = std::ranges::find(states, animator.current_state_id, &assets::animation_state::id);
+  return animator_get_layer_state_name(uuid, 0);
+}
+
+// The animator of a node, with its layers matched to its graph; null (after logging) if the node has none.
+auto layered_animator_of(std::uint64_t uuid, std::string_view what) -> memory::observer_ptr<scenes::animator> {
+  auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid() || !node.has_component<scenes::animator>()) {
+    utility::logger<"scripting">::error("Animator.{}: node {} has no animator", what, uuid);
+    return nullptr;
+  }
+
+  auto& animator = node.get_component<scenes::animator>();
+
+  if (animator.graph.is_valid()) {
+    animation::reconcile_animator_layers(*animator.graph, animator);
+  }
+
+  return memory::make_observer(animator);
+}
+
+auto interop::animation_event_get_name() -> managed::string {
+  const auto event = core::engine::get_module<scripting_module>().current_animation_event();
+
+  return managed::string::create(event != nullptr ? event->name.c_str() : "");
+}
+
+auto interop::animation_event_get_string_parameter() -> managed::string {
+  const auto event = core::engine::get_module<scripting_module>().current_animation_event();
+
+  return managed::string::create(event != nullptr ? event->string_parameter.c_str() : "");
+}
+
+auto interop::animation_event_get_clip_name() -> managed::string {
+  const auto event = core::engine::get_module<scripting_module>().current_animation_event();
+
+  return managed::string::create(event != nullptr ? event->clip_name.c_str() : "");
+}
+
+auto interop::animator_mark_root_motion_handled() -> void {
+  if (auto motion = core::engine::get_module<scripting_module>().current_root_motion()) {
+    motion->handled = true;
+  }
+}
+
+auto interop::animator_get_apply_root_motion(std::uint64_t uuid) -> managed::bool32 {
+  const auto animator = layered_animator_of(uuid, "ApplyRootMotion");
+
+  return animator != nullptr && animator->apply_root_motion;
+}
+
+auto interop::animator_set_apply_root_motion(std::uint64_t uuid, bool value) -> void {
+  if (auto animator = layered_animator_of(uuid, "ApplyRootMotion")) {
+    animator->apply_root_motion = value;
+  }
+}
+
+auto interop::animator_get_delta_position(std::uint64_t uuid, math::vector3* out_value) -> void {
+  auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(math::uuid::from_value(uuid));
+
+  if (!out_value || !node.is_valid() || !node.has_component<scenes::animator>()) {
+    return;
+  }
+
+  const auto& delta = node.get_component<scenes::animator>().root_motion_delta_position;
+
+  *out_value = math::vector3{node.world_matrix() * math::vector4{delta, 0.0f}};
+}
+
+auto interop::animator_get_delta_rotation(std::uint64_t uuid, math::quaternion* out_value) -> void {
+  auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(math::uuid::from_value(uuid));
+
+  if (!out_value || !node.is_valid() || !node.has_component<scenes::animator>()) {
+    return;
+  }
+
+  *out_value = node.get_component<scenes::animator>().root_motion_delta_rotation;
+}
+
+// An animator's IK chain by name; null (after logging) if the node has no animator or no such chain.
+auto ik_chain_of(std::uint64_t uuid, managed::string chain, std::string_view what) -> scenes::animator_ik_chain* {
+  auto animator = layered_animator_of(uuid, what);
+
+  if (animator == nullptr) {
+    return nullptr;
+  }
+
+  auto* found = animator->find_ik_chain(std::string{chain});
+
+  if (found == nullptr) {
+    utility::logger<"scripting">::error("Animator.{}: no IK chain named '{}'", what, std::string{chain});
+  }
+
+  return found;
+}
+
+auto interop::animator_set_ik_position(std::uint64_t uuid, managed::string chain, math::vector3* position) -> void {
+  if (auto* found = ik_chain_of(uuid, chain, "SetIKPosition"); found != nullptr && position != nullptr) {
+    found->target_position = *position;
+  }
+}
+
+auto interop::animator_set_ik_rotation(std::uint64_t uuid, managed::string chain, math::quaternion* rotation) -> void {
+  if (auto* found = ik_chain_of(uuid, chain, "SetIKRotation"); found != nullptr && rotation != nullptr) {
+    found->target_rotation = math::quaternion::normalized(*rotation);
+  }
+}
+
+auto interop::animator_set_ik_hint(std::uint64_t uuid, managed::string chain, math::vector3* position) -> void {
+  if (auto* found = ik_chain_of(uuid, chain, "SetIKHint"); found != nullptr && position != nullptr) {
+    found->hint_position = *position;
+    found->has_hint = true;
+  }
+}
+
+auto interop::animator_clear_ik_hint(std::uint64_t uuid, managed::string chain) -> void {
+  if (auto* found = ik_chain_of(uuid, chain, "ClearIKHint")) {
+    found->has_hint = false;
+  }
+}
+
+auto interop::animator_set_ik_weights(std::uint64_t uuid, managed::string chain, std::float_t position_weight, std::float_t rotation_weight) -> void {
+  if (auto* found = ik_chain_of(uuid, chain, "SetIKWeights")) {
+    found->position_weight = std::clamp(position_weight, 0.0f, 1.0f);
+    found->rotation_weight = std::clamp(rotation_weight, 0.0f, 1.0f);
+  }
+}
+
+auto interop::animator_set_look_at(std::uint64_t uuid, math::vector3* position, std::float_t weight) -> void {
+  if (auto animator = layered_animator_of(uuid, "SetLookAt"); animator != nullptr && position != nullptr) {
+    animator->look_at_target = *position;
+    animator->look_at_weight = std::clamp(weight, 0.0f, 1.0f);
+  }
+}
+
+auto interop::animator_get_layer_state_name(std::uint64_t uuid, std::int32_t layer) -> managed::string {
+  const auto animator = layered_animator_of(uuid, "GetCurrentStateName");
+
+  if (animator == nullptr || !animator->graph.is_valid() || layer < 0 || static_cast<std::size_t>(layer) >= animator->layers.size()) {
+    return managed::string::create("");
+  }
+
+  const auto& states = animator->graph->layers()[static_cast<std::size_t>(layer)].states;
+  const auto entry = std::ranges::find(states, animator->layers[static_cast<std::size_t>(layer)].current_state_id, &assets::animation_state::id);
 
   return managed::string::create(entry != states.end() ? entry->name.c_str() : "");
+}
+
+auto interop::animator_get_layer_count(std::uint64_t uuid) -> std::int32_t {
+  const auto animator = layered_animator_of(uuid, "LayerCount");
+
+  return animator != nullptr ? static_cast<std::int32_t>(animator->layers.size()) : 0;
+}
+
+auto interop::animator_get_layer_index(std::uint64_t uuid, managed::string name) -> std::int32_t {
+  const auto animator = layered_animator_of(uuid, "GetLayerIndex");
+
+  if (animator == nullptr || !animator->graph.is_valid()) {
+    return -1;
+  }
+
+  const auto& layers = animator->graph->layers();
+  const auto entry = std::ranges::find(layers, std::string{name}, &assets::animation_layer::name);
+
+  return entry != layers.end() ? static_cast<std::int32_t>(entry - layers.begin()) : -1;
+}
+
+auto interop::animator_get_layer_weight(std::uint64_t uuid, std::int32_t layer) -> std::float_t {
+  const auto animator = layered_animator_of(uuid, "GetLayerWeight");
+
+  if (animator == nullptr || layer < 0 || static_cast<std::size_t>(layer) >= animator->layers.size()) {
+    return 0.0f;
+  }
+
+  return layer == 0 ? 1.0f : animator->layers[static_cast<std::size_t>(layer)].weight;
+}
+
+auto interop::animator_set_layer_weight(std::uint64_t uuid, std::int32_t layer, std::float_t weight) -> void {
+  if (auto animator = layered_animator_of(uuid, "SetLayerWeight"); animator != nullptr && layer >= 0) {
+    animator->set_layer_weight(static_cast<std::size_t>(layer), weight);
+  }
 }
 
 auto interop::animator_set_float(std::uint64_t uuid, managed::string name, std::float_t value) -> void {

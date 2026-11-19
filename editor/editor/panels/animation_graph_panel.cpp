@@ -6,9 +6,14 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <optional>
+#include <span>
 #include <string>
 #include <unordered_set>
+#include <utility>
+#include <variant>
+#include <vector>
 
 #include <fmt/format.h>
 
@@ -18,6 +23,8 @@
 #include <libsbx/core/project.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
+
+#include <libsbx/animation/pose_evaluation.hpp>
 
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
 #include <libsbx/render/ui/widgets/animation_parameter_widgets.hpp>
@@ -129,12 +136,17 @@ auto animation_graph_panel::_open(sbx::assets::animation_graph_handle graph, std
   if (_graph.is_valid()) {
     _edit.name = _graph->name();
     _edit.parameters = _graph->parameters();
-    _edit.states = _graph->states();
-    _edit.transitions = _graph->transitions();
-    _edit.entry_state_id = _graph->entry_state_id();
+    _edit.layers = _graph->layers();
   } else {
     _edit = sbx::assets::animation_graph::create_info{};
   }
+
+  if (_edit.layers.empty()) {
+    _edit.layers.emplace_back();
+  }
+
+  _layer_index = 0u;
+  _select_layer_tab = true;
 }
 
 auto animation_graph_panel::_apply_live() -> void {
@@ -146,9 +158,268 @@ auto animation_graph_panel::_apply_live() -> void {
   assets_module.update_animation_graph(_graph, _edit);
 }
 
+auto animation_graph_panel::_draw_float_parameter_combo(const char* label, std::string& name) -> bool {
+  auto changed = false;
+
+  if (ImGui::BeginCombo(label, name.empty() ? "(none)" : name.c_str())) {
+    if (ImGui::Selectable("(none)", name.empty()) && !name.empty()) {
+      name.clear();
+      changed = true;
+    }
+
+    for (const auto& parameter : _edit.parameters) {
+      const auto is_number = std::holds_alternative<std::float_t>(parameter.default_value) || std::holds_alternative<std::int32_t>(parameter.default_value);
+
+      if (!is_number) {
+        continue;
+      }
+
+      if (ImGui::Selectable(parameter.name.c_str(), parameter.name == name) && parameter.name != name) {
+        name = parameter.name;
+        changed = true;
+      }
+    }
+
+    ImGui::EndCombo();
+  }
+
+  return changed;
+}
+
+auto animation_graph_panel::_draw_blend_preview(const sbx::assets::animation_motion& motion, std::span<const std::float_t> weights) -> void {
+  auto values = std::vector<std::pair<std::string, sbx::assets::animation_parameter_value>>{};
+
+  for (const auto& parameter : _edit.parameters) {
+    values.emplace_back(parameter.name, parameter.default_value);
+  }
+
+  const auto value_of = [&](const std::string& name) {
+    const auto entry = std::ranges::find(values, name, &std::pair<std::string, sbx::assets::animation_parameter_value>::first);
+
+    if (entry == values.end()) {
+      return 0.0f;
+    }
+
+    if (const auto* value = std::get_if<std::float_t>(&entry->second)) {
+      return *value;
+    }
+
+    if (const auto* value = std::get_if<std::int32_t>(&entry->second)) {
+      return static_cast<std::float_t>(*value);
+    }
+
+    return 0.0f;
+  };
+
+  const auto point = ImVec2{value_of(motion.parameter_x), value_of(motion.parameter_y)};
+
+  // Fit every child and the point, keeping the origin centered.
+  auto extent = std::max(std::abs(point.x), std::abs(point.y));
+
+  for (const auto& child : motion.children) {
+    extent = std::max({extent, std::abs(child.position.x()), std::abs(child.position.y())});
+  }
+
+  extent = std::max(extent * 1.15f, 0.5f);
+
+  const auto size = std::min(ImGui::GetContentRegionAvail().x, 180.0f);
+  const auto origin = ImGui::GetCursorScreenPos();
+  const auto center = ImVec2{origin.x + size * 0.5f, origin.y + size * 0.5f};
+
+  const auto to_screen = [&](float x, float y) {
+    return ImVec2{center.x + x / extent * size * 0.5f, center.y - y / extent * size * 0.5f};
+  };
+
+  auto* draw_list = ImGui::GetWindowDrawList();
+
+  draw_list->AddRectFilled(origin, ImVec2{origin.x + size, origin.y + size}, IM_COL32(30, 30, 34, 255));
+  draw_list->AddLine(ImVec2{origin.x, center.y}, ImVec2{origin.x + size, center.y}, IM_COL32(70, 70, 80, 255));
+  draw_list->AddLine(ImVec2{center.x, origin.y}, ImVec2{center.x, origin.y + size}, IM_COL32(70, 70, 80, 255));
+
+  for (auto index = std::size_t{0u}; index < weights.size(); ++index) {
+    const auto& child = motion.children[index];
+    const auto position = to_screen(child.position.x(), child.position.y());
+
+    draw_list->AddCircleFilled(position, 3.0f + weights[index] * 7.0f, IM_COL32(90, 160, 255, static_cast<int>(120.0f + weights[index] * 135.0f)));
+    draw_list->AddText(ImVec2{position.x + 6.0f, position.y - 6.0f}, IM_COL32(200, 200, 210, 255), fmt::format("{}", index).c_str());
+  }
+
+  const auto marker = to_screen(point.x, point.y);
+
+  draw_list->AddLine(ImVec2{marker.x - 5.0f, marker.y}, ImVec2{marker.x + 5.0f, marker.y}, IM_COL32(255, 200, 60, 255), 2.0f);
+  draw_list->AddLine(ImVec2{marker.x, marker.y - 5.0f}, ImVec2{marker.x, marker.y + 5.0f}, IM_COL32(255, 200, 60, 255), 2.0f);
+
+  ImGui::Dummy(ImVec2{size, size});
+  ImGui::TextDisabled("Cross: the parameters' default values.");
+}
+
+auto animation_graph_panel::_draw_motion(sbx::assets::animation_motion& motion) -> bool {
+  auto changed = false;
+
+  if (motion.kind == sbx::assets::animation_motion_kind::clip) {
+    const auto* preview_clips = (_preview_mesh.is_valid() && !_preview_mesh->animation_clips().empty()) ? &_preview_mesh->animation_clips() : nullptr;
+
+    if (preview_clips != nullptr) {
+      // Picked from the preview mesh's clips to avoid typos; clips still resolve by name at runtime.
+      if (ImGui::BeginCombo("Clip", motion.clip_name.empty() ? "(none)" : motion.clip_name.c_str())) {
+        for (const auto& clip : *preview_clips) {
+          if (!clip.is_valid()) {
+            continue;
+          }
+
+          if (ImGui::Selectable(clip->name().c_str(), clip->name() == motion.clip_name)) {
+            motion.clip_name = clip->name();
+            changed = true;
+          }
+        }
+
+        ImGui::EndCombo();
+      }
+
+      if (!motion.clip_name.empty()) {
+        const auto resolves = std::ranges::any_of(*preview_clips, [&motion](const auto& clip) { return clip.is_valid() && clip->name() == motion.clip_name; });
+
+        if (!resolves) {
+          ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " No clip named '%s' on the preview mesh; it holds the bind pose at runtime.", motion.clip_name.c_str());
+        }
+      }
+    } else {
+      changed |= draw_text_field("Clip", motion.clip_name);
+      ImGui::TextDisabled("Set a Preview Mesh above to pick from a list instead.");
+    }
+
+    return changed;
+  }
+
+  static constexpr auto blend_labels = std::array<const char*, 4u>{"1D", "2D Freeform Directional", "2D Freeform Cartesian", "Direct"};
+
+  auto blend_type = static_cast<int>(motion.blend_type);
+
+  if (ImGui::Combo("Blend Type", &blend_type, blend_labels.data(), static_cast<int>(blend_labels.size()))) {
+    motion.blend_type = static_cast<sbx::assets::animation_blend_type>(blend_type);
+    changed = true;
+  }
+
+  const auto is_2d = motion.blend_type == sbx::assets::animation_blend_type::freeform_directional_2d || motion.blend_type == sbx::assets::animation_blend_type::freeform_cartesian_2d;
+
+  if (motion.blend_type != sbx::assets::animation_blend_type::direct) {
+    changed |= _draw_float_parameter_combo(is_2d ? "Parameter X" : "Parameter", motion.parameter_x);
+  }
+
+  if (is_2d) {
+    changed |= _draw_float_parameter_combo("Parameter Y", motion.parameter_y);
+  }
+
+  // Weights at the parameters' default values, to see what the tree does without running the game.
+  auto defaults = std::vector<std::pair<std::string, sbx::assets::animation_parameter_value>>{};
+
+  for (const auto& parameter : _edit.parameters) {
+    defaults.emplace_back(parameter.name, parameter.default_value);
+  }
+
+  const auto count = std::min(motion.children.size(), sbx::assets::max_blend_children);
+
+  auto weights = std::array<std::float_t, sbx::assets::max_blend_children>{};
+
+  sbx::animation::blend_child_weights(motion, defaults, std::span{weights.data(), count});
+
+  if (is_2d && count > 0u) {
+    _draw_blend_preview(motion, std::span<const std::float_t>{weights.data(), count});
+  }
+
+  auto removed = std::optional<std::size_t>{};
+
+  for (auto index = std::size_t{0u}; index < motion.children.size(); ++index) {
+    auto& child = motion.children[index];
+
+    ImGui::PushID(static_cast<int>(index));
+
+    const auto name = child.kind == sbx::assets::animation_motion_kind::clip ? (child.clip_name.empty() ? std::string{"(no clip)"} : child.clip_name) : std::string{"Blend Tree"};
+    const auto weight = index < count ? weights[index] : 0.0f;
+
+    const auto open = ImGui::TreeNodeEx("##child", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap, "%zu: %s (%.2f)", index, name.c_str(), weight);
+
+    ImGui::SameLine();
+
+    if (ImGui::SmallButton(ICON_MDI_DELETE)) {
+      removed = index;
+    }
+
+    if (open) {
+      switch (motion.blend_type) {
+        case sbx::assets::animation_blend_type::linear_1d: {
+          changed |= ImGui::DragFloat("Threshold", &child.threshold, 0.01f);
+          break;
+        }
+        case sbx::assets::animation_blend_type::freeform_directional_2d:
+        case sbx::assets::animation_blend_type::freeform_cartesian_2d: {
+          auto position = std::array<float, 2u>{child.position.x(), child.position.y()};
+
+          if (ImGui::DragFloat2("Position", position.data(), 0.01f)) {
+            child.position = sbx::math::vector2{position[0], position[1]};
+            changed = true;
+          }
+
+          break;
+        }
+        case sbx::assets::animation_blend_type::direct: {
+          changed |= _draw_float_parameter_combo("Weight Parameter", child.direct_parameter);
+          break;
+        }
+      }
+
+      if (index >= sbx::assets::max_blend_children) {
+        ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " Past the %zu-child limit: ignored at runtime.", sbx::assets::max_blend_children);
+      }
+
+      changed |= _draw_motion(child);
+
+      ImGui::TreePop();
+    }
+
+    ImGui::PopID();
+  }
+
+  if (removed) {
+    motion.children.erase(motion.children.begin() + static_cast<std::ptrdiff_t>(*removed));
+    changed = true;
+  }
+
+  ImGui::BeginDisabled(motion.children.size() >= sbx::assets::max_blend_children);
+
+  // A new child lands past the last one, so it doesn't stack onto an existing threshold or position.
+  const auto add_child = [&](sbx::assets::animation_motion_kind kind) {
+    auto child = sbx::assets::animation_motion{};
+    child.kind = kind;
+
+    if (!motion.children.empty()) {
+      const auto& last = motion.children.back();
+      child.threshold = last.threshold + 1.0f;
+      child.position = last.position + sbx::math::vector2{1.0f, 0.0f};
+    }
+
+    motion.children.push_back(std::move(child));
+    changed = true;
+  };
+
+  if (ImGui::Button(ICON_MDI_PLUS " Clip")) {
+    add_child(sbx::assets::animation_motion_kind::clip);
+  }
+
+  ImGui::SameLine();
+
+  if (ImGui::Button(ICON_MDI_PLUS " Blend Tree")) {
+    add_child(sbx::assets::animation_motion_kind::blend);
+  }
+
+  ImGui::EndDisabled();
+
+  return changed;
+}
+
 auto animation_graph_panel::_state_name(std::uint32_t state_id) const -> std::string {
-  const auto entry = std::ranges::find(_edit.states, state_id, &sbx::assets::animation_state::id);
-  return (entry != _edit.states.end()) ? entry->name : std::string{"(unknown)"};
+  const auto entry = std::ranges::find(_layer().states, state_id, &sbx::assets::animation_state::id);
+  return (entry != _layer().states.end()) ? entry->name : std::string{"(unknown)"};
 }
 
 auto animation_graph_panel::draw(editor_state& state) -> void {
@@ -192,6 +463,10 @@ auto animation_graph_panel::draw(editor_state& state) -> void {
   ImGui::Separator();
 
   _draw_parameters();
+
+  ImGui::Separator();
+
+  _draw_layers();
 
   ImGui::Separator();
 
@@ -295,8 +570,10 @@ auto animation_graph_panel::_draw_parameters() -> void {
     _edit.parameters.erase(_edit.parameters.begin() + static_cast<std::ptrdiff_t>(*removed_index));
 
     // Drop conditions on the deleted parameter rather than leave them never matching.
-    for (auto& transition : _edit.transitions) {
-      std::erase_if(transition.conditions, [&removed_name](const auto& condition) { return condition.parameter_name == removed_name; });
+    for (auto& layer : _edit.layers) {
+      for (auto& transition : layer.transitions) {
+        std::erase_if(transition.conditions, [&removed_name](const auto& condition) { return condition.parameter_name == removed_name; });
+      }
     }
 
     _apply_live();
@@ -311,6 +588,244 @@ auto animation_graph_panel::_draw_parameters() -> void {
     }
 
     _edit.parameters.push_back(sbx::assets::animation_parameter{.name = name, .default_value = 0.0f});
+    _apply_live();
+  }
+}
+
+auto animation_graph_panel::_draw_mask_editor(sbx::assets::animation_layer& layer) -> bool {
+  auto changed = false;
+
+  const auto skeleton = _preview_mesh.is_valid() ? _preview_mesh->skeleton() : sbx::assets::skeleton_handle{};
+
+  if (!skeleton.is_valid() || !skeleton->is_valid()) {
+    // Without a skeleton to pick from, the mask is a list of joint names.
+    auto removed = std::optional<std::size_t>{};
+
+    for (auto index = std::size_t{0u}; index < layer.mask.size(); ++index) {
+      ImGui::PushID(static_cast<int>(index));
+
+      changed |= draw_text_field("##joint", layer.mask[index]);
+
+      ImGui::SameLine();
+
+      if (ImGui::SmallButton(ICON_MDI_TRASH_CAN)) {
+        removed = index;
+      }
+
+      ImGui::PopID();
+    }
+
+    if (removed) {
+      layer.mask.erase(layer.mask.begin() + static_cast<std::ptrdiff_t>(*removed));
+      changed = true;
+    }
+
+    if (ImGui::Button(ICON_MDI_PLUS " Joint")) {
+      layer.mask.emplace_back();
+      changed = true;
+    }
+
+    ImGui::TextDisabled("Set a Preview Mesh with a skeleton to pick joints from a tree.");
+
+    return changed;
+  }
+
+  const auto& joints = skeleton->joints();
+
+  auto children = std::vector<std::vector<std::size_t>>(joints.size());
+
+  for (auto index = std::size_t{0u}; index < joints.size(); ++index) {
+    if (joints[index].parent_index >= 0) {
+      children[static_cast<std::size_t>(joints[index].parent_index)].push_back(index);
+    }
+  }
+
+  // Ticking or unticking a joint does the same to everything below it, the usual way to mask a limb or the upper body.
+  const auto set_subtree = [&](this const auto& self, std::size_t index, bool included) -> void {
+    const auto& name = joints[index].name;
+    const auto present = std::ranges::contains(layer.mask, name);
+
+    if (included && !present) {
+      layer.mask.push_back(name);
+    } else if (!included && present) {
+      std::erase(layer.mask, name);
+    }
+
+    for (const auto child : children[index]) {
+      self(child, included);
+    }
+  };
+
+  const auto draw_joint = [&](this const auto& self, std::size_t index) -> void {
+    ImGui::PushID(static_cast<int>(index));
+
+    auto included = std::ranges::contains(layer.mask, joints[index].name);
+
+    if (ImGui::Checkbox("##included", &included)) {
+      set_subtree(index, included);
+      changed = true;
+    }
+
+    ImGui::SameLine();
+
+    const auto flags = ImGuiTreeNodeFlags_DefaultOpen | (children[index].empty() ? ImGuiTreeNodeFlags_Leaf : ImGuiTreeNodeFlags_None);
+
+    if (ImGui::TreeNodeEx("##joint", flags, "%s", joints[index].name.c_str())) {
+      for (const auto child : children[index]) {
+        self(child);
+      }
+
+      ImGui::TreePop();
+    }
+
+    ImGui::PopID();
+  };
+
+  if (ImGui::SmallButton("All")) {
+    layer.mask.clear();
+
+    for (const auto& joint : joints) {
+      layer.mask.push_back(joint.name);
+    }
+
+    changed = true;
+  }
+
+  ImGui::SameLine();
+
+  if (ImGui::SmallButton("None")) {
+    layer.mask.clear();
+    changed = true;
+  }
+
+  ImGui::SameLine();
+
+  if (layer.mask.empty()) {
+    ImGui::TextDisabled("(no mask: every joint)");
+  } else {
+    ImGui::TextDisabled("%zu joints", layer.mask.size());
+  }
+
+  ImGui::BeginChild("##mask_joints", ImVec2{0.0f, 220.0f}, ImGuiChildFlags_Borders);
+
+  for (auto index = std::size_t{0u}; index < joints.size(); ++index) {
+    if (joints[index].parent_index < 0) {
+      draw_joint(index);
+    }
+  }
+
+  ImGui::EndChild();
+
+  return changed;
+}
+
+auto animation_graph_panel::_draw_layers() -> void {
+  if (!ImGui::CollapsingHeader(ICON_MDI_LAYERS " Layers", ImGuiTreeNodeFlags_DefaultOpen)) {
+    return;
+  }
+
+  // The canvas shows one layer at a time; switching re-seeds node positions from that layer's states.
+  // A switch made by a button (add, move, delete) also moves the tab bar's selection, which only takes effect next frame; until then the old tab's report is ignored.
+  const auto select_layer = [&](std::size_t index, bool move_tab) {
+    _select_layer_tab |= move_tab;
+
+    if (index == _layer_index) {
+      return;
+    }
+
+    _layer_index = index;
+    _selection = std::monostate{};
+    _seeded_positions.clear();
+    _any_state_seeded = false;
+  };
+
+  if (ImGui::BeginTabBar("##animation_layers", ImGuiTabBarFlags_FittingPolicyScroll)) {
+    const auto moving_tab = std::exchange(_select_layer_tab, false);
+
+    for (auto index = std::size_t{0u}; index < _edit.layers.size(); ++index) {
+      const auto label = fmt::format("{}###layer_{}", _edit.layers[index].name, index);
+      const auto flags = (moving_tab && index == _layer_index) ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
+
+      if (ImGui::BeginTabItem(label.c_str(), nullptr, flags)) {
+        if (!moving_tab) {
+          select_layer(index, false);
+        }
+
+        ImGui::EndTabItem();
+      }
+    }
+
+    if (ImGui::TabItemButton(ICON_MDI_PLUS, ImGuiTabItemFlags_Trailing)) {
+      auto layer = sbx::assets::animation_layer{};
+      layer.name = fmt::format("Layer {}", _edit.layers.size());
+      layer.states.push_back(sbx::assets::animation_state{.id = 0u, .name = "Empty"});
+
+      _edit.layers.push_back(std::move(layer));
+      select_layer(_edit.layers.size() - 1u, true);
+      _apply_live();
+    }
+
+    ImGui::EndTabBar();
+  }
+
+  auto& layer = _layer();
+  const auto is_base = _layer_index == 0u;
+
+  if (draw_text_field("Layer Name", layer.name)) {
+    _apply_live();
+  }
+
+  if (is_base) {
+    ImGui::TextDisabled("The base layer always plays at full weight over every joint.");
+    return;
+  }
+
+  if (ImGui::SliderFloat("Weight", &layer.weight, 0.0f, 1.0f)) {
+    _apply_live();
+  }
+
+  static constexpr auto mode_labels = std::array<const char*, 2u>{"Override", "Additive"};
+
+  auto mode = static_cast<int>(layer.blend_mode);
+
+  if (ImGui::Combo("Blending", &mode, mode_labels.data(), static_cast<int>(mode_labels.size()))) {
+    layer.blend_mode = static_cast<sbx::assets::animation_layer_blend_mode>(mode);
+    _apply_live();
+  }
+
+  if (ImGui::TreeNodeEx("Mask", ImGuiTreeNodeFlags_None)) {
+    if (_draw_mask_editor(layer)) {
+      _apply_live();
+    }
+
+    ImGui::TreePop();
+  }
+
+  // Order matters: each layer blends over everything before it.
+  ImGui::BeginDisabled(_layer_index <= 1u);
+
+  if (ImGui::Button(ICON_MDI_ARROW_UP " Move Up")) {
+    std::swap(_edit.layers[_layer_index], _edit.layers[_layer_index - 1u]);
+    select_layer(_layer_index - 1u, true);
+    _apply_live();
+  }
+
+  ImGui::EndDisabled();
+  ImGui::SameLine();
+  ImGui::BeginDisabled(_layer_index + 1u >= _edit.layers.size());
+
+  if (ImGui::Button(ICON_MDI_ARROW_DOWN " Move Down")) {
+    std::swap(_edit.layers[_layer_index], _edit.layers[_layer_index + 1u]);
+    select_layer(_layer_index + 1u, true);
+    _apply_live();
+  }
+
+  ImGui::EndDisabled();
+  ImGui::SameLine();
+
+  if (ImGui::Button(ICON_MDI_TRASH_CAN " Delete Layer")) {
+    _edit.layers.erase(_edit.layers.begin() + static_cast<std::ptrdiff_t>(_layer_index));
+    select_layer(_layer_index - 1u, true);
     _apply_live();
   }
 }
@@ -352,7 +867,7 @@ auto animation_graph_panel::_draw_canvas() -> void {
   auto connected_outputs = std::unordered_set<std::uint32_t>{};
   auto any_state_connected = false;
 
-  for (const auto& transition : _edit.transitions) {
+  for (const auto& transition : _layer().transitions) {
     connected_inputs.insert(transition.to_state);
 
     if (transition.from_state.has_value()) {
@@ -370,7 +885,7 @@ auto animation_graph_panel::_draw_canvas() -> void {
   ax::NodeEditor::EndPin();
   ax::NodeEditor::EndNode();
 
-  for (auto& state : _edit.states) {
+  for (auto& state : _layer().states) {
     const auto node_id = node_id_for_state(state.id);
 
     if (!_seeded_positions.contains(state.id)) {
@@ -386,7 +901,7 @@ auto animation_graph_panel::_draw_canvas() -> void {
 
     ImGui::SameLine();
 
-    if (state.id == _edit.entry_state_id) {
+    if (state.id == _layer().entry_state_id) {
       ImGui::TextUnformatted(ICON_MDI_STAR);
       ImGui::SameLine();
     }
@@ -409,8 +924,8 @@ auto animation_graph_panel::_draw_canvas() -> void {
     }
   }
 
-  for (auto index = std::size_t{0u}; index < _edit.transitions.size(); ++index) {
-    const auto& transition = _edit.transitions[index];
+  for (auto index = std::size_t{0u}; index < _layer().transitions.size(); ++index) {
+    const auto& transition = _layer().transitions[index];
     const auto source_pin = transition.from_state.has_value() ? output_pin_for_state(*transition.from_state) : any_state_output_pin();
 
     ax::NodeEditor::Link(link_id_for_transition(index), source_pin, input_pin_for_state(transition.to_state));
@@ -435,8 +950,8 @@ auto animation_graph_panel::_draw_canvas() -> void {
         transition.from_state = source->is_any_state ? std::nullopt : std::optional<std::uint32_t>{source->state_id};
         transition.to_state = target->state_id;
 
-        _edit.transitions.push_back(transition);
-        _selection = _edit.transitions.size() - 1u;
+        _layer().transitions.push_back(transition);
+        _selection = _layer().transitions.size() - 1u;
         _apply_live();
       }
     }
@@ -451,8 +966,8 @@ auto animation_graph_panel::_draw_canvas() -> void {
       const auto transition_index = transition_index_from_link(link_id);
 
       if (transition_index.has_value() && ax::NodeEditor::AcceptDeletedItem()) {
-        if (*transition_index < _edit.transitions.size()) {
-          _edit.transitions.erase(_edit.transitions.begin() + static_cast<std::ptrdiff_t>(*transition_index));
+        if (*transition_index < _layer().transitions.size()) {
+          _layer().transitions.erase(_layer().transitions.begin() + static_cast<std::ptrdiff_t>(*transition_index));
         }
 
         _selection = std::monostate{};
@@ -467,11 +982,11 @@ auto animation_graph_panel::_draw_canvas() -> void {
 
       // The Any State pseudo-node isn't part of the asset, so its deletion is never accepted.
       if (deleted_state_id.has_value() && ax::NodeEditor::AcceptDeletedItem()) {
-        std::erase_if(_edit.states, [&deleted_state_id](const auto& s) { return s.id == *deleted_state_id; });
-        std::erase_if(_edit.transitions, [&deleted_state_id](const auto& t) { return t.to_state == *deleted_state_id || t.from_state == *deleted_state_id; });
+        std::erase_if(_layer().states, [&deleted_state_id](const auto& s) { return s.id == *deleted_state_id; });
+        std::erase_if(_layer().transitions, [&deleted_state_id](const auto& t) { return t.to_state == *deleted_state_id || t.from_state == *deleted_state_id; });
 
-        if (_edit.entry_state_id == *deleted_state_id && !_edit.states.empty()) {
-          _edit.entry_state_id = _edit.states.front().id;
+        if (_layer().entry_state_id == *deleted_state_id && !_layer().states.empty()) {
+          _layer().entry_state_id = _layer().states.front().id;
         }
 
         _seeded_positions.erase(*deleted_state_id);
@@ -499,8 +1014,8 @@ auto animation_graph_panel::_draw_canvas() -> void {
     const auto context_state_id = state_id_from_node(context_node_id);
 
     if (context_state_id.has_value()) {
-      if (ImGui::MenuItem(ICON_MDI_STAR " Set as Entry State", nullptr, false, _edit.entry_state_id != *context_state_id)) {
-        _edit.entry_state_id = *context_state_id;
+      if (ImGui::MenuItem(ICON_MDI_STAR " Set as Entry State", nullptr, false, _layer().entry_state_id != *context_state_id)) {
+        _layer().entry_state_id = *context_state_id;
         _apply_live();
       }
 
@@ -518,7 +1033,7 @@ auto animation_graph_panel::_draw_canvas() -> void {
     if (ImGui::MenuItem(ICON_MDI_PLUS " Add State")) {
       auto next_id = std::uint32_t{0u};
 
-      for (const auto& existing : _edit.states) {
+      for (const auto& existing : _layer().states) {
         next_id = std::max(next_id, existing.id + 1u);
       }
 
@@ -527,10 +1042,10 @@ auto animation_graph_panel::_draw_canvas() -> void {
       new_state.name = fmt::format("State {}", next_id);
       new_state.editor_position = sbx::math::vector2{spawn_position.x, spawn_position.y};
 
-      _edit.states.push_back(new_state);
+      _layer().states.push_back(new_state);
 
-      if (_edit.states.size() == 1u) {
-        _edit.entry_state_id = new_state.id;
+      if (_layer().states.size() == 1u) {
+        _layer().entry_state_id = new_state.id;
       }
 
       _selection = new_state.id;
@@ -563,9 +1078,9 @@ auto animation_graph_panel::_draw_canvas() -> void {
 auto animation_graph_panel::_draw_selection_inspector() -> void {
   if (std::holds_alternative<std::uint32_t>(_selection)) {
     const auto state_id = std::get<std::uint32_t>(_selection);
-    const auto entry = std::ranges::find(_edit.states, state_id, &sbx::assets::animation_state::id);
+    const auto entry = std::ranges::find(_layer().states, state_id, &sbx::assets::animation_state::id);
 
-    if (entry == _edit.states.end()) {
+    if (entry == _layer().states.end()) {
       _selection = std::monostate{};
       return;
     }
@@ -578,43 +1093,11 @@ auto animation_graph_panel::_draw_selection_inspector() -> void {
       _apply_live();
     }
 
-    const auto* preview_clips = (_preview_mesh.is_valid() && !_preview_mesh->animation_clips().empty()) ? &_preview_mesh->animation_clips() : nullptr;
-
-    if (preview_clips != nullptr) {
-      // Picked from the preview mesh's clips to avoid typos; clips still resolve by name at runtime.
-      if (ImGui::BeginCombo("Clip Name", selected_state.clip_name.empty() ? "(none)" : selected_state.clip_name.c_str())) {
-        for (const auto& clip : *preview_clips) {
-          if (!clip.is_valid()) {
-            continue;
-          }
-
-          const auto is_selected = clip->name() == selected_state.clip_name;
-
-          if (ImGui::Selectable(clip->name().c_str(), is_selected)) {
-            selected_state.clip_name = clip->name();
-            _apply_live();
-          }
-        }
-
-        ImGui::EndCombo();
-      }
-    } else {
-      if (draw_text_field("Clip Name", selected_state.clip_name)) {
-        _apply_live();
-      }
-
-      ImGui::TextDisabled("Set a Preview Mesh above to pick from a list instead.");
-    }
-
-    if (!selected_state.clip_name.empty() && preview_clips != nullptr) {
-      const auto resolves = std::ranges::any_of(*preview_clips, [&selected_state](const auto& clip) { return clip.is_valid() && clip->name() == selected_state.clip_name; });
-
-      if (!resolves) {
-        ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " No clip named '%s' on the preview mesh -- this state will hold its bind pose at runtime.", selected_state.clip_name.c_str());
-      }
-    }
-
     if (ImGui::DragFloat("Speed", &selected_state.speed, 0.05f, 0.0f, 10.0f)) {
+      _apply_live();
+    }
+
+    if (_draw_float_parameter_combo("Speed Multiplier", selected_state.speed_parameter)) {
       _apply_live();
     }
 
@@ -622,10 +1105,27 @@ auto animation_graph_panel::_draw_selection_inspector() -> void {
       _apply_live();
     }
 
-    ImGui::BeginDisabled(_edit.entry_state_id == selected_state.id);
+    ImGui::SeparatorText("Motion");
+
+    {
+      static constexpr auto kind_labels = std::array<const char*, 2u>{"Clip", "Blend Tree"};
+
+      auto kind = static_cast<int>(selected_state.motion.kind);
+
+      if (ImGui::Combo("Type", &kind, kind_labels.data(), static_cast<int>(kind_labels.size()))) {
+        selected_state.motion.kind = static_cast<sbx::assets::animation_motion_kind>(kind);
+        _apply_live();
+      }
+    }
+
+    if (_draw_motion(selected_state.motion)) {
+      _apply_live();
+    }
+
+    ImGui::BeginDisabled(_layer().entry_state_id == selected_state.id);
 
     if (ImGui::Button(ICON_MDI_STAR " Set as Entry State")) {
-      _edit.entry_state_id = selected_state.id;
+      _layer().entry_state_id = selected_state.id;
       _apply_live();
     }
 
@@ -633,12 +1133,12 @@ auto animation_graph_panel::_draw_selection_inspector() -> void {
   } else if (std::holds_alternative<std::size_t>(_selection)) {
     const auto index = std::get<std::size_t>(_selection);
 
-    if (index >= _edit.transitions.size()) {
+    if (index >= _layer().transitions.size()) {
       _selection = std::monostate{};
       return;
     }
 
-    auto& transition = _edit.transitions[index];
+    auto& transition = _layer().transitions[index];
 
     ImGui::SeparatorText("Transition");
 
@@ -757,7 +1257,7 @@ auto animation_graph_panel::_draw_selection_inspector() -> void {
     ImGui::Separator();
 
     if (ImGui::Button(ICON_MDI_TRASH_CAN " Delete Transition")) {
-      _edit.transitions.erase(_edit.transitions.begin() + static_cast<std::ptrdiff_t>(index));
+      _layer().transitions.erase(_layer().transitions.begin() + static_cast<std::ptrdiff_t>(index));
       _selection = std::monostate{};
       _apply_live();
     }

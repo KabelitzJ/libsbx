@@ -107,6 +107,16 @@ public:
   auto set_import_settings(const math::uuid& id, const import_settings& settings) -> void;
 
   /**
+   * @brief Replaces a mesh's animation events, saving them to its `.meta` and applying them to its loaded clips at once; no recook.
+   *
+   * set_import_settings leaves a mesh's events as they are, so a stale copy of the settings can't drop them.
+   *
+   * @param mesh_id The mesh's uuid.
+   * @param events The events, per clip name.
+   */
+  auto set_clip_events(const math::uuid& mesh_id, std::vector<animation_clip_events> events) -> void;
+
+  /**
    * @brief Re-cooks or re-parses an asset from its source and current import settings, updating loaded records in place so every live handle sees the new data.
    *
    * @param id The asset's uuid. No-op if nothing of it is loaded.

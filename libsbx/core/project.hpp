@@ -256,7 +256,7 @@ public:
     _msaa_samples = samples;
   }
 
-  /** @brief Scales how much simplification error a mesh LOD may show on screen: above 1 switches to coarser levels sooner, below 1 later. */
+  /** @brief Scales how much simplification error a mesh LOD may show on screen, as Godot's LOD Bias: above 1 keeps detail longer, below 1 switches to coarser levels sooner. */
   [[nodiscard]] auto lod_bias() const noexcept -> std::float_t {
     return _lod_bias;
   }

@@ -385,54 +385,12 @@ private:
   // GPU-path emitters: claims or keeps alive the emitter's pool slot and appends a snapshot if it is playing. Runs at render cadence.
   auto _extract_gpu_particle_emitter(render_packet& packet, const assets::particle_emitter& config, scenes::particle_emitter& runtime, const scenes::particle_effect& instance, const math::matrix4x4& world, std::float_t delta_time) -> void;
 
-  /**
-   * @brief Advances the animator's state machine and samples the (possibly crossfading) pose into @p pose. Runs once per skinned instance at render cadence.
-   *
-   * @param skeleton The skeleton being posed.
-   * @param renderer The instance's mesh_renderer, for resolving clip names.
-   * @param animator The animator, or null for the bind pose.
-   * @param pose Receives joint world and skinning matrices.
-   * @param delta_time The time step.
-   */
-  // Scratch for _evaluate_skeleton_pose, one per parallel chunk; kept across frames for its capacity.
-  struct pose_scratch {
-    std::vector<math::vector3> translations{};
-    std::vector<math::quaternion> rotations{};
-    std::vector<math::vector3> scales{};
-    std::vector<math::vector3> target_translations{};
-    std::vector<math::quaternion> target_rotations{};
-    std::vector<math::vector3> target_scales{};
-    std::vector<math::matrix4x4> locals{};
-  }; // struct pose_scratch
-
-  // Runs on async workers: touches only its own pose, animator and scratch.
-  auto _evaluate_skeleton_pose(const assets::skeleton& skeleton, const scenes::mesh_renderer& renderer, memory::observer_ptr<scenes::animator> animator, scenes::skeleton_pose& pose, std::float_t delta_time, pose_scratch& scratch) -> void;
-
-  /**
-   * @brief State machine bookkeeping only: current and target state, clip time and transition progress.
-   *
-   * @param renderer The instance's mesh_renderer, for resolving clip names.
-   * @param graph The animation graph.
-   * @param animator The animator to advance.
-   * @param delta_time The time step.
-   */
-  auto _advance_animator_state(const scenes::mesh_renderer& renderer, const assets::animation_graph& graph, scenes::animator& animator, std::float_t delta_time) -> void;
-
-  /**
-   * @brief The clip named by @p state, resolved against the renderer's mesh.
-   *
-   * @param renderer The mesh_renderer whose mesh provides the clips.
-   * @param state The animation state.
-   *
-   * @return The clip, or an invalid handle if @p state is null or the clip or mesh is missing.
-   */
-  [[nodiscard]] auto _resolve_state_clip(const scenes::mesh_renderer& renderer, const assets::animation_state* state) const -> assets::animation_clip_handle;
-
   struct draw_bucket {
     assets::mesh_handle mesh{};
     std::uint32_t submesh_index{0u};
     assets::material_handle material{};
     std::uint32_t pipeline_id{0u};
+    std::float_t lod_bias{1.0f};
     std::vector<transform_data> transforms{};
   }; // struct draw_bucket
 
@@ -464,17 +422,6 @@ private:
   // Six faces of RGBA16F, filled by copies of the resolved HDR color.
   graphics::buffer_handle _capture_readback_buffer{};
   std::uint32_t _capture_readback_resolution{0u};
-
-  struct skinned_entry {
-    ecs::entity entity{};
-    memory::observer_ptr<const scenes::world_transform> world{};
-    memory::observer_ptr<scenes::mesh_renderer> renderer{};
-    memory::observer_ptr<scenes::skeleton_pose> pose{};
-    memory::observer_ptr<scenes::animator> animator{};
-  }; // struct skinned_entry
-
-  std::vector<skinned_entry> _skinned_entries{};
-  std::vector<pose_scratch> _pose_scratch{};
 
   // Reused across frames to avoid reallocating; buckets left empty by the previous build are pruned.
   std::unordered_map<mesh_key, draw_bucket, mesh_key_hash> _opaque_buckets{};

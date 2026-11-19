@@ -40,9 +40,10 @@ struct mesh_key {
   math::uuid mesh{math::uuid::nil()};
   std::uint32_t submesh{0u};
   math::uuid material{math::uuid::nil()};
+  std::float_t lod_bias{1.0f}; // instances with another bias pick their levels differently, so they can't share a command
 
   auto operator==(const mesh_key& other) const -> bool {
-    return mesh == other.mesh && submesh == other.submesh && material == other.material;
+    return mesh == other.mesh && submesh == other.submesh && material == other.material && lod_bias == other.lod_bias;
   }
 
   auto operator<(const mesh_key& other) const -> bool {
@@ -62,7 +63,15 @@ struct mesh_key {
       return false; 
     }
 
-    return material < other.material;
+    if (material < other.material) {
+      return true;
+    }
+
+    if (other.material < material) {
+      return false;
+    }
+
+    return lod_bias < other.lod_bias;
   }
 
 }; // struct mesh_key
@@ -71,7 +80,7 @@ struct mesh_key {
 struct mesh_key_hash {
   auto operator()(const mesh_key& key) const noexcept -> std::size_t {
     auto seed = std::hash<math::uuid>{}(key.mesh);
-    utility::hash_combine(seed, key.submesh, std::hash<math::uuid>{}(key.material));
+    utility::hash_combine(seed, key.submesh, std::hash<math::uuid>{}(key.material), std::hash<std::float_t>{}(key.lod_bias));
     return seed;
   }
 }; // struct mesh_key_hash
@@ -97,6 +106,9 @@ struct draw_command {
   // Detail levels frustum_cull picks from per instance: level 0 is the submesh, level k its k-th cooked simplification, whose meshopt error is lod_errors[k - 1].
   std::uint32_t lod_count{1u};
   std::array<std::float_t, 4u> lod_errors{};
+
+  // The renderer's LOD bias; set_lod_levels scales the errors by it and the mesh's own, so the cull's threshold needs no per-command input.
+  std::float_t lod_bias{1.0f};
 
   // Where this command's culled output sits within a cull view, per command list (opaque and shadow caster lists lay out separately):
   // its lod_count indirect args start at lod_args_offset, and level k's visible transforms (non-instanced only) at lod_culled_offset + k * instance_count.

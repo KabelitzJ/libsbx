@@ -139,6 +139,11 @@ public:
     return _uploaded;
   }
 
+  /** @brief The mesh's own LOD bias from its import settings (mesh_import_options::lod_bias); multiplies the project's and the renderer's. */
+  [[nodiscard]] auto lod_bias() const noexcept -> std::float_t {
+    return _lod_bias;
+  }
+
   [[nodiscard]] auto resident_frame() const noexcept -> std::uint64_t {
     return _resident_frame;
   }
@@ -185,6 +190,7 @@ private:
   std::uint64_t _resident_frame{0u};
   bool _uploaded{false};
   math::volume _bounds{};
+  std::float_t _lod_bias{1.0f};
   math::uuid _id{math::uuid::nil()};
 
 }; // class mesh

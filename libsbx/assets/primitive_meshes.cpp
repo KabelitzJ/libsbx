@@ -333,7 +333,8 @@ auto ensure_primitive_mesh_cooked(primitive_mesh_kind kind) -> void {
 
   const auto cooked = asset_cooker::cooked_path(primitive_mesh_uuid(kind), ".sbxmsh");
 
-  if (std::filesystem::exists(cooked)) {
+  // There's no source to recook from, so a blob from an older cook version is regenerated here, before the loader would reject it.
+  if (asset_cooker::is_cooked_mesh_current(cooked)) {
     return;
   }
 
@@ -372,7 +373,7 @@ auto ensure_default_material_cooked() -> void {
   const auto id = default_material_uuid();
   const auto cooked = asset_cooker::cooked_path(id, ".sbxmat");
 
-  if (std::filesystem::exists(cooked)) {
+  if (asset_cooker::is_cooked_material_current(cooked)) {
     return;
   }
 

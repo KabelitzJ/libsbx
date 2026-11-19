@@ -94,6 +94,14 @@ private:
   auto _draw_import_settings_section(const asset_selection& asset) -> void;
   auto _draw_particle_effect_properties(editor_state& state, const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
 
+  /**
+   * @brief A skinned mesh's animation events, per clip: a timeline strip (click to add an event there) and the events' fields. Saved to the mesh's `.meta` as each edit finishes.
+   *
+   * @param asset The selected mesh.
+   * @param assets_module The assets module.
+   */
+  auto _draw_clip_events(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
+
   // Edits a prefab directly: its snapshot is deserialized into a private scratch scene and drawn like any node. Repopulated whenever the selected prefab changes.
   struct prefab_edit_session {
     sbx::scenes::scene scene{"Prefab Edit"};
@@ -133,6 +141,10 @@ private:
   bool _shader_seed_pending{false};
 
   sbx::assets::particle_effect::create_info _particle_effect_edit{};
+
+  // Staged animation events of the selected mesh, seeded when another mesh is selected.
+  std::vector<sbx::assets::animation_clip_events> _clip_events_edit{};
+  sbx::math::uuid _clip_events_mesh{sbx::math::uuid::nil()};
 
 }; // class inspector_panel
 

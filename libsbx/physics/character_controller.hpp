@@ -38,6 +38,7 @@ struct character_controller {
   math::vector3 velocity{math::vector3::zero}; // the last move's actual motion per second, over one fixed step
   math::vector3 ground_normal{math::vector3::up};
   std::float_t fall_speed{0.0f}; // simple_move's accumulated gravity
+  math::vector3 pending_motion{math::vector3::zero}; // world-space root motion from the node's animator, moved by the next fixed step
 }; // struct character_controller
 
 [[nodiscard]] inline auto controller_capsule(const character_controller& controller) -> capsule {

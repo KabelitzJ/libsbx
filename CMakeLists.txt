@@ -198,6 +198,9 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 target_sources(
   libsbx
   PRIVATE
+    "${CMAKE_SOURCE_DIR}/libsbx/animation/animation_module.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/animation/pose_evaluation.cpp"
+
     "${CMAKE_SOURCE_DIR}/libsbx/audio/audio_module.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker.cpp"
@@ -427,7 +430,10 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/assets/font.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/audio_clip.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/ibl_baker.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/animation/animation_module.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/animation/pose_evaluation.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/animation_clip.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/assets/animation_event.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/animation_graph.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/shader_graph.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/shader_graph_codegen.hpp"

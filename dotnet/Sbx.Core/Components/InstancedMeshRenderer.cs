@@ -58,6 +58,13 @@ namespace Sbx.Core.Components
       }
     }
 
+    /** Above 1 keeps every instance's detail longer, below 1 switches them to coarser levels sooner; multiplies the mesh's and the project's LOD bias. */
+    public float LodBias
+    {
+      get { unsafe { return InternalCalls.InstancedMeshRenderer_GetLodBias(UUID); } }
+      set { unsafe { InternalCalls.InstancedMeshRenderer_SetLodBias(UUID, value); } }
+    }
+
   } // class InstancedMeshRenderer
 
 } // namespace Sbx.Core.Components

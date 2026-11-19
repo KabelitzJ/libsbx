@@ -221,6 +221,57 @@ struct interop {
 
   static auto animator_get_current_state_name(std::uint64_t uuid) -> managed::string;
 
+  /** @brief The name of the animation event being delivered (see scripting_module::current_animation_event); empty outside a delivery. */
+  static auto animation_event_get_name() -> managed::string;
+
+  static auto animation_event_get_string_parameter() -> managed::string;
+
+  static auto animation_event_get_clip_name() -> managed::string;
+
+  /** @brief Called by a script's OnAnimatorMove dispatch: the engine won't apply this root motion itself. */
+  static auto animator_mark_root_motion_handled() -> void;
+
+  static auto animator_get_apply_root_motion(std::uint64_t uuid) -> managed::bool32;
+
+  static auto animator_set_apply_root_motion(std::uint64_t uuid, bool value) -> void;
+
+  /** @brief This frame's root motion as a world-space displacement, as CharacterController.Move takes it. */
+  static auto animator_get_delta_position(std::uint64_t uuid, math::vector3* out_value) -> void;
+
+  /** @brief This frame's root turn, to multiply onto the node's local rotation. */
+  static auto animator_get_delta_rotation(std::uint64_t uuid, math::quaternion* out_value) -> void;
+
+  /** @brief An IK chain's world-space goal position; takes effect by its position weight. */
+  static auto animator_set_ik_position(std::uint64_t uuid, managed::string chain, math::vector3* position) -> void;
+
+  /** @brief An IK chain's world-space goal rotation for its end joint; takes effect by its rotation weight. */
+  static auto animator_set_ik_rotation(std::uint64_t uuid, managed::string chain, math::quaternion* rotation) -> void;
+
+  /** @brief Where an IK chain's middle joint should point (a knee, an elbow), world space. */
+  static auto animator_set_ik_hint(std::uint64_t uuid, managed::string chain, math::vector3* position) -> void;
+
+  static auto animator_clear_ik_hint(std::uint64_t uuid, managed::string chain) -> void;
+
+  /** @brief How far an IK chain follows its goal position and rotation, 0 to 1 each. */
+  static auto animator_set_ik_weights(std::uint64_t uuid, managed::string chain, std::float_t position_weight, std::float_t rotation_weight) -> void;
+
+  /** @brief The look-at goal (world space) and how much the head turns toward it, 0 to 1. */
+  static auto animator_set_look_at(std::uint64_t uuid, math::vector3* position, std::float_t weight) -> void;
+
+  /** @brief The current state of one layer (0 is the base layer); empty for an unknown layer. */
+  static auto animator_get_layer_state_name(std::uint64_t uuid, std::int32_t layer) -> managed::string;
+
+  static auto animator_get_layer_count(std::uint64_t uuid) -> std::int32_t;
+
+  /** @brief A layer's index by name, -1 if the graph has none by that name. */
+  static auto animator_get_layer_index(std::uint64_t uuid, managed::string name) -> std::int32_t;
+
+  /** @brief A layer's runtime weight; always 1 for the base layer. */
+  static auto animator_get_layer_weight(std::uint64_t uuid, std::int32_t layer) -> std::float_t;
+
+  /** @brief Sets a layer's runtime weight, clamped to [0, 1]; the base layer ignores it. */
+  static auto animator_set_layer_weight(std::uint64_t uuid, std::int32_t layer, std::float_t weight) -> void;
+
   static auto animator_set_float(std::uint64_t uuid, managed::string name, std::float_t value) -> void;
 
   static auto animator_set_bool(std::uint64_t uuid, managed::string name, bool value) -> void;
@@ -632,6 +683,18 @@ struct interop {
 
   /** @brief Assigns a material to one submesh slot, creating the component and growing the slots as needed. material_uuid 0 clears the slot. */
   static auto mesh_renderer_set_material(std::uint64_t uuid, std::uint32_t submesh_index, std::uint64_t material_uuid) -> void;
+
+  /** @brief The node's mesh_renderer LOD bias; 1 without one. */
+  static auto mesh_renderer_get_lod_bias(std::uint64_t uuid) -> std::float_t;
+
+  /** @brief Sets the node's mesh_renderer LOD bias (at least 0.01); no-op without one. */
+  static auto mesh_renderer_set_lod_bias(std::uint64_t uuid, std::float_t bias) -> void;
+
+  /** @brief The node's instanced_mesh_renderer LOD bias; 1 without one. */
+  static auto instanced_mesh_renderer_get_lod_bias(std::uint64_t uuid) -> std::float_t;
+
+  /** @brief Sets the node's instanced_mesh_renderer LOD bias (at least 0.01); no-op without one. */
+  static auto instanced_mesh_renderer_set_lod_bias(std::uint64_t uuid, std::float_t bias) -> void;
 
   /** @brief The mesh every instance draws, creating the instanced_mesh_renderer and a default material as needed. Swapped in by apply_pending_geometry. */
   static auto instanced_mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* positions, math::vector3* normals, math::vector2* uvs, math::color* colors, std::uint32_t vertex_count, std::uint32_t* indices, std::uint32_t index_count) -> void;

@@ -881,4 +881,34 @@ auto interop::reflection_probe_set(std::uint64_t uuid, const reflection_probe_co
   probe.box_projection = value->box_projection != 0u;
 }
 
+auto interop::mesh_renderer_get_lod_bias(std::uint64_t uuid) -> std::float_t {
+  const auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(math::uuid::from_value(uuid));
+  const auto renderer = node.is_valid() ? node.try_get_component<scenes::mesh_renderer>() : nullptr;
+
+  return renderer != nullptr ? renderer->lod_bias : 1.0f;
+}
+
+auto interop::mesh_renderer_set_lod_bias(std::uint64_t uuid, std::float_t bias) -> void {
+  auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(math::uuid::from_value(uuid));
+
+  if (auto renderer = node.is_valid() ? node.try_get_component<scenes::mesh_renderer>() : nullptr) {
+    renderer->lod_bias = std::max(bias, 0.01f);
+  }
+}
+
+auto interop::instanced_mesh_renderer_get_lod_bias(std::uint64_t uuid) -> std::float_t {
+  const auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(math::uuid::from_value(uuid));
+  const auto renderer = node.is_valid() ? node.try_get_component<scenes::instanced_mesh_renderer>() : nullptr;
+
+  return renderer != nullptr ? renderer->lod_bias : 1.0f;
+}
+
+auto interop::instanced_mesh_renderer_set_lod_bias(std::uint64_t uuid, std::float_t bias) -> void {
+  auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(math::uuid::from_value(uuid));
+
+  if (auto renderer = node.is_valid() ? node.try_get_component<scenes::instanced_mesh_renderer>() : nullptr) {
+    renderer->lod_bias = std::max(bias, 0.01f);
+  }
+}
+
 } // namespace sbx::scripting

@@ -72,6 +72,13 @@ namespace Sbx.Core.Components
       unsafe { InternalCalls.MeshRenderer_SetMaterial(UUID, (uint)submeshIndex, material?.UUID ?? 0); }
     }
 
+    /** Above 1 keeps this object's detail longer, below 1 switches it to coarser levels sooner; multiplies the mesh's and the project's LOD bias. */
+    public float LodBias
+    {
+      get { unsafe { return InternalCalls.MeshRenderer_GetLodBias(UUID); } }
+      set { unsafe { InternalCalls.MeshRenderer_SetLodBias(UUID, value); } }
+    }
+
   } // class MeshRenderer
 
 } // namespace Sbx.Core.Components

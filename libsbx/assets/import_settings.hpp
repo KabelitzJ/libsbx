@@ -14,6 +14,7 @@
 
 #include <libsbx/reflection/enum.hpp>
 
+#include <libsbx/assets/animation_event.hpp>
 #include <libsbx/assets/asset_type.hpp>
 
 namespace sbx::assets {
@@ -51,6 +52,21 @@ struct mesh_import_options {
   std::float_t scale_factor{1.0f};
 
   bool generate_lods{true};
+
+  /** @brief The most simplified levels to cook below full detail (at most 4); fewer when simplifying stops paying off. */
+  std::uint32_t lod_count{4u};
+
+  /** @brief Each level's triangle count as a fraction of the level above it. */
+  std::float_t lod_reduction{0.5f};
+
+  /** @brief How far one simplification step may move the surface, as a fraction of the mesh's size; more lets coarser levels go further. */
+  std::float_t lod_max_error{0.01f};
+
+  /** @brief Scales when this mesh switches to coarser levels at runtime, on top of the project's LOD Bias: above 1 keeps detail longer, below 1 switches sooner. Applied to loaded meshes directly, so it's left out of import_settings_hash. */
+  std::float_t lod_bias{1.0f};
+
+  /** @brief Animation events per clip; applied to the loaded clips directly, so they're left out of import_settings_hash and never force a recook. Only assets_module::set_clip_events changes them. */
+  std::vector<animation_clip_events> clip_events{};
 
   auto operator==(const mesh_import_options&) const -> bool = default;
 }; // struct mesh_import_options

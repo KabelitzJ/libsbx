@@ -92,6 +92,49 @@ static auto save_animation_condition_comparator(animation_condition_comparator c
   }
 }
 
+static auto save_animation_blend_type(animation_blend_type type) -> std::string {
+  switch (type) {
+    case animation_blend_type::freeform_directional_2d: return "freeform_directional_2d";
+    case animation_blend_type::freeform_cartesian_2d: return "freeform_cartesian_2d";
+    case animation_blend_type::direct: return "direct";
+    default: return "linear_1d";
+  }
+}
+
+// Parsed back by load_animation_motion in asset_cooker_animation_graph.cpp.
+static auto save_animation_motion(const animation_motion& motion) -> YAML::Node {
+  auto node = YAML::Node{};
+
+  if (motion.kind == animation_motion_kind::blend) {
+    node["kind"] = "blend";
+    node["blend_type"] = save_animation_blend_type(motion.blend_type);
+    node["parameter_x"] = motion.parameter_x;
+    node["parameter_y"] = motion.parameter_y;
+
+    auto children_node = YAML::Node{YAML::NodeType::Sequence};
+
+    for (const auto& child : motion.children) {
+      children_node.push_back(save_animation_motion(child));
+    }
+
+    node["children"] = children_node;
+  } else {
+    node["kind"] = "clip";
+    node["clip_name"] = motion.clip_name;
+  }
+
+  node["threshold"] = motion.threshold;
+
+  auto position_node = YAML::Node{};
+  position_node["x"] = motion.position.x();
+  position_node["y"] = motion.position.y();
+  node["position"] = position_node;
+
+  node["direct_parameter"] = motion.direct_parameter;
+
+  return node;
+}
+
 asset_residency::asset_residency(asset_manifest& manifest, ibl_baker& baker)
 : _manifest{manifest},
   _ibl{baker} {
@@ -1383,9 +1426,7 @@ auto asset_residency::update_animation_graph(animation_graph_handle& graph, cons
 
   graph->_name = create_info.name;
   graph->_parameters = create_info.parameters;
-  graph->_states = create_info.states;
-  graph->_transitions = create_info.transitions;
-  graph->_entry_state_id = create_info.entry_state_id;
+  graph->_layers = create_info.layers;
   graph->_bump_generation();
 }
 
@@ -1404,7 +1445,6 @@ auto asset_residency::save_animation_graph(animation_graph_handle& graph, const 
   auto node = YAML::Node{};
 
   node["name"] = graph->name();
-  node["entry_state_id"] = graph->entry_state_id();
 
   auto parameters_node = YAML::Node{YAML::NodeType::Sequence};
 
@@ -1416,56 +1456,80 @@ auto asset_residency::save_animation_graph(animation_graph_handle& graph, const 
 
   node["parameters"] = parameters_node;
 
-  auto states_node = YAML::Node{YAML::NodeType::Sequence};
+  auto layers_node = YAML::Node{YAML::NodeType::Sequence};
 
-  for (const auto& state : graph->states()) {
-    auto state_node = YAML::Node{};
+  for (const auto& layer : graph->layers()) {
+    auto layer_node = YAML::Node{};
 
-    state_node["id"] = state.id;
-    state_node["name"] = state.name;
-    state_node["clip_name"] = state.clip_name;
-    state_node["speed"] = state.speed;
-    state_node["loop"] = state.loop;
+    layer_node["layer_name"] = layer.name;
+    layer_node["entry_state_id"] = layer.entry_state_id;
+    layer_node["weight"] = layer.weight;
+    layer_node["blend_mode"] = layer.blend_mode == animation_layer_blend_mode::additive ? "additive" : "override";
 
-    auto position_node = YAML::Node{};
-    position_node["x"] = state.editor_position.x();
-    position_node["y"] = state.editor_position.y();
-    state_node["editor_position"] = position_node;
+    auto mask_node = YAML::Node{YAML::NodeType::Sequence};
 
-    states_node.push_back(state_node);
-  }
-
-  node["states"] = states_node;
-
-  auto transitions_node = YAML::Node{YAML::NodeType::Sequence};
-
-  for (const auto& transition : graph->transitions()) {
-    auto transition_node = YAML::Node{};
-
-    if (transition.from_state) {
-      transition_node["from_state"] = *transition.from_state;
+    for (const auto& joint : layer.mask) {
+      mask_node.push_back(joint);
     }
 
-    transition_node["to_state"] = transition.to_state;
-    transition_node["duration"] = transition.duration;
-    transition_node["has_exit_time"] = transition.has_exit_time;
-    transition_node["exit_time"] = transition.exit_time.value();
+    layer_node["mask"] = mask_node;
 
-    auto conditions_node = YAML::Node{YAML::NodeType::Sequence};
+    auto states_node = YAML::Node{YAML::NodeType::Sequence};
 
-    for (const auto& condition : transition.conditions) {
-      auto condition_node = save_animation_parameter_value(condition.expected);
-      condition_node["parameter_name"] = condition.parameter_name;
-      condition_node["comparator"] = save_animation_condition_comparator(condition.comparator);
-      conditions_node.push_back(condition_node);
+    for (const auto& state : layer.states) {
+      auto state_node = YAML::Node{};
+
+      state_node["id"] = state.id;
+      state_node["name"] = state.name;
+      state_node["motion"] = save_animation_motion(state.motion);
+      state_node["speed"] = state.speed;
+      state_node["speed_parameter"] = state.speed_parameter;
+      state_node["loop"] = state.loop;
+
+      auto position_node = YAML::Node{};
+      position_node["x"] = state.editor_position.x();
+      position_node["y"] = state.editor_position.y();
+      state_node["editor_position"] = position_node;
+
+      states_node.push_back(state_node);
     }
 
-    transition_node["conditions"] = conditions_node;
+    layer_node["states"] = states_node;
 
-    transitions_node.push_back(transition_node);
+    auto transitions_node = YAML::Node{YAML::NodeType::Sequence};
+
+    for (const auto& transition : layer.transitions) {
+      auto transition_node = YAML::Node{};
+
+      if (transition.from_state) {
+        transition_node["from_state"] = *transition.from_state;
+      }
+
+      transition_node["to_state"] = transition.to_state;
+      transition_node["duration"] = transition.duration;
+      transition_node["has_exit_time"] = transition.has_exit_time;
+      transition_node["exit_time"] = transition.exit_time.value();
+
+      auto conditions_node = YAML::Node{YAML::NodeType::Sequence};
+
+      for (const auto& condition : transition.conditions) {
+        auto condition_node = save_animation_parameter_value(condition.expected);
+        condition_node["parameter_name"] = condition.parameter_name;
+        condition_node["comparator"] = save_animation_condition_comparator(condition.comparator);
+        conditions_node.push_back(condition_node);
+      }
+
+      transition_node["conditions"] = conditions_node;
+
+      transitions_node.push_back(transition_node);
+    }
+
+    layer_node["transitions"] = transitions_node;
+
+    layers_node.push_back(layer_node);
   }
 
-  node["transitions"] = transitions_node;
+  node["layers"] = layers_node;
 
   if (!resolved_path.parent_path().empty()) {
     std::filesystem::create_directories(resolved_path.parent_path());
@@ -2091,6 +2155,14 @@ auto asset_residency::_finalize_mesh(asset_loader::mesh_result& result) -> void 
 
   record->_finalize_content(std::move(submeshes), data.bounds, static_cast<std::uint32_t>(vertex_count));
 
+  // Not part of the cook: re-read on every load, so an Apply (which reloads the mesh) takes effect without a recook.
+  {
+    const auto settings = _manifest.import_settings_of(request.id);
+    const auto* options = std::get_if<mesh_import_options>(&settings);
+
+    record->_lod_bias = options != nullptr ? std::max(options->lod_bias, 0.01f) : 1.0f;
+  }
+
   if (has_skin_data) {
     // A recook rewrote the derived skeleton and clip blobs; records loaded before it must re-read them, or a reimport (e.g. a new scale) never reaches live animators.
     if (result.did_cook) {
@@ -2114,6 +2186,19 @@ auto asset_residency::_finalize_mesh(asset_loader::mesh_result& result) -> void 
 
     for (const auto& clip_id : data.animation_clips) {
       animation_clip_handles.push_back(load_animation_clip(clip_id));
+    }
+
+    // Clips that already finished loading get their events now; the rest get them when they do.
+    {
+      auto lock = std::lock_guard{_mutex};
+
+      for (const auto& clip_id : data.animation_clips) {
+        _clip_meshes[clip_id] = request.id;
+
+        if (const auto clip = _animation_clips.find(clip_id); clip != _animation_clips.end()) {
+          _apply_clip_events(*clip->second, request.id);
+        }
+      }
     }
 
     record->_set_skeletal_data(std::move(skeleton_handle_value), std::move(animation_clip_handles));
@@ -2483,6 +2568,49 @@ auto asset_residency::_finalize_animation_clip(asset_loader::animation_clip_resu
   }
 
   entry->second->_finalize_content(std::move(data.name), data.duration, std::move(data.channels));
+
+  if (const auto mesh = _clip_meshes.find(request.id); mesh != _clip_meshes.end()) {
+    _apply_clip_events(*entry->second, mesh->second);
+  }
+}
+
+auto asset_residency::_apply_clip_events(animation_clip& clip, const math::uuid& mesh_id) -> void {
+  clip._events.clear();
+
+  if (clip.name().empty()) {
+    return;
+  }
+
+  const auto settings = _manifest.import_settings_of(mesh_id);
+  const auto* options = std::get_if<mesh_import_options>(&settings);
+
+  if (options == nullptr) {
+    return;
+  }
+
+  const auto entry = std::ranges::find(options->clip_events, clip.name(), &animation_clip_events::clip_name);
+
+  if (entry == options->clip_events.end()) {
+    return;
+  }
+
+  clip._events = entry->events;
+
+  std::ranges::stable_sort(clip._events, {}, &animation_event::time);
+}
+
+auto asset_residency::reapply_clip_events(const math::uuid& mesh_id) -> void {
+  auto lock = std::lock_guard{_mutex};
+
+  for (const auto& [clip_id, owner] : _clip_meshes) {
+    if (owner != mesh_id) {
+      continue;
+    }
+
+    if (const auto clip = _animation_clips.find(clip_id); clip != _animation_clips.end()) {
+      _apply_clip_events(*clip->second, mesh_id);
+    }
+  }
 }
 
 auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {

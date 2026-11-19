@@ -35,44 +35,81 @@ static auto load_animation_condition_comparator(const std::string& value) -> ani
   if (value == "less_or_equal") return animation_condition_comparator::less_or_equal;
   return animation_condition_comparator::equals;
 }
-auto asset_cooker::parse_animation_graph_file(const std::filesystem::path& source) -> std::optional<animation_graph::create_info> {
-  auto root = YAML::Node{};
+static auto load_animation_blend_type(const std::string& value) -> animation_blend_type {
+  if (value == "freeform_directional_2d") return animation_blend_type::freeform_directional_2d;
+  if (value == "freeform_cartesian_2d") return animation_blend_type::freeform_cartesian_2d;
+  if (value == "direct") return animation_blend_type::direct;
+  return animation_blend_type::linear_1d;
+}
 
-  try {
-    root = YAML::LoadFile(source.string());
-  } catch (const std::exception& exception) {
-    utility::logger<"assets">::warn("Could not parse animation_graph '{}' ({})", source.generic_string(), exception.what());
-    return std::nullopt;
+// Reads the tree written by save_animation_motion in asset_residency.cpp.
+static auto load_animation_motion(const YAML::Node& node) -> animation_motion {
+  auto motion = animation_motion{};
+
+  if (node["kind"] && node["kind"].as<std::string>() == "blend") {
+    motion.kind = animation_motion_kind::blend;
   }
 
-  auto info = animation_graph::create_info{};
+  if (node["clip_name"]) motion.clip_name = node["clip_name"].as<std::string>();
+  if (node["blend_type"]) motion.blend_type = load_animation_blend_type(node["blend_type"].as<std::string>());
+  if (node["parameter_x"]) motion.parameter_x = node["parameter_x"].as<std::string>();
+  if (node["parameter_y"]) motion.parameter_y = node["parameter_y"].as<std::string>();
+  if (node["threshold"]) motion.threshold = node["threshold"].as<std::float_t>();
+  if (node["direct_parameter"]) motion.direct_parameter = node["direct_parameter"].as<std::string>();
 
-  if (root["name"]) info.name = root["name"].as<std::string>();
-  if (root["entry_state_id"]) info.entry_state_id = root["entry_state_id"].as<std::uint32_t>();
+  if (const auto position_node = node["position"]) {
+    if (position_node["x"]) motion.position.x() = position_node["x"].as<std::float_t>();
+    if (position_node["y"]) motion.position.y() = position_node["y"].as<std::float_t>();
+  }
 
-  if (const auto parameters = root["parameters"]) {
-    info.parameters.reserve(parameters.size());
+  if (const auto children = node["children"]) {
+    motion.children.reserve(children.size());
 
-    for (const auto parameter_node : parameters) {
-      auto parameter = animation_parameter{};
-
-      if (parameter_node["name"]) parameter.name = parameter_node["name"].as<std::string>();
-      parameter.default_value = load_animation_parameter_value(parameter_node);
-
-      info.parameters.push_back(parameter);
+    for (const auto child : children) {
+      motion.children.push_back(load_animation_motion(child));
     }
   }
 
-  if (const auto states = root["states"]) {
-    info.states.reserve(states.size());
+  return motion;
+}
+
+// One layer's state machine, from a "layers" entry, or from the root of a graph saved before layers.
+static auto load_animation_layer(const YAML::Node& node) -> animation_layer {
+  auto layer = animation_layer{};
+
+  if (node["layer_name"]) layer.name = node["layer_name"].as<std::string>();
+  if (node["entry_state_id"]) layer.entry_state_id = node["entry_state_id"].as<std::uint32_t>();
+  if (node["weight"]) layer.weight = node["weight"].as<std::float_t>();
+
+  if (node["blend_mode"] && node["blend_mode"].as<std::string>() == "additive") {
+    layer.blend_mode = animation_layer_blend_mode::additive;
+  }
+
+  if (const auto mask = node["mask"]) {
+    layer.mask.reserve(mask.size());
+
+    for (const auto joint : mask) {
+      layer.mask.push_back(joint.as<std::string>());
+    }
+  }
+
+  if (const auto states = node["states"]) {
+    layer.states.reserve(states.size());
 
     for (const auto state_node : states) {
       auto state = animation_state{};
 
       if (state_node["id"]) state.id = state_node["id"].as<std::uint32_t>();
       if (state_node["name"]) state.name = state_node["name"].as<std::string>();
-      if (state_node["clip_name"]) state.clip_name = state_node["clip_name"].as<std::string>();
+      // Graphs saved before blend trees name one clip on the state itself.
+      if (const auto motion_node = state_node["motion"]) {
+        state.motion = load_animation_motion(motion_node);
+      } else if (state_node["clip_name"]) {
+        state.motion.clip_name = state_node["clip_name"].as<std::string>();
+      }
+
       if (state_node["speed"]) state.speed = state_node["speed"].as<std::float_t>();
+      if (state_node["speed_parameter"]) state.speed_parameter = state_node["speed_parameter"].as<std::string>();
       if (state_node["loop"]) state.loop = state_node["loop"].as<bool>();
 
       if (const auto position_node = state_node["editor_position"]) {
@@ -80,12 +117,12 @@ auto asset_cooker::parse_animation_graph_file(const std::filesystem::path& sourc
         if (position_node["y"]) state.editor_position.y() = position_node["y"].as<std::float_t>();
       }
 
-      info.states.push_back(state);
+      layer.states.push_back(state);
     }
   }
 
-  if (const auto transitions = root["transitions"]) {
-    info.transitions.reserve(transitions.size());
+  if (const auto transitions = node["transitions"]) {
+    layer.transitions.reserve(transitions.size());
 
     for (const auto transition_node : transitions) {
       auto transition = animation_transition{};
@@ -108,13 +145,51 @@ auto asset_cooker::parse_animation_graph_file(const std::filesystem::path& sourc
         }
       }
 
-      info.transitions.push_back(transition);
+      layer.transitions.push_back(transition);
     }
+  }
+
+  return layer;
+}
+
+auto asset_cooker::parse_animation_graph_file(const std::filesystem::path& source) -> std::optional<animation_graph::create_info> {
+  auto root = YAML::Node{};
+
+  try {
+    root = YAML::LoadFile(source.string());
+  } catch (const std::exception& exception) {
+    utility::logger<"assets">::warn("Could not parse animation_graph '{}' ({})", source.generic_string(), exception.what());
+    return std::nullopt;
+  }
+
+  auto info = animation_graph::create_info{};
+
+  if (root["name"]) info.name = root["name"].as<std::string>();
+
+  if (const auto parameters = root["parameters"]) {
+    info.parameters.reserve(parameters.size());
+
+    for (const auto parameter_node : parameters) {
+      auto parameter = animation_parameter{};
+
+      if (parameter_node["name"]) parameter.name = parameter_node["name"].as<std::string>();
+      parameter.default_value = load_animation_parameter_value(parameter_node);
+
+      info.parameters.push_back(parameter);
+    }
+  }
+
+  if (const auto layers = root["layers"]) {
+    info.layers.reserve(layers.size());
+
+    for (const auto layer_node : layers) {
+      info.layers.push_back(load_animation_layer(layer_node));
+    }
+  } else {
+    info.layers.push_back(load_animation_layer(root));
   }
 
   return info;
 }
-
-
 
 } // namespace sbx::assets

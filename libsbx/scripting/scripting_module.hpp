@@ -16,6 +16,8 @@
 #include <libsbx/utility/hashed_string.hpp>
 #include <libsbx/utility/exception.hpp>
 
+#include <libsbx/memory/observer_ptr.hpp>
+
 #include <libsbx/core/module.hpp>
 
 #include <libsbx/scenes/components.hpp>
@@ -23,6 +25,8 @@
 
 #include <libsbx/physics/physics_module.hpp>
 #include <libsbx/physics/contact.hpp>
+
+#include <libsbx/animation/animation_module.hpp>
 
 #include <libsbx/canvas/canvas_module.hpp>
 
@@ -121,7 +125,7 @@ class scripting_module final : public utility::noncopyable {
   
 public:
 
-  using dependencies = core::dependency_list<filesystem::filesystem_module, scenes::scenes_module, physics::physics_module, canvas::canvas_module, render::presentation_module>;
+  using dependencies = core::dependency_list<filesystem::filesystem_module, scenes::scenes_module, physics::physics_module, canvas::canvas_module, render::presentation_module, animation::animation_module>;
 
   scripting_module();
 
@@ -237,6 +241,16 @@ public:
     return _resources;
   }
 
+  /** @brief The animation event being delivered to scripts right now, for the internal calls that read its strings; null outside a delivery. */
+  [[nodiscard]] auto current_animation_event() const noexcept -> memory::observer_ptr<const animation::fired_animation_event> {
+    return _current_animation_event;
+  }
+
+  /** @brief The root motion being offered to OnAnimatorMove right now, which a script marks handled through an internal call; null outside one. */
+  [[nodiscard]] auto current_root_motion() const noexcept -> memory::observer_ptr<animation::root_motion_event> {
+    return _current_root_motion;
+  }
+
 private:
 
   static auto _exception_callback(std::string_view message) -> void;
@@ -284,6 +298,15 @@ private:
   /** @brief Delivers OnControllerColliderHit to the scripts on the moving controller's node. */
   auto _dispatch_controller_hit(const physics::controller_hit& hit) -> void;
 
+  /** @brief Delivers OnAnimationEvent to the scripts on the animated node; the event's strings are read back through current_animation_event(). */
+  auto _dispatch_animation_event(const animation::fired_animation_event& event) -> void;
+
+  /** @brief Offers a node's root motion to OnAnimatorMove; a script overriding it applies the motion itself and marks it handled. */
+  auto _dispatch_animator_move(animation::root_motion_event& motion) -> void;
+
+  /** @brief Delivers OnAnimatorIK to the scripts on an animated node with IK, before its pose is evaluated. */
+  auto _dispatch_animator_ik(const math::uuid& node_id) -> void;
+
   auto _dispatch_button_click(const scenes::node& node) -> void;
 
   auto _dispatch_value_changed(const scenes::node& node) -> void;
@@ -298,6 +321,9 @@ private:
   scripting::managed::assembly_load_context _game_context;
   scripting::managed::assembly _game_assembly;
   bool _has_game_assembly{false};
+
+  memory::observer_ptr<const animation::fired_animation_event> _current_animation_event{};
+  memory::observer_ptr<animation::root_motion_event> _current_root_motion{};
 
   script_compiler _script_compiler;
 

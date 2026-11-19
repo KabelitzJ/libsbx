@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -38,7 +39,7 @@ inline constexpr auto environment_cook_version = std::uint32_t{1u};
 inline constexpr auto material_cook_version = std::uint32_t{7u};
 inline constexpr auto skeleton_cook_version = std::uint32_t{1u};
 inline constexpr auto animation_cook_version = std::uint32_t{1u};
-inline constexpr auto mesh_cook_version = std::uint32_t{11u};
+inline constexpr auto mesh_cook_version = std::uint32_t{12u}; // 12: skinned LODs simplified with joint-aware attributes
 
 // A mesh cook also emits its materials, skeleton and animation clips, so its freshness depends on all four cookers.
 inline constexpr auto mesh_cooker_version = mesh_cook_version * 1000000u + material_cook_version * 10000u + skeleton_cook_version * 100u + animation_cook_version;
@@ -259,6 +260,24 @@ public:
   [[nodiscard]] static auto write_cooked_material(const math::uuid& id, const material_description& description) -> bool;
 
   /**
+   * @brief Whether a cooked mesh blob exists and was written by the current mesh cook version, so it loads as is.
+   *
+   * @param cooked The cooked file.
+   *
+   * @return False for a missing, corrupt or stale file.
+   */
+  [[nodiscard]] static auto is_cooked_mesh_current(const std::filesystem::path& cooked) -> bool;
+
+  /**
+   * @brief Whether a cooked material blob exists and was written by the current material cook version, so it loads as is.
+   *
+   * @param cooked The cooked file.
+   *
+   * @return False for a missing, corrupt or stale file.
+   */
+  [[nodiscard]] static auto is_cooked_material_current(const std::filesystem::path& cooked) -> bool;
+
+  /**
    * @brief Reads a material cooked from a mesh import.
    *
    * @param id The derived material uuid.
@@ -427,8 +446,26 @@ private:
   /** @brief Computes area-weighted vertex normals for vertices[vertex_start, vertex_start + vertex_count); positions must already be set. */
   static auto _generate_normals(std::vector<vertex>& vertices, const std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> void;
 
-  /** @brief Optimizes a submesh's slice for GPU caches and appends a coarser LOD chain to `indices`. @p skin_vertices, when non-null, is kept parallel to @p vertices. */
-  static auto _optimize_and_generate_lods(std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count, bool generate_lods, std::vector<skin_vertex>* skin_vertices = nullptr) -> std::vector<mesh_lod>;
+  /**
+   * @brief Optimizes a submesh's slice for GPU caches and appends a coarser LOD chain to `indices`.
+   *
+   * For a skinned submesh the simplifier also weighs where each vertex's joints sit, so it avoids collapsing across a joint (an elbow, a knee), where the merged triangles would stretch once the limb bends.
+   *
+   * @param vertices The mesh's vertices; the slice is reordered for vertex fetch.
+   * @param indices The mesh's indices; the slice is rewritten and the LOD chain appended.
+   * @param vertex_start The slice's first vertex.
+   * @param vertex_count The slice's vertex count.
+   * @param index_start The slice's first index.
+   * @param index_count The slice's index count.
+   * @param lod_count The most simplified levels to build; 0 builds none.
+   * @param lod_reduction Each level's target triangle count as a fraction of the level above.
+   * @param lod_max_error How far one simplification step may move the surface, relative to the slice's size.
+   * @param skin_vertices When non-null, kept parallel to @p vertices through the reorder.
+   * @param joint_positions Each joint's bind-pose position in mesh space; empty for an unskinned mesh.
+   *
+   * @return The LOD levels, coarsest last.
+   */
+  static auto _optimize_and_generate_lods(std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count, std::uint32_t lod_count, std::float_t lod_reduction, std::float_t lod_max_error, std::vector<skin_vertex>* skin_vertices = nullptr, std::span<const math::vector3> joint_positions = {}) -> std::vector<mesh_lod>;
 
   static auto _cook_mesh(const std::filesystem::path& source, const math::uuid& id, const std::filesystem::path& cooked, const mesh_import_options& options) -> bool;
 

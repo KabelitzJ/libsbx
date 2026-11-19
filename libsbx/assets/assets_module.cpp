@@ -39,7 +39,36 @@ auto assets_module::import_settings_of(const math::uuid& id) -> import_settings 
 }
 
 auto assets_module::set_import_settings(const math::uuid& id, const import_settings& settings) -> void {
-  _manifest.set_import_settings(id, settings);
+  auto merged = settings;
+
+  // Events only change through set_clip_events.
+  if (auto* mesh = std::get_if<mesh_import_options>(&merged)) {
+    const auto current = _manifest.import_settings_of(id);
+
+    if (const auto* existing = std::get_if<mesh_import_options>(&current)) {
+      mesh->clip_events = existing->clip_events;
+    }
+  }
+
+  _manifest.set_import_settings(id, merged);
+}
+
+auto assets_module::set_clip_events(const math::uuid& mesh_id, std::vector<animation_clip_events> events) -> void {
+  auto settings = _manifest.import_settings_of(mesh_id);
+  auto* mesh = std::get_if<mesh_import_options>(&settings);
+
+  if (mesh == nullptr) {
+    utility::logger<"assets">::warn("set_clip_events: {} is not a mesh", mesh_id);
+    return;
+  }
+
+  // Clips without events aren't worth a .meta entry.
+  std::erase_if(events, [](const animation_clip_events& clip) { return clip.events.empty(); });
+
+  mesh->clip_events = std::move(events);
+
+  _manifest.set_import_settings(mesh_id, settings);
+  _residency.reapply_clip_events(mesh_id);
 }
 
 auto assets_module::reimport(const math::uuid& id) -> void {

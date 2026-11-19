@@ -24,8 +24,8 @@ namespace Sbx.Core
     }
 
     /**
-     * How much on-screen error a mesh's simplified detail levels may show before the renderer uses them: above 1 switches to coarser
-     * levels sooner, below 1 keeps detail longer. Changes the open project's value, like Project Settings > Rendering.
+     * How much on-screen error a mesh's simplified detail levels may show before the renderer uses them: above 1 keeps detail
+     * longer, below 1 switches to coarser levels sooner. Changes the open project's value, like Project Settings > Rendering.
      */
     public static float LodBias
     {

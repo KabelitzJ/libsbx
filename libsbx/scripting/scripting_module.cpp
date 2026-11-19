@@ -72,6 +72,25 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_GetPlaying", reinterpret_cast<void*>(&interop::animator_get_playing));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_SetPlaying", reinterpret_cast<void*>(&interop::animator_set_playing));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_GetCurrentStateName", reinterpret_cast<void*>(&interop::animator_get_current_state_name));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_GetLayerStateName", reinterpret_cast<void*>(&interop::animator_get_layer_state_name));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AnimationEvent_GetName", reinterpret_cast<void*>(&interop::animation_event_get_name));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AnimationEvent_GetStringParameter", reinterpret_cast<void*>(&interop::animation_event_get_string_parameter));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AnimationEvent_GetClipName", reinterpret_cast<void*>(&interop::animation_event_get_clip_name));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_MarkRootMotionHandled", reinterpret_cast<void*>(&interop::animator_mark_root_motion_handled));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_GetApplyRootMotion", reinterpret_cast<void*>(&interop::animator_get_apply_root_motion));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_SetApplyRootMotion", reinterpret_cast<void*>(&interop::animator_set_apply_root_motion));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_GetDeltaPosition", reinterpret_cast<void*>(&interop::animator_get_delta_position));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_GetDeltaRotation", reinterpret_cast<void*>(&interop::animator_get_delta_rotation));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_SetIKPosition", reinterpret_cast<void*>(&interop::animator_set_ik_position));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_SetIKRotation", reinterpret_cast<void*>(&interop::animator_set_ik_rotation));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_SetIKHint", reinterpret_cast<void*>(&interop::animator_set_ik_hint));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_ClearIKHint", reinterpret_cast<void*>(&interop::animator_clear_ik_hint));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_SetIKWeights", reinterpret_cast<void*>(&interop::animator_set_ik_weights));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_SetLookAt", reinterpret_cast<void*>(&interop::animator_set_look_at));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_GetLayerCount", reinterpret_cast<void*>(&interop::animator_get_layer_count));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_GetLayerIndex", reinterpret_cast<void*>(&interop::animator_get_layer_index));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_GetLayerWeight", reinterpret_cast<void*>(&interop::animator_get_layer_weight));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_SetLayerWeight", reinterpret_cast<void*>(&interop::animator_set_layer_weight));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_SetFloat", reinterpret_cast<void*>(&interop::animator_set_float));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_SetBool", reinterpret_cast<void*>(&interop::animator_set_bool));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_SetInt", reinterpret_cast<void*>(&interop::animator_set_int));
@@ -256,6 +275,10 @@ scripting_module::scripting_module() {
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "MeshRenderer_SetGeometry", reinterpret_cast<void*>(&interop::mesh_renderer_set_geometry));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "MeshRenderer_SetMaterial", reinterpret_cast<void*>(&interop::mesh_renderer_set_material));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "MeshRenderer_GetLodBias", reinterpret_cast<void*>(&interop::mesh_renderer_get_lod_bias));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "MeshRenderer_SetLodBias", reinterpret_cast<void*>(&interop::mesh_renderer_set_lod_bias));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "InstancedMeshRenderer_GetLodBias", reinterpret_cast<void*>(&interop::instanced_mesh_renderer_get_lod_bias));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "InstancedMeshRenderer_SetLodBias", reinterpret_cast<void*>(&interop::instanced_mesh_renderer_set_lod_bias));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "InstancedMeshRenderer_SetGeometry", reinterpret_cast<void*>(&interop::instanced_mesh_renderer_set_geometry));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "InstancedMeshRenderer_SetMaterial", reinterpret_cast<void*>(&interop::instanced_mesh_renderer_set_material));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "InstancedMeshRenderer_SetInstances", reinterpret_cast<void*>(&interop::instanced_mesh_renderer_set_instances));
@@ -423,6 +446,12 @@ scripting_module::scripting_module() {
   physics_module.on_contact_began().connect([this](const physics::collision_event& event) { _dispatch_collision_event(event, true); });
   physics_module.on_contact_ended().connect([this](const physics::collision_event& event) { _dispatch_collision_event(event, false); });
   physics_module.on_controller_hit().connect([this](const physics::controller_hit& hit) { _dispatch_controller_hit(hit); });
+
+  auto& animation_module = core::engine::get_module<animation::animation_module>();
+
+  animation_module.on_event().connect([this](const animation::fired_animation_event& event) { _dispatch_animation_event(event); });
+  animation_module.on_animator_move().connect([this](animation::root_motion_event& motion) { _dispatch_animator_move(motion); });
+  animation_module.on_animator_ik().connect([this](const math::uuid& node_id) { _dispatch_animator_ik(node_id); });
 
   auto& canvas_module = core::engine::get_module<canvas::canvas_module>();
 
@@ -749,6 +778,75 @@ auto scripting_module::_dispatch_controller_hit(const physics::controller_hit& h
 
   for (auto& instance : scripts->instances) {
     instance.invoke("DispatchControllerColliderHit", other_uuid, hit.point.x(), hit.point.y(), hit.point.z(), hit.normal.x(), hit.normal.y(), hit.normal.z(), hit.move_direction.x(), hit.move_direction.y(), hit.move_direction.z(), hit.move_length);
+  }
+}
+
+auto scripting_module::_dispatch_animation_event(const animation::fired_animation_event& event) -> void {
+  auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(event.node);
+
+  if (!node.is_valid()) {
+    return;
+  }
+
+  auto scripts = node.try_get_component<scripting::scripts>();
+
+  if (!scripts) {
+    return;
+  }
+
+  // Copied first: a handler may add or remove scripts on this node.
+  const auto instances = scripts->instances;
+
+  _current_animation_event = memory::make_observer(event);
+
+  for (const auto& instance : instances) {
+    instance.invoke("DispatchAnimationEvent", event.float_parameter, event.int_parameter, event.layer, event.weight);
+  }
+
+  _current_animation_event = nullptr;
+}
+
+auto scripting_module::_dispatch_animator_move(animation::root_motion_event& motion) -> void {
+  auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(motion.node);
+
+  if (!node.is_valid()) {
+    return;
+  }
+
+  auto scripts = node.try_get_component<scripting::scripts>();
+
+  if (!scripts) {
+    return;
+  }
+
+  const auto instances = scripts->instances;
+
+  _current_root_motion = memory::make_observer(motion);
+
+  for (const auto& instance : instances) {
+    instance.invoke("DispatchAnimatorMove");
+  }
+
+  _current_root_motion = nullptr;
+}
+
+auto scripting_module::_dispatch_animator_ik(const math::uuid& node_id) -> void {
+  auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(node_id);
+
+  if (!node.is_valid()) {
+    return;
+  }
+
+  auto scripts = node.try_get_component<scripting::scripts>();
+
+  if (!scripts) {
+    return;
+  }
+
+  const auto instances = scripts->instances;
+
+  for (const auto& instance : instances) {
+    instance.invoke("DispatchAnimatorIK");
   }
 }
 

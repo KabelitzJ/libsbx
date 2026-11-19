@@ -143,6 +143,7 @@ auto draw_viewport_window(editor_state& state, const sbx::graphics::sampler& sam
       draw_audio_source_gizmo(state);
       draw_character_controller_gizmo(state);
       draw_volume_gizmos(state);
+      draw_animator_ik_gizmo(state);
     }
 
     if (is_editing && image_clicked && !gizmo_active && !toolbar_active && !view_gizmo_active && !icons_active) {

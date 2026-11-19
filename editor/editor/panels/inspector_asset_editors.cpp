@@ -4,10 +4,14 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
+#include <iterator>
 #include <optional>
 #include <span>
+#include <string>
 #include <variant>
+#include <vector>
 
 #include <fmt/format.h>
 
@@ -21,6 +25,7 @@
 
 #include <libsbx/core/engine.hpp>
 
+#include <libsbx/assets/assets_module.hpp>
 #include <libsbx/assets/particle_effect.hpp>
 #include <libsbx/assets/shader_graph.hpp>
 
@@ -677,6 +682,142 @@ auto inspector_panel::_draw_shader_properties(editor_state& state, std::span<con
   }
 
   return changed;
+}
+
+auto inspector_panel::_draw_clip_events(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
+  const auto& mesh = _asset_cache.mesh;
+
+  if (!mesh.is_valid() || mesh->animation_clips().empty()) {
+    return;
+  }
+
+  if (_clip_events_mesh != asset.id) {
+    const auto settings = assets_module.import_settings_of(asset.id);
+    const auto* options = std::get_if<sbx::assets::mesh_import_options>(&settings);
+
+    _clip_events_edit = options != nullptr ? options->clip_events : std::vector<sbx::assets::animation_clip_events>{};
+    _clip_events_mesh = asset.id;
+  }
+
+  if (!ImGui::CollapsingHeader(ICON_MDI_TIMELINE " Animation Events")) {
+    return;
+  }
+
+  auto commit = false;
+
+  for (const auto& clip : mesh->animation_clips()) {
+    if (!clip.is_valid() || !clip.is_loaded()) {
+      continue;
+    }
+
+    const auto& name = clip->name();
+    const auto duration = std::max(clip->duration(), 0.0001f);
+
+    auto entry = std::ranges::find(_clip_events_edit, name, &sbx::assets::animation_clip_events::clip_name);
+    const auto event_count = entry != _clip_events_edit.end() ? entry->events.size() : std::size_t{0u};
+
+    ImGui::PushID(name.c_str());
+
+    if (!ImGui::TreeNodeEx("##clip", ImGuiTreeNodeFlags_None, "%s (%.2f s, %zu events)", name.c_str(), clip->duration(), event_count)) {
+      ImGui::PopID();
+      continue;
+    }
+
+    const auto add_event = [&](std::float_t time) {
+      if (entry == _clip_events_edit.end()) {
+        _clip_events_edit.push_back(sbx::assets::animation_clip_events{.clip_name = name});
+        entry = std::prev(_clip_events_edit.end());
+      }
+
+      entry->events.push_back(sbx::assets::animation_event{.time = time, .name = "Event"});
+      commit = true;
+    };
+
+    // The clip's timeline: one marker per event; clicking adds an event at that time.
+    {
+      const auto width = std::max(ImGui::GetContentRegionAvail().x, 50.0f);
+      const auto height = ImGui::GetFrameHeight();
+      const auto origin = ImGui::GetCursorScreenPos();
+
+      if (ImGui::InvisibleButton("##timeline", ImVec2{width, height})) {
+        add_event(std::clamp((ImGui::GetIO().MousePos.x - origin.x) / width, 0.0f, 1.0f) * clip->duration());
+      }
+
+      auto* draw_list = ImGui::GetWindowDrawList();
+
+      draw_list->AddRectFilled(origin, ImVec2{origin.x + width, origin.y + height}, IM_COL32(35, 35, 40, 255), 3.0f);
+
+      for (auto tick = 1; tick < 10; ++tick) {
+        const auto x = origin.x + width * static_cast<float>(tick) / 10.0f;
+        draw_list->AddLine(ImVec2{x, origin.y + height * 0.65f}, ImVec2{x, origin.y + height}, IM_COL32(70, 70, 80, 255));
+      }
+
+      if (entry != _clip_events_edit.end()) {
+        for (const auto& event : entry->events) {
+          const auto x = origin.x + std::clamp(event.time / duration, 0.0f, 1.0f) * width;
+
+          draw_list->AddLine(ImVec2{x, origin.y}, ImVec2{x, origin.y + height}, IM_COL32(255, 190, 60, 255), 2.0f);
+
+          if (ImGui::IsItemHovered() && std::abs(ImGui::GetIO().MousePos.x - x) < 4.0f) {
+            ImGui::SetTooltip("%s at %.3f s", event.name.c_str(), event.time);
+          }
+        }
+      }
+
+      if (ImGui::IsItemHovered()) {
+        const auto time = std::clamp((ImGui::GetIO().MousePos.x - origin.x) / width, 0.0f, 1.0f) * clip->duration();
+        draw_list->AddLine(ImVec2{ImGui::GetIO().MousePos.x, origin.y}, ImVec2{ImGui::GetIO().MousePos.x, origin.y + height}, IM_COL32(255, 255, 255, 90));
+        draw_list->AddText(ImVec2{origin.x + 4.0f, origin.y + 2.0f}, IM_COL32(200, 200, 210, 200), fmt::format("{:.2f} s", time).c_str());
+      }
+    }
+
+    if (entry != _clip_events_edit.end()) {
+      auto removed = std::optional<std::size_t>{};
+
+      for (auto index = std::size_t{0u}; index < entry->events.size(); ++index) {
+        auto& event = entry->events[index];
+
+        ImGui::PushID(static_cast<int>(index));
+        ImGui::SeparatorText(fmt::format("{}##event", event.name.empty() ? "(unnamed)" : event.name).c_str());
+
+        // Staged as they change, saved when each edit finishes, so a drag writes the .meta once.
+        draw_text_field("Name", event.name);
+        commit |= ImGui::IsItemDeactivatedAfterEdit();
+        ImGui::SliderFloat("Time", &event.time, 0.0f, clip->duration(), "%.3f s");
+        commit |= ImGui::IsItemDeactivatedAfterEdit();
+        ImGui::DragFloat("Float", &event.float_parameter, 0.01f);
+        commit |= ImGui::IsItemDeactivatedAfterEdit();
+        ImGui::DragInt("Int", &event.int_parameter, 0.1f);
+        commit |= ImGui::IsItemDeactivatedAfterEdit();
+        draw_text_field("String", event.string_parameter);
+        commit |= ImGui::IsItemDeactivatedAfterEdit();
+        ImGui::SliderFloat("Min Weight", &event.min_weight, 0.0f, 1.0f);
+        commit |= ImGui::IsItemDeactivatedAfterEdit();
+
+        if (ImGui::Button(ICON_MDI_TRASH_CAN " Remove")) {
+          removed = index;
+        }
+
+        ImGui::PopID();
+      }
+
+      if (removed) {
+        entry->events.erase(entry->events.begin() + static_cast<std::ptrdiff_t>(*removed));
+        commit = true;
+      }
+    }
+
+    if (ImGui::Button(ICON_MDI_PLUS " Event")) {
+      add_event(0.0f);
+    }
+
+    ImGui::TreePop();
+    ImGui::PopID();
+  }
+
+  if (commit) {
+    assets_module.set_clip_events(asset.id, _clip_events_edit);
+  }
 }
 
 } // namespace editor

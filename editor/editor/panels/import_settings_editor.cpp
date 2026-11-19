@@ -197,6 +197,48 @@ auto import_settings_editor::_draw_mesh(sbx::assets::mesh_import_options& settin
 
   changed |= ImGui::Checkbox("Generate LODs", &settings.generate_lods);
 
+  ImGui::BeginDisabled(!settings.generate_lods);
+
+  {
+    auto count = static_cast<int>(settings.lod_count);
+
+    if (ImGui::SliderInt("LOD Levels", &count, 1, 4)) {
+      settings.lod_count = static_cast<std::uint32_t>(count);
+      changed = true;
+    }
+
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("The most simplified levels below full detail; fewer are made when simplifying stops paying off.");
+    }
+  }
+
+  if (ImGui::SliderFloat("Reduction Per Level", &settings.lod_reduction, 0.1f, 0.9f, "%.2f")) {
+    changed = true;
+  }
+
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Each level's triangle count as a fraction of the level above it: 0.5 halves it every level.");
+  }
+
+  if (ImGui::SliderFloat("Max Error", &settings.lod_max_error, 0.001f, 0.2f, "%.3f", ImGuiSliderFlags_Logarithmic)) {
+    changed = true;
+  }
+
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("How far one simplification step may move the surface, as a fraction of the mesh's size. Larger lets coarse levels go further but changes the silhouette more.");
+  }
+
+  ImGui::EndDisabled();
+
+  if (ImGui::DragFloat("LOD Bias", &settings.lod_bias, 0.01f, 0.01f, 10.0f, "%.2f", ImGuiSliderFlags_Logarithmic)) {
+    settings.lod_bias = std::max(settings.lod_bias, 0.01f);
+    changed = true;
+  }
+
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("When this mesh switches to coarser levels at runtime: above 1 keeps detail longer, below 1 switches sooner. Multiplies the project's LOD Bias and each Mesh Renderer's. Applies without a recook.");
+  }
+
   changed |= ImGui::Checkbox("Extract Materials", &settings.extract_materials);
 
   if (ImGui::IsItemHovered()) {

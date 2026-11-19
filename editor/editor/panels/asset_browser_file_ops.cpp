@@ -70,8 +70,9 @@ auto asset_browser_panel::_create_animation_graph(editor_state& state, const std
 
   // One entry state so the graph is valid immediately; the rest is built in the graph editor.
   auto create_info = sbx::assets::animation_graph::create_info{.name = "New Animation Graph"};
-  create_info.states.push_back(sbx::assets::animation_state{.id = 0u, .name = "Idle"});
-  create_info.entry_state_id = 0u;
+  auto& base_layer = create_info.layers.emplace_back();
+  base_layer.states.push_back(sbx::assets::animation_state{.id = 0u, .name = "Idle"});
+  base_layer.entry_state_id = 0u;
 
   auto handle = assets_module.create_animation_graph(create_info);
   const auto id = assets_module.save_animation_graph(handle, relative_path);

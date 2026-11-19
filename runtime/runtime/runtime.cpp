@@ -39,6 +39,7 @@
 #include <libsbx/canvas/canvas_module.hpp>
 
 #include <libsbx/particles/particles_module.hpp>
+#include <libsbx/animation/animation_module.hpp>
 
 #include <libsbx/audio/audio_module.hpp>
 
@@ -66,6 +67,7 @@ using module_list = sbx::core::module_list<
   sbx::terrain::terrain_module,
   sbx::canvas::canvas_module,
   sbx::particles::particles_module,
+  sbx::animation::animation_module,
   sbx::audio::audio_module,
   sbx::scripting::scripting_module,
   sbx::render::scene_renderer_module

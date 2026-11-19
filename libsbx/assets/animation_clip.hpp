@@ -11,6 +11,7 @@
 #include <libsbx/math/uuid.hpp>
 #include <libsbx/math/vector3.hpp>
 
+#include <libsbx/assets/animation_event.hpp>
 #include <libsbx/assets/asset_handle.hpp>
 #include <libsbx/assets/loadable.hpp>
 
@@ -71,6 +72,11 @@ public:
     return _id;
   }
 
+  /** @brief The clip's events from its mesh's import settings, sorted by time. */
+  [[nodiscard]] auto events() const noexcept -> const std::vector<animation_event>& {
+    return _events;
+  }
+
 private:
 
   auto _finalize_content(std::string name, std::float_t duration, std::vector<animation_joint_channel> channels) -> void {
@@ -83,6 +89,7 @@ private:
   std::string _name{};
   std::float_t _duration{0.0f};
   std::vector<animation_joint_channel> _channels{};
+  std::vector<animation_event> _events{};
   math::uuid _id{math::uuid::nil()};
 
 }; // class animation_clip

@@ -39,6 +39,13 @@ auto draw_volume_gizmos(editor_state& state) -> void;
 /** @brief Wire spheres at the selected spatial audio source's min (full volume) and max distance. */
 auto draw_audio_source_gizmo(editor_state& state) -> void;
 
+/**
+ * @brief The selected animator's IK chains (two bones each, green with foot placement) and, while scripts drive them, their goals, hints and look-at line.
+ *
+ * @param state The editor state.
+ */
+auto draw_animator_ik_gizmo(editor_state& state) -> void;
+
 /** @brief The selected character controller's capsule. */
 auto draw_character_controller_gizmo(editor_state& state) -> void;
 

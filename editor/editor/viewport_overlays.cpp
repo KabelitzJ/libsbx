@@ -6,6 +6,7 @@
 #include <array>
 #include <cfloat>
 #include <cmath>
+#include <optional>
 
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
 
@@ -258,6 +259,62 @@ auto draw_volume_gizmos(editor_state& state) -> void {
       const auto inner = sbx::math::vector3{std::max(probe.box_extents.x() - probe.blend_distance, 0.0f), std::max(probe.box_extents.y() - probe.blend_distance, 0.0f), std::max(probe.box_extents.z() - probe.blend_distance, 0.0f)};
 
       debug_draw.add_wire_box(box, inner, sbx::math::color{0.3f, 0.8f, 1.0f, 0.4f});
+    }
+  }
+}
+
+auto draw_animator_ik_gizmo(editor_state& state) -> void {
+  auto& scene = sbx::core::engine::get_module<sbx::scenes::scenes_module>().active_scene();
+
+  auto node = state.selected_node(scene);
+
+  if (!node.is_valid() || !node.has_component<sbx::scenes::animator>() || !node.has_component<sbx::scenes::skeleton_pose>()) {
+    return;
+  }
+
+  const auto& animator = node.get_component<sbx::scenes::animator>();
+  const auto& pose = node.get_component<sbx::scenes::skeleton_pose>();
+  const auto& world = node.world_matrix();
+
+  auto& debug_draw = sbx::core::engine::get_module<sbx::render::scene_renderer_module>().debug_draw();
+
+  const auto joint_world = [&](std::int32_t joint) -> std::optional<sbx::math::vector3> {
+    if (joint < 0 || static_cast<std::size_t>(joint) >= pose.joint_world_matrices.size()) {
+      return std::nullopt;
+    }
+
+    return sbx::math::vector3{world * sbx::math::vector4{sbx::math::vector3{pose.joint_world_matrices[static_cast<std::size_t>(joint)][3]}, 1.0f}};
+  };
+
+  // Each chain's two bones, and its goal and hint while a script drives them.
+  for (const auto& chain : animator.ik_chains) {
+    const auto root = joint_world(chain.joints[0]);
+    const auto middle = joint_world(chain.joints[1]);
+    const auto end = joint_world(chain.joints[2]);
+
+    if (!root || !middle || !end) {
+      continue;
+    }
+
+    const auto bone_color = chain.foot_placement ? sbx::math::color{0.4f, 1.0f, 0.4f, 1.0f} : sbx::math::color{1.0f, 0.85f, 0.3f, 1.0f};
+
+    debug_draw.add_line(*root, *middle, bone_color);
+    debug_draw.add_line(*middle, *end, bone_color);
+
+    if (chain.position_weight > 0.0f) {
+      debug_draw.add_cross(chain.target_position, 0.1f, sbx::math::color{1.0f, 0.5f, 0.1f, 1.0f});
+      debug_draw.add_line(*end, chain.target_position, sbx::math::color{1.0f, 0.5f, 0.1f, 0.5f});
+    }
+
+    if (chain.has_hint) {
+      debug_draw.add_cross(chain.hint_position, 0.08f, sbx::math::color{0.3f, 0.8f, 1.0f, 1.0f});
+    }
+  }
+
+  if (animator.look_at_weight > 0.0f) {
+    if (const auto head = joint_world(animator.look_at_joint_index)) {
+      debug_draw.add_line(*head, animator.look_at_target, sbx::math::color{0.3f, 1.0f, 0.6f, 0.8f});
+      debug_draw.add_cross(animator.look_at_target, 0.1f, sbx::math::color{0.3f, 1.0f, 0.6f, 1.0f});
     }
   }
 }

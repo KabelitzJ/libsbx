@@ -191,6 +191,13 @@ public:
   auto reimport(const math::uuid& id) -> void;
 
   /**
+   * @brief Re-reads a mesh's clip events from its import settings into its loaded clips, without a recook.
+   *
+   * @param mesh_id The mesh's uuid.
+   */
+  auto reapply_clip_events(const math::uuid& mesh_id) -> void;
+
+  /**
    * @brief Builds a mesh from in-memory data, uploaded through the next process_uploads(). Every call creates a new, uncached record.
    *
    * @param vertices The vertices.
@@ -586,6 +593,14 @@ private:
   auto _finalize_skeleton(asset_loader::skeleton_result& result) -> void;
   auto _finalize_animation_clip(asset_loader::animation_clip_result& result) -> void;
 
+  /**
+   * @brief Gives a loaded clip the events its mesh's import settings list under its name (none if it has no name yet). Call with _mutex held.
+   *
+   * @param clip The clip record.
+   * @param mesh_id The mesh the clip was cooked from.
+   */
+  auto _apply_clip_events(animation_clip& clip, const math::uuid& mesh_id) -> void;
+
   asset_manifest& _manifest;
   ibl_baker& _ibl;
 
@@ -611,6 +626,9 @@ private:
 
   std::unordered_map<math::uuid, std::shared_ptr<skeleton>> _skeletons{};
   std::unordered_map<math::uuid, std::shared_ptr<animation_clip>> _animation_clips{};
+
+  // Clip uuid -> the mesh it was cooked from, whose import settings hold its events.
+  std::unordered_map<math::uuid, math::uuid> _clip_meshes{};
 
   std::vector<std::shared_ptr<material>> _materials{};
   std::deque<pending_material_upload> _pending_materials{};

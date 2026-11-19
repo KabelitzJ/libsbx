@@ -198,6 +198,10 @@ auto project_settings_panel::_draw_rendering_tab() -> void {
     project.save();
   }
 
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("How much a mesh's simplified detail levels may differ from the full mesh on screen before they're used.\nHigher keeps detail longer; lower switches to coarser levels sooner (faster, more visible).");
+  }
+
   auto occlusion_culling = project.occlusion_culling();
 
   if (ImGui::Checkbox("Occlusion Culling", &occlusion_culling)) {
@@ -206,10 +210,6 @@ auto project_settings_panel::_draw_rendering_tab() -> void {
   }
 
   ImGui::TextDisabled("Skips meshes hidden behind what the camera drew last frame.");
-
-  if (ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("How much a mesh's simplified detail levels may differ from the full mesh on screen before they're used.\nHigher switches to coarser levels sooner (faster, more visible); lower keeps detail longer.");
-  }
 }
 
 // Whether @p ancestor is @p candidate or one of its parents, so a drop can't create a cycle.

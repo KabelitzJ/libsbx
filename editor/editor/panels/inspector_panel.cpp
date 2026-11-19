@@ -424,6 +424,8 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
         ImGui::Text("Submeshes: %zu", handle->submeshes().size());
         ImGui::Text("Uploaded: %s", handle->is_uploaded() ? "yes" : "no");
       }
+
+      _draw_clip_events(asset, assets_module);
       break;
     }
     case sbx::assets::asset_type::material: {
@@ -459,12 +461,11 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
       const auto& handle = _asset_cache.animation_graph;
 
       if (handle.is_valid()) {
-        ImGui::Text("States: %zu", handle->states().size());
-        ImGui::Text("Transitions: %zu", handle->transitions().size());
+        for (const auto& layer : handle->layers()) {
+          const auto entry_state_it = std::ranges::find(layer.states, layer.entry_state_id, &sbx::assets::animation_state::id);
 
-        const auto& states = handle->states();
-        const auto entry_state_it = std::ranges::find(states, handle->entry_state_id(), &sbx::assets::animation_state::id);
-        ImGui::Text("Entry State: %s", entry_state_it != states.end() ? entry_state_it->name.c_str() : "(none)");
+          ImGui::Text("%s: %zu states, %zu transitions, entry %s", layer.name.c_str(), layer.states.size(), layer.transitions.size(), entry_state_it != layer.states.end() ? entry_state_it->name.c_str() : "(none)");
+        }
 
         if (!handle->parameters().empty() && ImGui::TreeNodeEx("Parameters", ImGuiTreeNodeFlags_DefaultOpen)) {
           for (const auto& parameter : handle->parameters()) {

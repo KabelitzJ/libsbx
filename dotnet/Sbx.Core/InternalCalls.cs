@@ -35,6 +35,25 @@ namespace Sbx.Core
     internal static delegate* unmanaged<ulong, bool> Animator_GetPlaying;
     internal static delegate* unmanaged<ulong, bool, void> Animator_SetPlaying;
     internal static delegate* unmanaged<ulong, NativeString> Animator_GetCurrentStateName;
+    internal static delegate* unmanaged<ulong, int, NativeString> Animator_GetLayerStateName;
+    internal static delegate* unmanaged<NativeString> AnimationEvent_GetName;
+    internal static delegate* unmanaged<NativeString> AnimationEvent_GetStringParameter;
+    internal static delegate* unmanaged<NativeString> AnimationEvent_GetClipName;
+    internal static delegate* unmanaged<void> Animator_MarkRootMotionHandled;
+    internal static delegate* unmanaged<ulong, bool> Animator_GetApplyRootMotion;
+    internal static delegate* unmanaged<ulong, bool, void> Animator_SetApplyRootMotion;
+    internal static delegate* unmanaged<ulong, Vector3*, void> Animator_GetDeltaPosition;
+    internal static delegate* unmanaged<ulong, Quaternion*, void> Animator_GetDeltaRotation;
+    internal static delegate* unmanaged<ulong, NativeString, Vector3*, void> Animator_SetIKPosition;
+    internal static delegate* unmanaged<ulong, NativeString, Quaternion*, void> Animator_SetIKRotation;
+    internal static delegate* unmanaged<ulong, NativeString, Vector3*, void> Animator_SetIKHint;
+    internal static delegate* unmanaged<ulong, NativeString, void> Animator_ClearIKHint;
+    internal static delegate* unmanaged<ulong, NativeString, float, float, void> Animator_SetIKWeights;
+    internal static delegate* unmanaged<ulong, Vector3*, float, void> Animator_SetLookAt;
+    internal static delegate* unmanaged<ulong, int> Animator_GetLayerCount;
+    internal static delegate* unmanaged<ulong, NativeString, int> Animator_GetLayerIndex;
+    internal static delegate* unmanaged<ulong, int, float> Animator_GetLayerWeight;
+    internal static delegate* unmanaged<ulong, int, float, void> Animator_SetLayerWeight;
     internal static delegate* unmanaged<ulong, NativeString, float, void> Animator_SetFloat;
     internal static delegate* unmanaged<ulong, NativeString, bool, void> Animator_SetBool;
     internal static delegate* unmanaged<ulong, NativeString, int, void> Animator_SetInt;
@@ -224,6 +243,10 @@ namespace Sbx.Core
 
     internal static delegate* unmanaged<ulong, Vector3*, Vector3*, Vector2*, Color*, uint, uint*, uint, Color*, void> MeshRenderer_SetGeometry;
     internal static delegate* unmanaged<ulong, uint, ulong, void> MeshRenderer_SetMaterial;
+    internal static delegate* unmanaged<ulong, float> MeshRenderer_GetLodBias;
+    internal static delegate* unmanaged<ulong, float, void> MeshRenderer_SetLodBias;
+    internal static delegate* unmanaged<ulong, float> InstancedMeshRenderer_GetLodBias;
+    internal static delegate* unmanaged<ulong, float, void> InstancedMeshRenderer_SetLodBias;
     internal static delegate* unmanaged<ulong, Vector3*, Vector3*, Vector2*, Color*, uint, uint*, uint, void> InstancedMeshRenderer_SetGeometry;
     internal static delegate* unmanaged<ulong, ulong, void> InstancedMeshRenderer_SetMaterial;
     internal static delegate* unmanaged<ulong, InstanceData*, uint, void> InstancedMeshRenderer_SetInstances;

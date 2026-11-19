@@ -6,6 +6,7 @@
 #include <cmath>
 #include <fstream>
 #include <numeric>
+#include <span>
 #include <system_error>
 #include <unordered_map>
 
@@ -290,7 +291,7 @@ auto asset_cooker::generate_tangents(std::vector<vertex>& vertices, const std::v
   }
 }
 
-auto asset_cooker::_optimize_and_generate_lods(std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count, bool generate_lods, std::vector<skin_vertex>* skin_vertices) -> std::vector<mesh_lod> {
+auto asset_cooker::_optimize_and_generate_lods(std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count, std::uint32_t lod_count, std::float_t lod_reduction, std::float_t lod_max_error, std::vector<skin_vertex>* skin_vertices, std::span<const math::vector3> joint_positions) -> std::vector<mesh_lod> {
   auto lods = std::vector<mesh_lod>{};
 
   if (index_count == 0u || vertex_count == 0u) {
@@ -326,13 +327,58 @@ auto asset_cooker::_optimize_and_generate_lods(std::vector<vertex>& vertices, st
     indices[index_start + i] = local[i] + static_cast<std::uint32_t>(vertex_start);
   }
 
-  // Each LOD targets half the previous triangle count, until meshopt_simplify stalls or the mesh is too small.
+  // Skinned: each vertex's joints' bind positions, blended by its weights and scaled to the slice's extent like meshopt scales positions.
+  // Vertices driven by the same joints share a value, so collapsing them is free, while collapsing across a joint costs about the distance between the joints.
+  auto skin_attributes = std::vector<std::float_t>{};
+
+  if (skin_vertices != nullptr && !joint_positions.empty()) {
+    auto minimum = vertices[vertex_start].position;
+    auto maximum = minimum;
+
+    for (auto index = vertex_start; index < vertex_start + vertex_count; ++index) {
+      const auto& position = vertices[index].position;
+
+      minimum = math::vector3{std::min(minimum.x(), position.x()), std::min(minimum.y(), position.y()), std::min(minimum.z(), position.z())};
+      maximum = math::vector3{std::max(maximum.x(), position.x()), std::max(maximum.y(), position.y()), std::max(maximum.z(), position.z())};
+    }
+
+    const auto extent = std::max({maximum.x() - minimum.x(), maximum.y() - minimum.y(), maximum.z() - minimum.z(), 1e-6f});
+
+    skin_attributes.resize(vertex_count * 3u, 0.0f);
+
+    for (auto index = std::size_t{0u}; index < vertex_count; ++index) {
+      const auto& skin = (*skin_vertices)[vertex_start + index];
+
+      auto blended = math::vector3{0.0f, 0.0f, 0.0f};
+
+      for (auto influence = std::size_t{0u}; influence < 4u; ++influence) {
+        const auto joint = skin.joint_indices[influence];
+
+        if (joint < joint_positions.size()) {
+          blended = blended + joint_positions[joint] * skin.weights[influence];
+        }
+      }
+
+      skin_attributes[index * 3u + 0u] = blended.x() / extent;
+      skin_attributes[index * 3u + 1u] = blended.y() / extent;
+      skin_attributes[index * 3u + 2u] = blended.z() / extent;
+    }
+  }
+
+  // As much say as the positions themselves: the error of a collapse is about how far apart the joints are, relative to the mesh.
+  static constexpr auto skin_attribute_weights = std::array<std::float_t, 3u>{1.0f, 1.0f, 1.0f};
+
+  // Each LOD targets a fraction of the previous triangle count, until meshopt_simplify stalls or the mesh is too small.
+  // The runtime picks from at most 4 simplified levels (render::max_lod_levels - 1).
   auto previous = local;
-  const auto max_levels = generate_lods ? std::size_t{4u} : std::size_t{0u};
+  const auto max_levels = std::min(static_cast<std::size_t>(lod_count), std::size_t{4u});
+  const auto reduction = std::clamp(lod_reduction, 0.05f, 0.95f);
+  const auto max_error = std::clamp(lod_max_error, 1e-4f, 1.0f);
   constexpr auto min_triangle_count = std::size_t{8u};
 
   for (auto level = std::size_t{0u}; level < max_levels; ++level) {
-    const auto target_index_count = std::max((previous.size() / 2u) / 3u * 3u, min_triangle_count * 3u);
+    const auto target_triangles = static_cast<std::size_t>(static_cast<std::float_t>(previous.size() / 3u) * reduction);
+    const auto target_index_count = std::max(target_triangles * 3u, min_triangle_count * 3u);
 
     if (target_index_count >= previous.size()) {
       break;
@@ -341,14 +387,23 @@ auto asset_cooker::_optimize_and_generate_lods(std::vector<vertex>& vertices, st
     auto simplified = std::vector<std::uint32_t>(previous.size());
     auto result_error = 0.0f;
 
-    const auto simplified_count = meshopt_simplify(
-      simplified.data(), previous.data(), previous.size(),
-      &vertices[vertex_start].position.x(), vertex_count, sizeof(vertex),
-      target_index_count, 1e-2f, 0u, &result_error
-    );
+    const auto simplified_count = skin_attributes.empty()
+      ? meshopt_simplify(
+          simplified.data(), previous.data(), previous.size(),
+          &vertices[vertex_start].position.x(), vertex_count, sizeof(vertex),
+          target_index_count, max_error, 0u, &result_error
+        )
+      : meshopt_simplifyWithAttributes(
+          simplified.data(), previous.data(), previous.size(),
+          &vertices[vertex_start].position.x(), vertex_count, sizeof(vertex),
+          skin_attributes.data(), 3u * sizeof(std::float_t), skin_attribute_weights.data(), skin_attribute_weights.size(), nullptr,
+          target_index_count, max_error, 0u, &result_error
+        );
 
-    // Under ~10% reduction means the chain has bottomed out.
-    if (simplified_count == 0u || simplified_count >= (previous.size() * 9u) / 10u) {
+    // Getting under a fifth of the requested reduction means the chain has bottomed out (topology or the error limit stopped it).
+    const auto stalled_at = target_index_count + ((previous.size() - target_index_count) * 4u) / 5u;
+
+    if (simplified_count == 0u || simplified_count >= stalled_at) {
       break;
     }
 
@@ -595,6 +650,14 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
 
   const auto has_skin_data = options.import_skeleton && !joints.empty();
 
+  // Each joint's bind-pose position in mesh space (the inverse of its inverse bind matrix), for joint-aware LOD simplification.
+  auto joint_positions = std::vector<math::vector3>{};
+  joint_positions.reserve(joints.size());
+
+  for (const auto& joint : joints) {
+    joint_positions.push_back(math::vector3{math::matrix4x4::inverted(joint.inverse_bind_matrix)[3]});
+  }
+
   // The Nth primitive overall is what included_primitives indexes, so this increments once per primitive, matching inspect_mesh_source.
   auto global_primitive_index = std::size_t{0u};
 
@@ -725,7 +788,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
         generate_tangents(vertices, indices, vertex_start, position_accessor.count, index_start, index_accessor.count);
       }
 
-      auto lods = _optimize_and_generate_lods(vertices, indices, vertex_start, position_accessor.count, index_start, index_accessor.count, options.generate_lods, has_skin_data ? &skin_vertices : nullptr);
+      auto lods = _optimize_and_generate_lods(vertices, indices, vertex_start, position_accessor.count, index_start, index_accessor.count, options.generate_lods ? options.lod_count : 0u, options.lod_reduction, options.lod_max_error, has_skin_data ? &skin_vertices : nullptr, has_skin_data ? std::span<const math::vector3>{joint_positions} : std::span<const math::vector3>{});
 
       submeshes.push_back(cooked_submesh{
         static_cast<std::uint32_t>(index_start),
@@ -961,6 +1024,15 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
   }
 
   return true;
+}
+
+auto asset_cooker::is_cooked_mesh_current(const std::filesystem::path& cooked) -> bool {
+  auto in = std::ifstream{cooked, std::ios::binary};
+
+  auto header = mesh_file_header{};
+  in.read(reinterpret_cast<char*>(&header), sizeof(header));
+
+  return in && header.magic == mesh_magic && header.version == mesh_cook_version;
 }
 
 auto asset_cooker::_load_cooked_mesh(const std::filesystem::path& cooked, std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::vector<cooked_submesh>& submeshes, math::volume& bounds, std::vector<skin_vertex>& skin_vertices, std::vector<std::uint32_t>& animation_clip_original_indices) -> bool {

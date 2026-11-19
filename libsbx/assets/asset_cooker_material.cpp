@@ -317,4 +317,13 @@ auto asset_cooker::_cook_material(const math::uuid& id, const material_descripti
 }
 
 
+auto asset_cooker::is_cooked_material_current(const std::filesystem::path& cooked) -> bool {
+  auto in = std::ifstream{cooked, std::ios::binary};
+
+  auto header = material_file_header{};
+  in.read(reinterpret_cast<char*>(&header), sizeof(header));
+
+  return in && header.magic == material_magic && header.version == material_cook_version;
+}
+
 } // namespace sbx::assets

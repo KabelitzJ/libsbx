@@ -400,6 +400,10 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
         component["submeshes"] = submeshes;
       }
 
+      if (renderer.lod_bias != 1.0f) {
+        component["lod_bias"] = renderer.lod_bias;
+      }
+
       components.push_back(component);
     }
   }
@@ -430,6 +434,34 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
         component["type"] = "animator";
         component["graph"] = keys.animation_graph_keys.at(graph_id);
         component["playing"] = anim.playing;
+
+        // Written only when changed: the editor finds unsaved changes by comparing a fresh serialization with the file, so scenes saved before these existed must serialize unchanged.
+        const auto defaults = animator{};
+
+        if (anim.apply_root_motion != defaults.apply_root_motion) component["apply_root_motion"] = anim.apply_root_motion;
+        if (anim.root_motion_joint != defaults.root_motion_joint) component["root_motion_joint"] = anim.root_motion_joint;
+        if (anim.bake_vertical_root_motion != defaults.bake_vertical_root_motion) component["bake_vertical_root_motion"] = anim.bake_vertical_root_motion;
+        if (anim.bake_root_rotation != defaults.bake_root_rotation) component["bake_root_rotation"] = anim.bake_root_rotation;
+
+        if (!anim.ik_chains.empty()) {
+          auto chains = YAML::Node{YAML::NodeType::Sequence};
+
+          for (const auto& chain : anim.ik_chains) {
+            auto chain_node = YAML::Node{};
+            chain_node["name"] = chain.name;
+            chain_node["end_joint"] = chain.end_joint;
+            chain_node["foot_placement"] = chain.foot_placement;
+            chains.push_back(chain_node);
+          }
+
+          component["ik_chains"] = chains;
+        }
+
+        if (anim.look_at_joint != defaults.look_at_joint) component["look_at_joint"] = anim.look_at_joint;
+        if (anim.look_at_spine_joints != defaults.look_at_spine_joints) component["look_at_spine_joints"] = anim.look_at_spine_joints;
+        if (anim.look_at_clamp != defaults.look_at_clamp) component["look_at_clamp"] = anim.look_at_clamp;
+        if (anim.foot_reach != defaults.foot_reach) component["foot_reach"] = anim.foot_reach;
+        if (anim.foot_ground_layers.bits != defaults.foot_ground_layers.bits) component["foot_ground_layers"] = anim.foot_ground_layers.bits;
 
         // Parameter values aren't persisted; loads start from the graph's defaults.
         components.push_back(component);
@@ -1174,6 +1206,10 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
         target_node.get_or_add_component<skeleton_pose>().skeleton = renderer.mesh->skeleton();
       }
 
+      if (component["lod_bias"]) {
+        renderer.lod_bias = component["lod_bias"].as<std::float_t>();
+      }
+
       if (const auto submeshes = component["submeshes"]) {
         for (const auto submesh : submeshes) {
           const auto index = submesh["index"].as<std::size_t>();
@@ -1193,6 +1229,26 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
       }
 
       anim.playing = component["playing"] ? component["playing"].as<bool>() : true;
+
+      if (component["apply_root_motion"]) anim.apply_root_motion = component["apply_root_motion"].as<bool>();
+      if (component["root_motion_joint"]) anim.root_motion_joint = component["root_motion_joint"].as<std::string>();
+      if (component["bake_vertical_root_motion"]) anim.bake_vertical_root_motion = component["bake_vertical_root_motion"].as<bool>();
+      if (component["bake_root_rotation"]) anim.bake_root_rotation = component["bake_root_rotation"].as<bool>();
+
+      if (const auto chains = component["ik_chains"]) {
+        for (const auto chain_node : chains) {
+          auto& chain = anim.ik_chains.emplace_back();
+          chain.name = chain_node["name"].as<std::string>("");
+          chain.end_joint = chain_node["end_joint"].as<std::string>("");
+          chain.foot_placement = chain_node["foot_placement"].as<bool>(false);
+        }
+      }
+
+      if (component["look_at_joint"]) anim.look_at_joint = component["look_at_joint"].as<std::string>();
+      if (component["look_at_spine_joints"]) anim.look_at_spine_joints = component["look_at_spine_joints"].as<std::uint32_t>();
+      if (component["look_at_clamp"]) anim.look_at_clamp = component["look_at_clamp"].as<std::float_t>();
+      if (component["foot_reach"]) anim.foot_reach = component["foot_reach"].as<std::float_t>();
+      if (component["foot_ground_layers"]) anim.foot_ground_layers.bits = component["foot_ground_layers"].as<std::uint32_t>();
     } else if (type == "camera") {
       auto& c = target_node.get_or_add_component<camera>();
       c.fov_degrees = component["fov_degrees"].as<std::float_t>();

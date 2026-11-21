@@ -7,7 +7,9 @@
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/scenes/components.hpp>
+#include <libsbx/scenes/prefab_prototype.hpp>
 #include <libsbx/scenes/scene_serializer.hpp>
+#include <libsbx/scenes/scenes_module.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
 
@@ -68,7 +70,8 @@ instantiate_prefab_command::instantiate_prefab_command(sbx::assets::prefab_handl
 : _prefab{std::move(prefab)}, _parent_id{parent_id}, _position{position} { }
 
 auto instantiate_prefab_command::execute(sbx::scenes::scene& target) -> void {
-  auto instance = sbx::scenes::scene_serializer::instantiate_prefab(target, _prefab, (_id == sbx::math::uuid::nil()) ? std::nullopt : std::optional{_id});
+  auto& prototypes = sbx::core::engine::get_module<sbx::scenes::scenes_module>().prefab_prototypes();
+  auto instance = sbx::scenes::instantiate_prefab_prototype(target, _prefab, prototypes, (_id == sbx::math::uuid::nil()) ? std::nullopt : std::optional{_id});
 
   if (!instance.is_valid()) {
     return;

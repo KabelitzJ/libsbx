@@ -339,6 +339,9 @@ auto scenes_module::_apply_unload(const pending_operation& operation) -> void {
 
   std::erase_if(_scene_set.scenes, [&](const loaded_scene& loaded) { return loaded.handle == unloaded.handle; });
 
+  // Prefabs only this scene used may be gone now; their prototypes would hold their assets.
+  _prefab_prototypes.prune();
+
   utility::logger<"scenes">::info("Unloaded scene '{}'", unloaded.name);
 }
 

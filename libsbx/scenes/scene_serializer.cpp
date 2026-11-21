@@ -15,6 +15,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include <libsbx/utility/logger.hpp>
+#include <libsbx/utility/profiler.hpp>
 #include <libsbx/utility/hashed_string.hpp>
 
 #include <libsbx/reflection/enum.hpp>
@@ -2298,7 +2299,9 @@ auto scene_serializer::attach_prefab_instance(scene& target, node subtree_root, 
   subtree_root.add_component<prefab_instance>(prefab, prefab.generation());
 }
 
-auto scene_serializer::instantiate_prefab(scene& target, const assets::prefab_handle& prefab, std::optional<math::uuid> root_id) -> node {
+auto scene_serializer::instantiate_prefab(scene& target, const assets::prefab_handle& prefab, std::optional<math::uuid> root_id, memory::observer_ptr<std::unordered_map<math::uuid, math::uuid>> out_id_remap) -> node {
+  SBX_PROFILE_SCOPE("scene_serializer::instantiate_prefab");
+
   if (!prefab.is_valid()) {
     return node{};
   }
@@ -2345,6 +2348,10 @@ auto scene_serializer::instantiate_prefab(scene& target, const assets::prefab_ha
   auto root = target.find(id_remap.at(root_old_id));
 
   root.add_component<prefab_instance>(prefab, prefab.generation());
+
+  if (out_id_remap != nullptr) {
+    *out_id_remap = std::move(id_remap);
+  }
 
   return root;
 }

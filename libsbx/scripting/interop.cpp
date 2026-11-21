@@ -27,6 +27,7 @@
 
 #include <libsbx/scenes/components.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
+#include <libsbx/scenes/prefab_prototype.hpp>
 #include <libsbx/scenes/scene_serializer.hpp>
 
 #include <libsbx/animation/pose_evaluation.hpp>
@@ -1053,7 +1054,7 @@ auto interop::node_instantiate_prefab(managed::string path, std::uint64_t parent
     return 0u;
   }
 
-  auto instance = scenes::scene_serializer::instantiate_prefab(scene, prefab);
+  auto instance = scenes::instantiate_prefab_prototype(scene, prefab, scenes_module.prefab_prototypes());
 
   if (!instance.is_valid()) {
     utility::logger<"scripting">::error("Node.Instantiate('{}') failed to instantiate", std::string{path});

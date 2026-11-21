@@ -36,6 +36,7 @@ target_sources(
 
     "${PROJECT_SOURCE_DIR}/physics/physics_queries_test.cpp"
 
+    "${PROJECT_SOURCE_DIR}/scenes/prefab_prototype_test.cpp"
     "${PROJECT_SOURCE_DIR}/scenes/scene_serializer_test.cpp"
 
     "${PROJECT_SOURCE_DIR}/utility/fast_mod_test.cpp"

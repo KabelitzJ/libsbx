@@ -30,6 +30,7 @@
 #include <libsbx/assets/assets_module.hpp>
 
 #include <libsbx/scenes/scene.hpp>
+#include <libsbx/scenes/prefab_prototype.hpp>
 
 namespace sbx::scenes {
 
@@ -227,6 +228,11 @@ public:
   /** @brief Retires every buffer queued by release_instance_buffer since the last call. Render idle only. */
   auto collect_released_instance_buffers() -> void;
 
+  /** @brief The prototypes prefab instantiation copies from, one per prefab version in use. Main thread only. */
+  [[nodiscard]] auto prefab_prototypes() noexcept -> prefab_prototype_cache& {
+    return _prefab_prototypes;
+  }
+
 private:
 
   // Declared before _scene: the scene's instance_buffers still queue here while it is destroyed.
@@ -284,6 +290,10 @@ private:
   auto _ensure_persistent_scene() -> void;
 
   scene _scene{};
+
+  // Never part of _scene: prototype scenes stay invisible to every system.
+  prefab_prototype_cache _prefab_prototypes{};
+
   scene_set _scene_set{{loaded_scene{1u, {}, "Scene"}}, 1u, 2u};
   std::vector<pending_operation> _pending_operations{};
   std::vector<async_load> _async_loads{};

@@ -8,7 +8,10 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
+
+#include <libsbx/memory/observer_ptr.hpp>
 
 #include <libsbx/scenes/scene.hpp>
 
@@ -81,8 +84,11 @@ public:
    * sync_prefab_instances to keep an existing instance's root identity across a resync) and tags
    * every created node with prefab_member{<its id in the prefab's own snapshot>}. The new subtree
    * is left attached under target's root — the caller repositions it (see scene::insert_child).
+   *
+   * Parses the snapshot on every call; spawning goes through instantiate_prefab_prototype (prefab_prototype.hpp), which copies a prototype this function builds once per prefab version.
+   * References between the prefab's own nodes keep their snapshot ids; out_id_remap, if given, receives every snapshot id's new node id so a caller can remap them.
    */
-  static auto instantiate_prefab(scene& target, const assets::prefab_handle& prefab, std::optional<math::uuid> root_id = std::nullopt) -> node;
+  static auto instantiate_prefab(scene& target, const assets::prefab_handle& prefab, std::optional<math::uuid> root_id = std::nullopt, memory::observer_ptr<std::unordered_map<math::uuid, math::uuid>> out_id_remap = nullptr) -> node;
 
   /**
    * @brief Resyncs every prefab_instance in target whose source has moved past applied_generation:

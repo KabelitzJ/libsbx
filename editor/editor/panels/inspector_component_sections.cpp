@@ -28,7 +28,10 @@
 #include <libsbx/math/vector4.hpp>
 
 #include <libsbx/scenes/components.hpp>
+#include <libsbx/scenes/instance_populate.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
+
+#include <libsbx/terrain/heightmap.hpp>
 
 #include <libsbx/physics/collider.hpp>
 #include <libsbx/physics/rigidbody.hpp>
@@ -44,6 +47,7 @@
 
 #include <editor/panels/inspector_asset_pickers.hpp>
 
+#include <editor/editor_state.hpp>
 #include <editor/probe_baking.hpp>
 
 #include <editor/commands/prefab_override.hpp>
@@ -355,6 +359,242 @@ auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::scene& target,
       ImGui::SetTooltip("Above 1 keeps this object's detail longer, below 1 switches it to coarser levels sooner. Multiplies the mesh's and the project's LOD bias.");
     }
   }
+}
+
+// The target surface's triangles in the renderer node's local space (instances are placed relative to it), or none if the target has no usable surface.
+auto populate_triangles_of(sbx::scenes::node renderer_node, sbx::scenes::node target_node, sbx::assets::assets_module& assets_module) -> std::vector<sbx::scenes::populate_triangle> {
+  auto triangles = std::vector<sbx::scenes::populate_triangle>{};
+
+  const auto& renderer_world = renderer_node.get_component<sbx::scenes::world_transform>();
+
+  // World to the renderer's space, and its normal matrix (inverse transpose of the inverse: the transpose of the world matrix).
+  const auto& world_to_local = renderer_world.inverse;
+  const auto world_to_local_normal = sbx::math::matrix4x4::transposed(renderer_world.matrix);
+
+  const auto add = [&](const sbx::math::vector3& a, const sbx::math::vector3& b, const sbx::math::vector3& c, const sbx::math::vector3& world_normal) {
+    const auto to_local = [&](const sbx::math::vector3& point) { return sbx::math::vector3{world_to_local * sbx::math::vector4{point, 1.0f}}; };
+    const auto local_normal = sbx::math::vector3::normalized(sbx::math::vector3{world_to_local_normal * sbx::math::vector4{world_normal, 0.0f}});
+
+    triangles.push_back(sbx::scenes::populate_triangle{to_local(a), to_local(b), to_local(c), local_normal});
+  };
+
+  if (const auto renderer = target_node.try_get_component<sbx::scenes::mesh_renderer>(); renderer && renderer->mesh.is_valid()) {
+    const auto cooked = assets_module.resolve_mesh_collision_data(renderer->mesh->id());
+
+    if (!cooked) {
+      return triangles;
+    }
+
+    const auto& target_world = target_node.get_component<sbx::scenes::world_transform>();
+    const auto target_normal = sbx::math::matrix4x4::transposed(target_world.inverse);
+
+    const auto world_point = [&](std::uint32_t index) { return sbx::math::vector3{target_world.matrix * sbx::math::vector4{cooked->vertices[index].position, 1.0f}}; };
+    const auto world_normal = [&](std::uint32_t index) { return sbx::math::vector3{target_normal * sbx::math::vector4{cooked->vertices[index].normal, 0.0f}}; };
+
+    for (auto index = std::size_t{0u}; index + 2u < cooked->indices.size(); index += 3u) {
+      const auto i0 = cooked->indices[index];
+      const auto i1 = cooked->indices[index + 1u];
+      const auto i2 = cooked->indices[index + 2u];
+
+      // The vertex normals say which side is the surface's outside, whatever the winding.
+      add(world_point(i0), world_point(i1), world_point(i2), world_normal(i0) + world_normal(i1) + world_normal(i2));
+    }
+
+    return triangles;
+  }
+
+  if (const auto collider = target_node.try_get_component<sbx::physics::heightfield_collider>(); collider && collider->data) {
+    // Heightfields are world-axis-aligned and centred on the origin, like raycast_heightfield reads them.
+    const auto& map = *collider->data;
+    const auto extent = map.half_extent();
+    const auto cell = map.cell_size();
+
+    const auto point = [&](std::uint32_t x, std::uint32_t z) {
+      return sbx::math::vector3{static_cast<std::float_t>(x) * cell - extent.x(), map.height_at(x, z), static_cast<std::float_t>(z) * cell - extent.y()};
+    };
+
+    const auto up_facing = [](const sbx::math::vector3& a, const sbx::math::vector3& b, const sbx::math::vector3& c) {
+      const auto normal = sbx::math::vector3::cross(b - a, c - a);
+      return normal.y() < 0.0f ? normal * -1.0f : normal;
+    };
+
+    for (auto z = std::uint32_t{0u}; z + 1u < map.depth(); ++z) {
+      for (auto x = std::uint32_t{0u}; x + 1u < map.width(); ++x) {
+        const auto p00 = point(x, z);
+        const auto p10 = point(x + 1u, z);
+        const auto p01 = point(x, z + 1u);
+        const auto p11 = point(x + 1u, z + 1u);
+
+        add(p00, p10, p11, up_facing(p00, p10, p11));
+        add(p00, p11, p01, up_facing(p00, p11, p01));
+      }
+    }
+  }
+
+  return triangles;
+}
+
+// The Populate Surface window's settings, kept between openings like Godot's dialog.
+struct populate_window_state {
+  sbx::math::uuid renderer_node{sbx::math::uuid::nil()};
+  sbx::math::uuid target_node{sbx::math::uuid::nil()};
+  sbx::scenes::populate_options options{};
+  std::string error{};
+}; // struct populate_window_state
+
+auto draw_populate_window(editor_state& state, sbx::scenes::scene& target, sbx::assets::assets_module& assets_module, populate_window_state& window) -> void {
+  if (!ImGui::BeginPopupModal("Populate Surface", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    return;
+  }
+
+  auto target_node = window.target_node != sbx::math::uuid::nil() ? target.find(window.target_node) : sbx::scenes::node{};
+  const auto target_label = target_node.is_valid() ? std::string{target_node.name().c_str()} : std::string{"(drop a node from the Hierarchy)"};
+
+  draw_property_row("Target Surface", [&] {
+    const auto slot_width = ImGui::CalcItemWidth() - ImGui::GetFrameHeight() - ImGui::GetStyle().ItemSpacing.x;
+    ImGui::Button(target_label.c_str(), ImVec2{slot_width, 0.0f});
+
+    if (ImGui::BeginDragDropTarget()) {
+      if (const auto* payload = ImGui::AcceptDragDropPayload(node_drag_drop_payload_type)) {
+        window.target_node = sbx::math::uuid::from_value(*static_cast<const std::uint64_t*>(payload->Data));
+        window.error.clear();
+      }
+
+      ImGui::EndDragDropTarget();
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button(ICON_MDI_CLOSE)) {
+      window.target_node = sbx::math::uuid::nil();
+    }
+
+    return false;
+  });
+
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("A node with an imported mesh (Mesh Renderer) or a terrain heightfield, the surface the instances are placed on.");
+  }
+
+  static constexpr auto axis_names = std::array<const char*, 3u>{"X", "Y", "Z"};
+  auto axis = static_cast<int>(window.options.mesh_up_axis);
+
+  if (ImGui::Combo("Mesh Up Axis", &axis, axis_names.data(), static_cast<int>(axis_names.size()))) {
+    window.options.mesh_up_axis = static_cast<sbx::scenes::populate_up_axis>(axis);
+  }
+
+  ImGui::DragFloat("Random Rotation", &window.options.random_rotation, 1.0f, 0.0f, 180.0f, "%.0f°");
+  ImGui::DragFloat("Random Tilt", &window.options.random_tilt, 1.0f, 0.0f, 180.0f, "%.0f°");
+  ImGui::DragFloat("Random Scale", &window.options.random_scale, 0.01f, 0.0f, 1.0f, "%.2f");
+  ImGui::DragFloat("Scale", &window.options.scale, 0.01f, 0.001f, 1000.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
+  ImGui::DragScalar("Amount", ImGuiDataType_U32, &window.options.amount, 1.0f);
+  ImGui::InputScalar("Seed", ImGuiDataType_U32, &window.options.seed);
+
+  if (!window.error.empty()) {
+    ImGui::TextColored(ImVec4{1.0f, 0.4f, 0.4f, 1.0f}, "%s", window.error.c_str());
+  }
+
+  if (ImGui::Button("Populate")) {
+    auto renderer_node = target.find(window.renderer_node);
+
+    if (!renderer_node.is_valid() || !renderer_node.has_component<sbx::scenes::instanced_mesh_renderer>()) {
+      ImGui::CloseCurrentPopup();
+    } else if (!target_node.is_valid()) {
+      window.error = "Pick a target surface first.";
+    } else {
+      const auto triangles = populate_triangles_of(renderer_node, target_node, assets_module);
+
+      if (triangles.empty()) {
+        window.error = "The target has no surface: it needs a Mesh Renderer with an imported mesh, or a heightfield.";
+      } else {
+        auto& renderer = renderer_node.get_component<sbx::scenes::instanced_mesh_renderer>();
+        const auto before = renderer;
+
+        renderer.data = std::make_shared<const std::vector<sbx::scenes::instance_data>>(sbx::scenes::populate_surface(triangles, window.options));
+
+        state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::instanced_mesh_renderer>>(renderer_node.id(), before, renderer, "Populate Surface"));
+
+        window.error.clear();
+        ImGui::CloseCurrentPopup();
+      }
+    }
+  }
+
+  ImGui::SameLine();
+
+  if (ImGui::Button("Cancel")) {
+    window.error.clear();
+    ImGui::CloseCurrentPopup();
+  }
+
+  ImGui::EndPopup();
+}
+
+auto draw_instanced_mesh_renderer_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
+  if (!draw_component_header<sbx::scenes::instanced_mesh_renderer>(state, target, node, ICON_MDI_CUBE_SCAN, "Instanced Mesh Renderer")) {
+    return;
+  }
+
+  auto& renderer = node.get_component<sbx::scenes::instanced_mesh_renderer>();
+
+  // Pickers resolve within one frame, so snapshot once and push at most one command.
+  const auto before = renderer;
+  auto changed = false;
+
+  if (draw_property_row("Mesh", [&] { return draw_mesh_picker(state, "##instanced_mesh_picker_popup", renderer.mesh, assets_module, mesh_renderer_preview_size); })) {
+    // A picked mesh is an asset; a script-built one stays alive for undo rather than being released here.
+    renderer.owns_mesh = false;
+    changed = true;
+  }
+
+  changed |= draw_property_row("Material", [&] { return draw_material_picker(state, "##instanced_material_picker_popup", renderer.material, assets_module, {}, true, mesh_renderer_preview_size); });
+
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Overrides every submesh's material. None draws each submesh with the mesh's own material.");
+  }
+
+  if (changed) {
+    state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::instanced_mesh_renderer>>(node.id(), before, renderer, "Edit Instanced Mesh Renderer"));
+  }
+
+  if (!renderer.mesh.is_valid()) {
+    ImGui::TextDisabled("No mesh assigned.");
+  } else {
+    static auto pending = std::optional<sbx::scenes::instanced_mesh_renderer>{};
+
+    ImGui::DragFloat("LOD Bias", &renderer.lod_bias, 0.01f, 0.01f, 10.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+    bracket_edit(state, target, node, renderer, pending, "Edit Instanced Mesh Renderer");
+
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Above 1 keeps every instance's detail longer, below 1 switches them to coarser levels sooner. Multiplies the mesh's and the project's LOD bias.");
+    }
+  }
+
+  const auto count = renderer.data ? renderer.data->size() : std::size_t{0u};
+
+  ImGui::TextDisabled("%zu instances", count);
+
+  static auto populate_window = populate_window_state{};
+
+  ImGui::SameLine();
+
+  if (ImGui::SmallButton("Populate...")) {
+    populate_window.renderer_node = node.id();
+    populate_window.error.clear();
+    ImGui::OpenPopup("Populate Surface");
+  }
+
+  if (count > 0u) {
+    ImGui::SameLine();
+
+    if (ImGui::SmallButton("Clear Instances")) {
+      const auto cleared_before = renderer;
+      renderer.data.reset();
+      state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::instanced_mesh_renderer>>(node.id(), cleared_before, renderer, "Clear Instances"));
+    }
+  }
+
+  draw_populate_window(state, target, assets_module, populate_window);
 }
 
 auto draw_animator_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {

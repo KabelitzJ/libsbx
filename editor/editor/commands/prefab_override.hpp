@@ -26,6 +26,7 @@ constexpr auto component_key() -> std::string_view {
   else if constexpr (std::same_as<Component, sbx::scenes::layer>) { return "layer"; }
   else if constexpr (std::same_as<Component, sbx::scenes::inactive>) { return "inactive"; }
   else if constexpr (std::same_as<Component, sbx::scenes::mesh_renderer>) { return "static_mesh"; }
+  else if constexpr (std::same_as<Component, sbx::scenes::instanced_mesh_renderer>) { return "instanced_mesh_renderer"; }
   else if constexpr (std::same_as<Component, sbx::scenes::animator>) { return "animator"; }
   else if constexpr (std::same_as<Component, sbx::scenes::camera>) { return "camera"; }
   else if constexpr (std::same_as<Component, sbx::scenes::directional_light>) { return "directional_light"; }

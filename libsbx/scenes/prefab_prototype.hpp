@@ -45,6 +45,7 @@ using prefab_copied_components = utility::type_list<
   layer,
   inactive,
   mesh_renderer,
+  instanced_mesh_renderer,
   skeleton_pose,
   animator,
   camera,
@@ -85,8 +86,8 @@ using prefab_copied_components = utility::type_list<
 >;
 
 /** @brief The scene serializer's "type" key of every component in prefab_copied_components (skeleton_pose has none: it's derived from the mesh). */
-inline constexpr auto prefab_copied_component_keys = std::array<std::string_view, 40u>{
-  "transform", "layer", "inactive", "static_mesh", "animator", "camera", "directional_light", "point_light", "spot_light", "decal", "reflection_probe", "skybox", "particle_effect", "audio_source", "audio_listener", "script", "prefab_member", "prefab_instance",
+inline constexpr auto prefab_copied_component_keys = std::array<std::string_view, 41u>{
+  "transform", "layer", "inactive", "static_mesh", "instanced_mesh_renderer", "animator", "camera", "directional_light", "point_light", "spot_light", "decal", "reflection_probe", "skybox", "particle_effect", "audio_source", "audio_listener", "script", "prefab_member", "prefab_instance",
   "rigidbody", "shape_collider", "mesh_collider", "character_controller", "nav_agent",
   "canvas", "canvas_group", "canvas_scaler", "rect_transform", "ui_image", "ui_text", "ui_button", "ui_toggle", "ui_slider", "ui_scrollbar", "ui_scroll_rect", "ui_mask", "layout_element", "content_size_fitter", "horizontal_layout_group", "vertical_layout_group", "grid_layout_group"
 };

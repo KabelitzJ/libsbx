@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/scenes/instance_buffer.hpp>
 
+#include <utility>
+
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
@@ -10,8 +12,9 @@
 
 namespace sbx::scenes {
 
-instance_buffer::instance_buffer(std::span<const instance_data> instances)
-: _count{static_cast<std::uint32_t>(instances.size())} {
+instance_buffer::instance_buffer(std::span<const instance_data> instances, std::weak_ptr<const void> source)
+: _count{static_cast<std::uint32_t>(instances.size())},
+  _source{std::move(source)} {
   if (instances.empty()) {
     return;
   }

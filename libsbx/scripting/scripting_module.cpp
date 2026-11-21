@@ -282,6 +282,10 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "InstancedMeshRenderer_SetGeometry", reinterpret_cast<void*>(&interop::instanced_mesh_renderer_set_geometry));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "InstancedMeshRenderer_SetMaterial", reinterpret_cast<void*>(&interop::instanced_mesh_renderer_set_material));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "InstancedMeshRenderer_SetInstances", reinterpret_cast<void*>(&interop::instanced_mesh_renderer_set_instances));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "InstancedMeshRenderer_SetMesh", reinterpret_cast<void*>(&interop::instanced_mesh_renderer_set_mesh));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Mesh_Load", reinterpret_cast<void*>(&interop::mesh_load));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Mesh_Primitive", reinterpret_cast<void*>(&interop::mesh_primitive));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Mesh_IsLoaded", reinterpret_cast<void*>(&interop::mesh_is_loaded));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_Load", reinterpret_cast<void*>(&interop::material_load));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_CreateInstance", reinterpret_cast<void*>(&interop::material_create_instance));
@@ -681,6 +685,7 @@ auto scripting_module::seed_missing_field_defaults(scenes::node& node, scenes::s
       case scenes::script_field_type::enumeration: default_value.int_value = get_enum_field_value(scratch, field_name, field.get_type()); break;
       case scenes::script_field_type::texture: default_value.texture_value = math::uuid::from_value(scratch.get_field_value<std::uint64_t>(field_name)); break;
       case scenes::script_field_type::audio_clip: default_value.audio_clip_value = math::uuid::from_value(scratch.get_field_value<std::uint64_t>(field_name)); break;
+      case scenes::script_field_type::mesh: default_value.mesh_value = math::uuid::from_value(scratch.get_field_value<std::uint64_t>(field_name)); break;
     }
 
     entry.field_overrides.push_back(std::move(default_value));
@@ -734,6 +739,7 @@ auto scripting_module::_apply_field_overrides(managed::object& instance, const s
       case scenes::script_field_type::enumeration: set_enum_field_value(instance, field.name, field.int_value); break;
       case scenes::script_field_type::texture: instance.set_field_value(field.name, field.texture_value.value()); break;
       case scenes::script_field_type::audio_clip: instance.set_field_value(field.name, field.audio_clip_value.value()); break;
+      case scenes::script_field_type::mesh: instance.set_field_value(field.name, field.mesh_value.value()); break;
     }
   }
 }

@@ -375,6 +375,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/render/ui/widgets/animation_parameter_widgets.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/instance_buffer.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scenes/instance_populate.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/prefab_prototype.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene_serializer.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene.cpp"
@@ -408,6 +409,7 @@ target_sources(
 
     "${CMAKE_SOURCE_DIR}/libsbx/terrain/terrain_module.cpp"
 
+    "${CMAKE_SOURCE_DIR}/libsbx/utility/base64.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/utility/compression.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/utility/crc32.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/utility/hash.cpp"
@@ -699,6 +701,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/components.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/instance_buffer.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/post_process.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scenes/instance_populate.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/prefab_prototype.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene_serializer.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene.hpp"
@@ -757,6 +760,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/utility/assert.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/bit.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/cast.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/base64.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/compression.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/concepts.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/crc32.hpp"

@@ -349,6 +349,8 @@ auto scene_renderer_module::prepare() -> void {
 
   _advance_capture();
 
+  _sync_instance_buffers();
+
   _work_packet = _build_packet();
 
   const auto summarize = [](const std::vector<draw_command>& commands) -> draw_category_stats {
@@ -366,6 +368,40 @@ auto scene_renderer_module::prepare() -> void {
   _last_draw_stats.opaque = summarize(_work_packet.opaque_commands);
   _last_draw_stats.transparent = summarize(_work_packet.transparent_commands);
   _last_draw_stats.shadow = summarize(_work_packet.shadow_caster_commands);
+}
+
+auto scene_renderer_module::_sync_instance_buffers() -> void {
+  SBX_PROFILE_SCOPE("scene_renderer_module::sync_instance_buffers");
+
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  std::erase_if(_instance_buffers_by_data, [](const auto& entry) { return entry.second.expired(); });
+
+  for (auto&& [entity, renderer] : scenes_module.active_scene().query<scenes::instanced_mesh_renderer>().each()) {
+    if (!renderer.data || renderer.data->empty()) {
+      renderer.instances.reset();
+      continue;
+    }
+
+    const auto data = std::shared_ptr<const void>{renderer.data};
+
+    if (renderer.instances && renderer.instances->is_built_from(data)) {
+      continue;
+    }
+
+    // Copies sharing one data vector (prefab instances, duplicates) share one GPU buffer; the address is only a lookup key, the ownership check decides.
+    if (auto existing = _instance_buffers_by_data[data.get()].lock(); existing && existing->is_built_from(data)) {
+      renderer.instances = std::move(existing);
+      continue;
+    }
+
+    auto buffer = std::make_shared<const scenes::instance_buffer>(*renderer.data, data);
+    _instance_buffers_by_data[data.get()] = buffer;
+    renderer.instances = std::move(buffer);
+  }
+
+  // Buffers dropped above (and anywhere else) are retired now, with the render thread idle.
+  scenes_module.collect_released_instance_buffers();
 }
 
 auto scene_renderer_module::set_viewport_extent(math::vector2u extent) -> void {
@@ -673,39 +709,46 @@ auto scene_renderer_module::_build_packet() -> render_packet {
   auto instanced_culled = std::uint32_t{0u};
 
   for (const auto [entity, world, renderer] : scene.query<scenes::world_transform, scenes::instanced_mesh_renderer>(ecs::exclude<scenes::inactive>).each()) {
-    if (!renderer.mesh.is_valid() || !renderer.material.is_valid() || !renderer.instances || renderer.instances->count() == 0u) {
-      continue;
-    }
-
-    if (renderer.material->alpha() == assets::alpha_mode::blend) {
-      static auto warned = false;
-
-      if (!std::exchange(warned, true)) {
-        utility::logger<"render">::warn("instanced_mesh_renderer: blended materials aren't supported, skipping");
-      }
-
+    if (!renderer.mesh.is_valid() || !renderer.instances || renderer.instances->count() == 0u) {
       continue;
     }
 
     const auto count = renderer.instances->count();
-    const auto casts_shadow = renderer.material->casts_shadow();
-    const auto views = casts_shadow ? cull_view_count(packet) : 1u;
     const auto& submeshes = renderer.mesh->submeshes();
+    const auto mesh_resident = assets_module.is_resident(renderer.mesh);
 
     const auto node_index = static_cast<std::uint32_t>(packet.transforms.size());
     packet.transforms.push_back(transform_data{world.matrix, math::matrix4x4::transposed(world.inverse)});
 
-    const auto resident = assets_module.is_resident(renderer.mesh) && assets_module.is_resident(renderer.material);
-
     for (auto index = std::uint32_t{0u}; index < submeshes.size(); ++index) {
+      // The override, else the submesh's own material, like mesh_renderer.
+      const auto& material = renderer.material.is_valid() ? renderer.material : submeshes[index].material;
+
+      if (!material.is_valid()) {
+        continue;
+      }
+
+      if (material->alpha() == assets::alpha_mode::blend) {
+        static auto warned = false;
+
+        if (!std::exchange(warned, true)) {
+          utility::logger<"render">::warn("instanced_mesh_renderer: blended materials aren't supported, skipping");
+        }
+
+        continue;
+      }
+
+      const auto casts_shadow = material->casts_shadow();
+      const auto views = casts_shadow ? cull_view_count(packet) : 1u;
+
       auto command = draw_command{};
       command.mesh = renderer.mesh;
       command.submesh_index = index;
-      command.material = renderer.material;
+      command.material = material;
       command.instance_count = count;
       command.transform_offset = node_index;
-      command.pipeline_id = compute_pipeline_id(*renderer.material);
-      command.resident = resident;
+      command.pipeline_id = compute_pipeline_id(*material);
+      command.resident = mesh_resident && assets_module.is_resident(material);
       command.local_bounds = submeshes[index].bounds;
       command.instances = renderer.instances;
       command.culled_offset = instanced_culled;

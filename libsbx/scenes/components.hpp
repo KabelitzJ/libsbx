@@ -241,18 +241,20 @@ struct mesh_renderer {
 }; // struct mesh_renderer
 
 /**
- * @brief One mesh drawn many times in one instanced draw (Godot's MultiMesh): every submesh of
- * mesh with material, once per entry of instances, each placed relative to this node. Unlike a
- * mesh_renderer per object, there's no node per instance and nothing re-uploaded per frame: the
- * instances sit in their own GPU buffer, and frustum_cull_pass culls them one by one on the GPU
- * (expanding only the visible ones to full transforms). Opaque and alpha-masked materials only.
- * Runtime-only: not saved with the scene.
+ * @brief One mesh drawn many times in one instanced draw (Godot's MultiMesh): every submesh of mesh, once per entry of data, each placed relative to this node.
+ *
+ * Each submesh draws with material if set, else with its own material, like mesh_renderer.
+ * Unlike a mesh_renderer per object, there's no node per instance and nothing re-uploaded per frame: the instances sit in their own GPU buffer, and frustum_cull_pass culls them one by one on the GPU (expanding only the visible ones to full transforms).
+ * Opaque and alpha-masked materials only; a blended submesh is skipped.
+ * data is what's saved and edited; instances, the GPU copy, is rebuilt from it by scene_renderer_module while the render thread is idle. Replace data (never mutate it in place) to change the instances.
  */
 struct instanced_mesh_renderer {
   assets::mesh_handle mesh{};
-  assets::material_handle material{};
+  assets::material_handle material{}; // optional override for every submesh
   std::float_t lod_bias{1.0f}; // see mesh_renderer::lod_bias
+  std::shared_ptr<const std::vector<instance_data>> data{}; // shared by copies (prefab instances, duplicates) until one is replaced
   std::shared_ptr<const instance_buffer> instances{};
+  bool owns_mesh{false}; // mesh was built for this component (C# SetGeometry), so replacing it releases it; an asset mesh is shared and never released here
 }; // struct instanced_mesh_renderer
 
 /**
@@ -636,7 +638,8 @@ enum class script_field_type : std::uint8_t {
   color, // a Sbx.Core.Math.Color-typed field -- blittable (four sequential floats), same direct get/set_field_value path as vector3
   enumeration, // any C# enum field, stored as its integer value in int_value
   texture, // a Sbx.Core.Texture2D-typed field, stored as the texture asset's uuid (nil = unassigned), same INativeHandle convention as material
-  audio_clip // a Sbx.Core.AudioClip-typed field, stored as the clip asset's uuid (nil = unassigned)
+  audio_clip, // a Sbx.Core.AudioClip-typed field, stored as the clip asset's uuid (nil = unassigned)
+  mesh // a Sbx.Core.Mesh-typed field, stored as the mesh asset's uuid (nil = unassigned)
 }; // enum class script_field_type
 
 struct script_field_override {
@@ -653,6 +656,7 @@ struct script_field_override {
   math::uuid material_value{math::uuid::nil()};
   math::uuid texture_value{math::uuid::nil()};
   math::uuid audio_clip_value{math::uuid::nil()};
+  math::uuid mesh_value{math::uuid::nil()};
   math::color color_value{};
 }; // struct script_field_override
 

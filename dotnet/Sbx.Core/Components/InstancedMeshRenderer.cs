@@ -41,9 +41,16 @@ namespace Sbx.Core.Components
       }
     }
 
-    public void SetMaterial(Material material)
+    /** Instances a mesh asset (an imported model or Mesh.Primitive), replacing any SetGeometry mesh; null draws nothing. */
+    public void SetMesh(Mesh? mesh)
     {
-      unsafe { InternalCalls.InstancedMeshRenderer_SetMaterial(UUID, material.UUID); }
+      unsafe { InternalCalls.InstancedMeshRenderer_SetMesh(UUID, mesh?.UUID ?? 0ul); }
+    }
+
+    /** Overrides the material of every submesh; null clears the override, so each submesh draws with the mesh's own material. */
+    public void SetMaterial(Material? material)
+    {
+      unsafe { InternalCalls.InstancedMeshRenderer_SetMaterial(UUID, material?.UUID ?? 0ul); }
     }
 
     /** Replaces every instance (empty: draws nothing). */

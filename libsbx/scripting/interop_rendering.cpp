@@ -24,6 +24,7 @@
 
 #include <libsbx/assets/asset_cooker.hpp>
 #include <libsbx/assets/assets_module.hpp>
+#include <libsbx/assets/primitive_meshes.hpp>
 
 #include <vulkan/vulkan.h>
 
@@ -63,23 +64,6 @@ auto build_script_mesh(math::vector3* positions, math::vector3* normals, math::v
 }
 
 auto interop::apply_pending_geometry() -> void {
-  // Creating and retiring instance buffers both write the resource registry, so only while the render thread is idle.
-  if (auto& instances = core::engine::get_module<scripting_module>().resources().pending_instances; !instances.empty()) {
-    auto& scene = core::engine::get_module<scenes::scenes_module>().active_scene();
-
-    for (auto& [uuid, data] : instances) {
-      auto node = scene.find(math::uuid::from_value(uuid));
-
-      if (auto renderer = node.is_valid() ? node.try_get_component<scenes::instanced_mesh_renderer>() : nullptr) {
-        renderer->instances = data.empty() ? nullptr : std::make_shared<const scenes::instance_buffer>(data);
-      }
-    }
-
-    instances.clear();
-  }
-
-  core::engine::get_module<scenes::scenes_module>().collect_released_instance_buffers();
-
   auto& pending = core::engine::get_module<scripting_module>().resources().pending_geometries;
 
   if (pending.empty()) {
@@ -99,8 +83,13 @@ auto interop::apply_pending_geometry() -> void {
 
     if (geometry.instanced) {
       if (auto instanced = node.try_get_component<scenes::instanced_mesh_renderer>()) {
-        assets_module.release_mesh(instanced->mesh);
+        // An asset mesh is shared with every other user; only a mesh built for this component is released.
+        if (instanced->owns_mesh) {
+          assets_module.release_mesh(instanced->mesh);
+        }
+
         instanced->mesh = assets_module.create_dynamic_mesh(geometry.vertices, geometry.indices, std::move(geometry.submeshes), geometry.bounds);
+        instanced->owns_mesh = true;
       }
 
       continue;
@@ -190,8 +179,11 @@ auto interop::instanced_mesh_renderer_set_geometry(std::uint64_t uuid, math::vec
 
   auto& renderer = node.get_or_add_component<scenes::instanced_mesh_renderer>();
 
-  if (!renderer.material.is_valid()) {
-    renderer.material = core::engine::get_module<assets::assets_module>().create_material(assets::material::create_info{
+  // The default goes on the built mesh's submesh, not into the override, so a later SetMesh still draws the asset's own materials; reused while the previous built mesh has one.
+  auto material = (renderer.owns_mesh && renderer.mesh.is_valid() && !renderer.mesh->submeshes().empty()) ? renderer.mesh->submeshes().front().material : assets::material_handle{};
+
+  if (!material.is_valid()) {
+    material = core::engine::get_module<assets::assets_module>().create_material(assets::material::create_info{
       .name = "Script Instanced Mesh",
       .metallic_factor = 0.0f,
       .roughness_factor = 0.8f
@@ -199,7 +191,7 @@ auto interop::instanced_mesh_renderer_set_geometry(std::uint64_t uuid, math::vec
   }
 
   auto geometry = build_script_mesh(positions, normals, uvs, colors, vertex_count, indices, index_count);
-  geometry.submeshes = std::vector<assets::mesh::submesh>{assets::mesh::submesh{0u, index_count, geometry.bounds, renderer.material}};
+  geometry.submeshes = std::vector<assets::mesh::submesh>{assets::mesh::submesh{0u, index_count, geometry.bounds, material}};
   geometry.instanced = true;
   core::engine::get_module<scripting_module>().resources().pending_geometries[uuid] = std::move(geometry);
 }
@@ -212,7 +204,61 @@ auto interop::instanced_mesh_renderer_set_material(std::uint64_t uuid, std::uint
     return;
   }
 
-  node.get_or_add_component<scenes::instanced_mesh_renderer>().material = core::engine::get_module<assets::assets_module>().load_material(math::uuid::from_value(material_uuid));
+  // 0 (C# null) clears the override, so each submesh draws with its own material again.
+  auto& renderer = node.get_or_add_component<scenes::instanced_mesh_renderer>();
+  renderer.material = material_uuid != 0u ? core::engine::get_module<assets::assets_module>().load_material(math::uuid::from_value(material_uuid)) : assets::material_handle{};
+}
+
+auto interop::instanced_mesh_renderer_set_mesh(std::uint64_t uuid, std::uint64_t mesh_uuid) -> void {
+  auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("instanced_mesh_renderer_set_mesh: invalid node");
+    return;
+  }
+
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto& renderer = node.get_or_add_component<scenes::instanced_mesh_renderer>();
+
+  // A SetGeometry still waiting would replace this mesh at render idle; the map is shared with MeshRenderer.SetGeometry, so only an instanced entry is dropped.
+  auto& pending = core::engine::get_module<scripting_module>().resources().pending_geometries;
+
+  if (const auto entry = pending.find(uuid); entry != pending.end() && entry->second.instanced) {
+    pending.erase(entry);
+  }
+
+  // The render thread may still draw a built mesh this frame, so it's retired, never freed on the spot.
+  if (renderer.owns_mesh) {
+    assets_module.release_mesh(renderer.mesh);
+  }
+
+  renderer.mesh = mesh_uuid != 0u ? assets_module.load_mesh(math::uuid::from_value(mesh_uuid)) : assets::mesh_handle{};
+  renderer.owns_mesh = false;
+}
+
+auto interop::mesh_load(managed::string path) -> std::uint64_t {
+  const auto mesh = core::engine::get_module<assets::assets_module>().load_mesh(std::filesystem::path{std::string{path}});
+
+  return mesh.is_valid() ? mesh->id().value() : 0u;
+}
+
+auto interop::mesh_primitive(std::uint32_t kind) -> std::uint64_t {
+  if (kind > static_cast<std::uint32_t>(assets::primitive_mesh_kind::cylinder)) {
+    utility::logger<"scripting">::error("Mesh.Primitive: unknown primitive {}", kind);
+    return 0u;
+  }
+
+  const auto mesh = core::engine::get_module<assets::assets_module>().load_mesh(assets::primitive_mesh_uuid(static_cast<assets::primitive_mesh_kind>(kind)));
+
+  return mesh.is_valid() ? mesh->id().value() : 0u;
+}
+
+auto interop::mesh_is_loaded(std::uint64_t mesh_uuid) -> managed::bool32 {
+  if (mesh_uuid == 0u) {
+    return false;
+  }
+
+  return core::engine::get_module<assets::assets_module>().load_mesh(math::uuid::from_value(mesh_uuid)).is_loaded();
 }
 
 auto interop::instanced_mesh_renderer_set_instances(std::uint64_t uuid, scenes::instance_data* instances, std::uint32_t count) -> void {
@@ -223,8 +269,9 @@ auto interop::instanced_mesh_renderer_set_instances(std::uint64_t uuid, scenes::
     return;
   }
 
-  node.get_or_add_component<scenes::instanced_mesh_renderer>();
-  core::engine::get_module<scripting_module>().resources().pending_instances[uuid] = std::vector<scenes::instance_data>{instances, instances + count};
+  // The GPU copy is rebuilt from this by scene_renderer_module at render idle.
+  auto& renderer = node.get_or_add_component<scenes::instanced_mesh_renderer>();
+  renderer.data = count > 0u ? std::make_shared<const std::vector<scenes::instance_data>>(instances, instances + count) : nullptr;
 }
 
 auto interop::mesh_renderer_set_material(std::uint64_t uuid, std::uint32_t submesh_index, std::uint64_t material_uuid) -> void {

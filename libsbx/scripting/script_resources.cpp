@@ -36,7 +36,6 @@ auto script_resources::clear() -> void {
   }
 
   pending_geometries.clear();
-  pending_instances.clear();
 }
 
 } // namespace sbx::scripting

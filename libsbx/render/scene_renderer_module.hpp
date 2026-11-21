@@ -394,6 +394,9 @@ private:
     std::vector<transform_data> transforms{};
   }; // struct draw_bucket
 
+  // Builds or replaces the GPU instance buffer of every instanced_mesh_renderer whose data changed. Render idle only.
+  auto _sync_instance_buffers() -> void;
+
   struct billboard_key_hash {
     auto operator()(const std::pair<std::uint32_t, assets::emitter_blend_mode>& key) const noexcept -> std::size_t {
       auto seed = std::hash<std::uint32_t>{}(key.first);
@@ -473,6 +476,9 @@ private:
   std::vector<std::pair<mesh_key, const draw_bucket*>> _ordered_opaque_buckets{};
   std::vector<transparent_entry> _transparent_entries{};
   std::vector<transparent_entry> _selected_entries{};
+
+  // GPU instance buffers by the instanced_mesh_renderer::data they were built from, so copies sharing that data share one buffer.
+  std::unordered_map<const void*, std::weak_ptr<const scenes::instance_buffer>> _instance_buffers_by_data{};
 
   // CPU particle buckets, reused the same way.
   std::unordered_map<std::pair<std::uint32_t, assets::emitter_blend_mode>, std::vector<particle_billboard_instance>, billboard_key_hash> _billboard_buckets{};

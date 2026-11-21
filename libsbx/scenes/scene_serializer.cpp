@@ -14,6 +14,8 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include <libsbx/utility/base64.hpp>
+#include <libsbx/utility/compression.hpp>
 #include <libsbx/utility/logger.hpp>
 #include <libsbx/utility/profiler.hpp>
 #include <libsbx/utility/hashed_string.hpp>
@@ -257,6 +259,24 @@ auto mesh_asset_name(const math::uuid& id) -> std::string {
   return core::engine::get_module<assets::assets_module>().path_of(id).stem().string();
 }
 
+// The raw 80-byte instance records, compressed and base64-encoded: exact, compact, and the same text for the same instances.
+auto encode_instances(std::span<const instance_data> instances) -> std::string {
+  const auto compressed = utility::compress(instances);
+
+  return utility::base64_encode(compressed);
+}
+
+auto decode_instances(std::string_view text, std::size_t count) -> std::vector<instance_data> {
+  const auto compressed = utility::base64_decode(text);
+
+  if (!compressed) {
+    utility::logger<"scenes">::error("instanced_mesh_renderer: instances aren't valid base64, dropping them");
+    return {};
+  }
+
+  return utility::decompress<instance_data>(*compressed, count);
+}
+
 // Keys every mesh and material a mesh_renderer references before any node is written.
 auto collect_mesh_material_keys(ecs::registry& registry, const std::vector<ecs::entity>& entities, asset_key_table& keys) -> void {
   for (const auto entity : entities) {
@@ -305,6 +325,44 @@ auto collect_mesh_material_keys(ecs::registry& registry, const std::vector<ecs::
 
         keys.materials_table.push_back(entry);
       }
+    }
+  }
+
+  // Instanced renderers share mesh and material keys with mesh_renderers; a mesh built by a script (owns_mesh) has no file to reference.
+  for (const auto entity : entities) {
+    if (!registry.all_of<instanced_mesh_renderer>(entity)) {
+      continue;
+    }
+
+    const auto& renderer = registry.get<instanced_mesh_renderer>(entity);
+
+    if (renderer.mesh.is_valid() && !renderer.owns_mesh && renderer.mesh->id() != math::uuid::nil() && !keys.mesh_keys.contains(renderer.mesh->id())) {
+      const auto id = renderer.mesh->id();
+      const auto name = mesh_asset_name(id);
+      const auto key = make_asset_key(keys, name);
+
+      keys.mesh_keys.emplace(id, key);
+
+      auto entry = YAML::Node{};
+      entry["key"] = key;
+      entry["name"] = name;
+      entry["uuid"] = id.value();
+
+      keys.meshes_table.push_back(entry);
+    }
+
+    if (renderer.material.is_valid() && renderer.material->id() != math::uuid::nil() && !keys.material_keys.contains(renderer.material->id())) {
+      const auto id = renderer.material->id();
+      const auto key = make_asset_key(keys, renderer.material->name());
+
+      keys.material_keys.emplace(id, key);
+
+      auto entry = YAML::Node{};
+      entry["key"] = key;
+      entry["name"] = renderer.material->name();
+      entry["uuid"] = id.value();
+
+      keys.materials_table.push_back(entry);
     }
   }
 
@@ -642,6 +700,32 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
     components.push_back(component);
   }
 
+  if (registry.all_of<instanced_mesh_renderer>(entity)) {
+    const auto& renderer = registry.get<instanced_mesh_renderer>(entity);
+
+    auto component = YAML::Node{};
+    component["type"] = "instanced_mesh_renderer";
+
+    if (renderer.mesh.is_valid() && !renderer.owns_mesh && renderer.mesh->id() != math::uuid::nil()) {
+      component["mesh"] = keys.mesh_keys.at(renderer.mesh->id());
+    }
+
+    if (renderer.material.is_valid() && renderer.material->id() != math::uuid::nil()) {
+      component["material"] = keys.material_keys.at(renderer.material->id());
+    }
+
+    if (renderer.lod_bias != 1.0f) {
+      component["lod_bias"] = renderer.lod_bias;
+    }
+
+    if (renderer.data && !renderer.data->empty()) {
+      component["instance_count"] = renderer.data->size();
+      component["instances"] = encode_instances(*renderer.data);
+    }
+
+    components.push_back(component);
+  }
+
   if (registry.all_of<particle_effect>(entity)) {
     const auto& instance = registry.get<particle_effect>(entity);
 
@@ -971,6 +1055,7 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
           case script_field_type::enumeration: field_node["kind"] = "enum"; field_node["value"] = field.int_value; break;
           case script_field_type::texture: field_node["kind"] = "texture"; field_node["value"] = field.texture_value.value(); break;
           case script_field_type::audio_clip: field_node["kind"] = "audio_clip"; field_node["value"] = field.audio_clip_value.value(); break;
+          case script_field_type::mesh: field_node["kind"] = "mesh"; field_node["value"] = field.mesh_value.value(); break;
         }
 
         fields.push_back(field_node);
@@ -1368,6 +1453,18 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
       source.priority = static_cast<std::uint8_t>(std::min(component["priority"].as<std::uint32_t>(source.priority), 255u));
     } else if (type == "audio_listener") {
       target_node.get_or_add_component<audio_listener>().volume = component["volume"].as<std::float_t>(1.0f);
+    } else if (type == "instanced_mesh_renderer") {
+      auto& renderer = target_node.get_or_add_component<instanced_mesh_renderer>();
+
+      // assets_module only when an asset is referenced, so asset-free scenes load without an engine.
+      renderer.mesh = component["mesh"] ? core::engine::get_module<assets::assets_module>().load_mesh(key_to_uuid.at(component["mesh"].as<std::string>())) : assets::mesh_handle{};
+      renderer.material = component["material"] ? core::engine::get_module<assets::assets_module>().load_material(key_to_uuid.at(component["material"].as<std::string>())) : assets::material_handle{};
+      renderer.lod_bias = component["lod_bias"].as<std::float_t>(1.0f);
+      renderer.owns_mesh = false;
+
+      const auto count = component["instance_count"].as<std::size_t>(0u);
+      auto instances = (count > 0u && component["instances"]) ? decode_instances(component["instances"].as<std::string>(), count) : std::vector<instance_data>{};
+      renderer.data = instances.empty() ? nullptr : std::make_shared<const std::vector<instance_data>>(std::move(instances));
     } else if (type == "particle_effect") {
       auto& instance = target_node.get_or_add_component<particle_effect>();
 
@@ -1669,6 +1766,9 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
           } else if (kind == "audio_clip") {
             field.type = script_field_type::audio_clip;
             field.audio_clip_value = field_yaml["value"].as<math::uuid>();
+          } else if (kind == "mesh") {
+            field.type = script_field_type::mesh;
+            field.mesh_value = field_yaml["value"].as<math::uuid>();
           }
 
           entry.field_overrides.push_back(std::move(field));

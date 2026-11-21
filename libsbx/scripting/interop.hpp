@@ -699,9 +699,22 @@ struct interop {
   /** @brief The mesh every instance draws, creating the instanced_mesh_renderer and a default material as needed. Swapped in by apply_pending_geometry. */
   static auto instanced_mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* positions, math::vector3* normals, math::vector2* uvs, math::color* colors, std::uint32_t vertex_count, std::uint32_t* indices, std::uint32_t index_count) -> void;
 
+  /** @brief Sets the material override for every submesh; 0 clears it, so each submesh uses its own material. */
   static auto instanced_mesh_renderer_set_material(std::uint64_t uuid, std::uint64_t material_uuid) -> void;
 
-  /** @brief Replaces every instance (count 0 = none). The GPU buffer is created by apply_pending_geometry. */
+  /** @brief Instances a mesh asset (0 = none), replacing geometry from SetGeometry. */
+  static auto instanced_mesh_renderer_set_mesh(std::uint64_t uuid, std::uint64_t mesh_uuid) -> void;
+
+  /** @brief Loads a mesh asset by project-relative path. Returns its uuid, or 0 if the path isn't a mesh. */
+  static auto mesh_load(managed::string path) -> std::uint64_t;
+
+  /** @brief The built-in primitive mesh of a primitive_mesh_kind. Returns its uuid, or 0 for an unknown kind. */
+  static auto mesh_primitive(std::uint32_t kind) -> std::uint64_t;
+
+  /** @brief Whether a mesh asset's data has loaded. */
+  static auto mesh_is_loaded(std::uint64_t mesh_uuid) -> managed::bool32;
+
+  /** @brief Replaces every instance (count 0 = none). The GPU buffer is rebuilt by scene_renderer_module at render idle. */
   static auto instanced_mesh_renderer_set_instances(std::uint64_t uuid, scenes::instance_data* instances, std::uint32_t count) -> void;
 
   /** @brief Loads a .material by project-relative path. Returns its uuid, or 0 if the path isn't a material. */

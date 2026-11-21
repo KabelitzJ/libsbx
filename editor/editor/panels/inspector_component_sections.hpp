@@ -15,6 +15,9 @@ namespace editor {
 // One draw_*_section per component type: a collapsing header whose close button removes the component, then its fields. Called through component_entries().
 auto draw_camera_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
 auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void;
+
+/** @brief The Instanced Mesh Renderer section: mesh, optional material override, LOD bias, instance count, Clear and Populate. */
+auto draw_instanced_mesh_renderer_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void;
 auto draw_animator_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
 auto draw_directional_light_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
 auto draw_point_light_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;

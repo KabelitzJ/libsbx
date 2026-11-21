@@ -25,7 +25,6 @@
 
 #include <libsbx/assets/mesh.hpp>
 
-#include <libsbx/scenes/instance_buffer.hpp>
 
 namespace sbx::scripting {
 
@@ -96,7 +95,6 @@ struct script_resources : public utility::noncopyable {
   auto clear() -> void;
 
   std::unordered_map<std::uint64_t, pending_geometry> pending_geometries;
-  std::unordered_map<std::uint64_t, std::vector<scenes::instance_data>> pending_instances;
 
   std::unordered_map<std::uint64_t, compute_buffer_state> compute_buffers;
   std::unordered_map<std::uint64_t, compute_shader_state> compute_shaders;

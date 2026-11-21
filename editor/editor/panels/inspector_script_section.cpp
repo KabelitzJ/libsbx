@@ -469,6 +469,32 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
       }
 
       commit_after(changed);
+    } else if (field_type_name == "Sbx.Core.Mesh") {
+      // Raw uuid via INativeHandle like Material; the mesh picker includes the built-in primitives.
+      auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+
+      const auto current_uuid = live_instance ? sbx::math::uuid::from_value(live_instance->get_field_value<std::uint64_t>(field_name))
+                                                : override_slot ? override_slot->mesh_value : sbx::math::uuid::nil();
+
+      auto slot = (current_uuid != sbx::math::uuid::nil()) ? assets_module.load_mesh(current_uuid) : sbx::assets::mesh_handle{};
+
+      const auto changed = draw_property_row(display_name.c_str(), [&] { return draw_mesh_picker(state, "##mesh_field_picker", slot, assets_module); });
+
+      capture_before();
+
+      if (changed) {
+        const auto new_uuid = slot.is_valid() ? slot->id() : sbx::math::uuid::nil();
+
+        if (live_instance) {
+          live_instance->set_field_value(field_name, new_uuid.value());
+        } else {
+          auto& slot_override = ensure_override_slot();
+          slot_override.type = sbx::scenes::script_field_type::mesh;
+          slot_override.mesh_value = new_uuid;
+        }
+      }
+
+      commit_after(changed);
     } else if (const auto entries = field.get_type().get_enum_entries(); !entries.empty()) {
       auto value = live_instance ? sbx::scripting::get_enum_field_value(*live_instance, field_name, field.get_type())
                                   : override_slot ? override_slot->int_value : std::int64_t{0};

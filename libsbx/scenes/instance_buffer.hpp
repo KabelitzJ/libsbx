@@ -4,6 +4,7 @@
 #define LIBSBX_SCENES_INSTANCE_BUFFER_HPP_
 
 #include <cstdint>
+#include <memory>
 #include <span>
 
 #include <libsbx/utility/noncopyable.hpp>
@@ -43,7 +44,13 @@ class instance_buffer : public utility::noncopyable {
 
 public:
 
-  explicit instance_buffer(std::span<const instance_data> instances);
+  /**
+   * @brief Uploads the instances.
+   *
+   * @param instances The instances.
+   * @param source What the instances were copied from (instanced_mesh_renderer::data), so a consumer can tell the buffer is still current; only compared by ownership, never read.
+   */
+  explicit instance_buffer(std::span<const instance_data> instances, std::weak_ptr<const void> source = {});
 
   ~instance_buffer();
 
@@ -56,10 +63,24 @@ public:
     return _count;
   }
 
+  /**
+   * @brief Whether the buffer was built from @p data.
+   *
+   * Compared by ownership, so a new vector that happens to reuse a freed one's address never matches.
+   *
+   * @param data The data to compare with.
+   *
+   * @return Whether @p data is the source.
+   */
+  [[nodiscard]] auto is_built_from(const std::shared_ptr<const void>& data) const noexcept -> bool {
+    return !_source.owner_before(data) && !data.owner_before(_source);
+  }
+
 private:
 
   graphics::buffer_handle _buffer{};
   std::uint32_t _count{0u};
+  std::weak_ptr<const void> _source{};
 
 }; // class instance_buffer
 

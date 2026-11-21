@@ -39,6 +39,8 @@ target_sources(
 
     "${PROJECT_SOURCE_DIR}/scenes/prefab_prototype_test.cpp"
     "${PROJECT_SOURCE_DIR}/scenes/scene_serializer_test.cpp"
+    "${PROJECT_SOURCE_DIR}/scenes/instance_populate_test.cpp"
+    "${PROJECT_SOURCE_DIR}/scenes/instanced_mesh_renderer_test.cpp"
     "${PROJECT_SOURCE_DIR}/scenes/scene_destroy_test.cpp"
     "${PROJECT_SOURCE_DIR}/scenes/world_transform_test.cpp"
 
@@ -47,6 +49,7 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/utility/hashed_string_test.cpp"
     "${PROJECT_SOURCE_DIR}/utility/static_string_test.cpp"
     "${PROJECT_SOURCE_DIR}/utility/compression_test.cpp"
+    "${PROJECT_SOURCE_DIR}/utility/base64_test.cpp"
 
     "${PROJECT_SOURCE_DIR}/units/length_test.cpp"
     "${PROJECT_SOURCE_DIR}/units/time_test.cpp"

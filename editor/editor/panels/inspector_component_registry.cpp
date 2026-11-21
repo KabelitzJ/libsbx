@@ -84,6 +84,9 @@ auto component_entries() -> const std::vector<component_entry>& {
     make_entry<sbx::scenes::mesh_renderer>(ICON_MDI_CUBE_OUTLINE, "Mesh Renderer", "3D", 0,
       [](editor_state& s, sbx::scenes::scene& t, sbx::scenes::node& n, sbx::assets::assets_module& a) { draw_mesh_renderer_section(s, t, n, a); }),
 
+    make_entry<sbx::scenes::instanced_mesh_renderer>(ICON_MDI_CUBE_SCAN, "Instanced Mesh Renderer", "3D", 0,
+      [](editor_state& s, sbx::scenes::scene& t, sbx::scenes::node& n, sbx::assets::assets_module& a) { draw_instanced_mesh_renderer_section(s, t, n, a); }),
+
     // skeleton_pose is managed automatically by draw_mesh_renderer_section.
     make_entry<sbx::scenes::animator>(ICON_MDI_ANIMATION_PLAY, "Animator", "3D", 0,
       [](editor_state& s, sbx::scenes::scene& t, sbx::scenes::node& n, sbx::assets::assets_module&) { draw_animator_section(s, t, n); }),

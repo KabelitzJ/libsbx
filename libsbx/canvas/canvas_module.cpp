@@ -155,7 +155,7 @@ auto canvas_module::update() -> void {
 
       camera_world_matrix = camera_node.world_matrix();
       camera_fov_degrees = camera_settings.fov_degrees;
-      view = math::matrix4x4::inverted(camera_world_matrix);
+      view = camera_node.get_component<scenes::world_transform>().inverse;
       projection = math::matrix4x4::perspective(math::degree{camera_settings.fov_degrees}, aspect, camera_settings.near_plane, camera_settings.far_plane);
     } else {
       // world_space renders as part of the normal 3D view, so it must track whichever camera is

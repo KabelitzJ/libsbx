@@ -157,24 +157,30 @@ auto resolve_convex(scenes::scene& scene, const scenes::node& node, convex_hull_
   return std::nullopt;
 }
 
-auto resolve_body_shapes(scenes::scene& scene, const scenes::node& rigidbody_node, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache, std::pmr::memory_resource* resource) -> std::pmr::vector<body_shape> {
+auto resolve_body_shapes(scenes::scene& scene, const scenes::node& rigidbody_node, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache, std::pmr::memory_resource* resource, memory::observer_ptr<std::vector<scenes::node>> contributors) -> std::pmr::vector<body_shape> {
   auto shapes = std::pmr::vector<body_shape>{resource};
+
+  const auto add = [&](const scenes::node& node) {
+    if (auto resolved = resolve_convex(scene, node, hull_cache, assets_module, cache)) {
+      shapes.push_back(std::move(*resolved));
+
+      if (contributors) {
+        contributors->push_back(node);
+      }
+    }
+  };
 
   const auto& relationship = rigidbody_node.get_component<scenes::relationship>();
 
   // No children: a single-shape body, so skip the recursive walk.
   if (relationship.children.empty()) {
-    if (auto resolved = resolve_convex(scene, rigidbody_node, hull_cache, assets_module, cache)) {
-      shapes.push_back(std::move(*resolved));
-    }
+    add(rigidbody_node);
 
     return shapes;
   }
 
   const auto collect = [&](this const auto& self, const scenes::node& node) -> void {
-    if (auto resolved = resolve_convex(scene, node, hull_cache, assets_module, cache)) {
-      shapes.push_back(std::move(*resolved));
-    }
+    add(node);
 
     for (const auto child_entity : node.get_component<scenes::relationship>().children) {
       const auto child = scene.node_of(child_entity);

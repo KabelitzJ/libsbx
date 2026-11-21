@@ -1130,7 +1130,7 @@ auto place_feet(scenes::animator& animator, const std::vector<assets::skeleton::
   }
 
   const auto& world = scratch.world;
-  const auto to_mesh = math::matrix4x4::inverted(world);
+  const auto& to_mesh = scratch.world_inverse;
   const auto origin = math::vector3{world[3]};
 
   struct planted_foot {
@@ -1217,7 +1217,7 @@ auto look_at(const scenes::animator& animator, const std::vector<assets::skeleto
 
   const auto forward_local = math::quaternion::inverted(bind_rotation) * math::vector3{0.0f, 0.0f, 1.0f};
 
-  const auto target = math::vector3{math::matrix4x4::inverted(scratch.world) * math::vector4{animator.look_at_target, 1.0f}};
+  const auto target = math::vector3{scratch.world_inverse * math::vector4{animator.look_at_target, 1.0f}};
   const auto to_target = target - joint_position(scratch, head);
 
   if (to_target.length_squared() < 1e-8f) {
@@ -1281,7 +1281,7 @@ auto apply_ik(scenes::animator& animator, const std::vector<assets::skeleton::jo
 
   compute_ik_globals(joints, translations, rotations, scales, scratch);
 
-  const auto to_mesh = math::matrix4x4::inverted(scratch.world);
+  const auto& to_mesh = scratch.world_inverse;
 
   // The node's world rotation alone (its scale normalized out), to bring world rotations into mesh space.
   auto unscaled = scratch.world;

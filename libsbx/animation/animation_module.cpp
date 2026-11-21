@@ -55,7 +55,7 @@ auto animation_module::post_update() -> void {
       needs_ground |= std::ranges::any_of(animator->ik_chains, &scenes::animator_ik_chain::foot_placement);
     }
 
-    _entries.push_back(skinned_entry{static_cast<math::uuid>(id), memory::make_observer<const scenes::mesh_renderer>(renderer), memory::make_observer(pose), animator, world.matrix});
+    _entries.push_back(skinned_entry{static_cast<math::uuid>(id), memory::make_observer<const scenes::mesh_renderer>(renderer), memory::make_observer(pose), animator, world.matrix, world.inverse});
   }
 
   // Foot placement probes the physics world from the workers; only while simulating, when the broadphase holds the scene.
@@ -95,6 +95,7 @@ auto animation_module::post_update() -> void {
       const auto first_event = scratch.fired_events.size();
 
       scratch.world = entry.world;
+      scratch.world_inverse = entry.world_inverse;
 
       evaluate_skeleton_pose(*entry.pose->skeleton, *entry.renderer, entry.animator, *entry.pose, delta_time, scratch);
 

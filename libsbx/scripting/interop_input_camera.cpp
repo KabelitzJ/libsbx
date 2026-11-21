@@ -117,7 +117,7 @@ auto interop::camera_screen_point_to_ray(math::ray* ray, math::vector2* position
 
   const auto aspect = (extent.y() > 0u) ? (static_cast<std::float_t>(extent.x()) / static_cast<std::float_t>(extent.y())) : 1.0f;
 
-  const auto view = math::matrix4x4::inverted(node.world_matrix());
+  const auto view = node.get_component<scenes::world_transform>().inverse;
   const auto projection = math::matrix4x4::perspective(math::degree{camera.fov_degrees}, aspect, camera.near_plane, camera.far_plane);
   const auto inverse_view_projection = math::matrix4x4::inverted(projection * view);
 
@@ -162,7 +162,7 @@ auto interop::camera_world_to_screen_point(math::vector3* world_position, math::
 
   const auto aspect = (extent.y() > 0u) ? (static_cast<std::float_t>(extent.x()) / static_cast<std::float_t>(extent.y())) : 1.0f;
 
-  const auto view = math::matrix4x4::inverted(node.world_matrix());
+  const auto view = node.get_component<scenes::world_transform>().inverse;
   const auto projection = math::matrix4x4::perspective(math::degree{camera.fov_degrees}, aspect, camera.near_plane, camera.far_plane);
 
   const auto clip = projection * view * math::vector4{*world_position, 1.0f};

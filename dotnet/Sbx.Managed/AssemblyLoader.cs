@@ -157,6 +157,7 @@ namespace Sbx.Managed
       }
 
       Object._cachedMethods.Clear();
+      Object._batchInvokers.Clear();
 
       TypeInterface._cachedTypes.Clear();
       TypeInterface._cachedMethods.Clear();

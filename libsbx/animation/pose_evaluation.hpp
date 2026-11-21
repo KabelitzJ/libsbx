@@ -93,8 +93,9 @@ struct pose_scratch {
   // The instance being evaluated.
   root_motion_context root_motion{};
 
-  // Set by the caller before each instance: its node's world matrix, and the ground probe foot placement uses (empty disables it).
+  // Set by the caller before each instance: its node's world matrix and that matrix's inverse, and the ground probe foot placement uses (empty disables it).
   math::matrix4x4 world{math::matrix4x4::identity};
+  math::matrix4x4 world_inverse{math::matrix4x4::identity};
   ground_query ground{};
 
   // IK's view of the pose in mesh space, recomputed as joints move.

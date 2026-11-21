@@ -426,6 +426,7 @@ auto runtime::load_functions() -> void {
   detail::backend.get_method_handle = load_managed_function_ptr<detail::backend_functions::get_method_handle_fn>(SBX_SCRIPTING_STR("Sbx.Managed.Object, Sbx.Managed"), SBX_SCRIPTING_STR("GetMethodHandle"));
   detail::backend.invoke_method_handle = load_managed_function_ptr<detail::backend_functions::invoke_method_handle_fn>(SBX_SCRIPTING_STR("Sbx.Managed.Object, Sbx.Managed"), SBX_SCRIPTING_STR("InvokeMethodHandle"));
   detail::backend.invoke_method_handle_return = load_managed_function_ptr<detail::backend_functions::invoke_method_handle_return_fn>(SBX_SCRIPTING_STR("Sbx.Managed.Object, Sbx.Managed"), SBX_SCRIPTING_STR("InvokeMethodHandleRet"));
+  detail::backend.invoke_method_handle_batch = load_managed_function_ptr<detail::backend_functions::invoke_method_handle_batch_fn>(SBX_SCRIPTING_STR("Sbx.Managed.Object, Sbx.Managed"), SBX_SCRIPTING_STR("InvokeMethodHandleBatch"));
   detail::backend.set_field_value = load_managed_function_ptr<detail::backend_functions::set_field_value_fn>(SBX_SCRIPTING_STR("Sbx.Managed.Object, Sbx.Managed"), SBX_SCRIPTING_STR("SetFieldValue"));
   detail::backend.get_field_value = load_managed_function_ptr<detail::backend_functions::get_field_value_fn>(SBX_SCRIPTING_STR("Sbx.Managed.Object, Sbx.Managed"), SBX_SCRIPTING_STR("GetFieldValue"));
   detail::backend.set_property_value = load_managed_function_ptr<detail::backend_functions::set_property_value_fn>(SBX_SCRIPTING_STR("Sbx.Managed.Object, Sbx.Managed"), SBX_SCRIPTING_STR("SetPropertyValue"));

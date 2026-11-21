@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
@@ -162,6 +163,11 @@ namespace Sbx.Managed
     {
       try
       {
+        if (_batchDepth > 0)
+        {
+          _destroyedDuringBatch.Add(InObjectHandle);
+        }
+
         GCHandle.FromIntPtr(InObjectHandle).Free();
       }
       catch (Exception ex)
@@ -262,6 +268,72 @@ namespace Sbx.Managed
       catch (Exception ex)
       {
         HandleException(ex);
+      }
+    }
+
+    // One compiled call per method handle, so a batch never goes through MethodInfo.Invoke; cleared with the other caches when a script assembly unloads.
+    internal static readonly Dictionary<int, Action<object>?> _batchInvokers = new();
+
+    private static Action<object>? BatchInvoker(int InMethodHandle)
+    {
+      if (_batchInvokers.TryGetValue(InMethodHandle, out var invoker))
+      {
+        return invoker;
+      }
+
+      if (TypeInterface._cachedMethods.TryGetValue(InMethodHandle, out var methodInfo) && methodInfo != null && methodInfo.DeclaringType != null && methodInfo.GetParameters().Length == 0)
+      {
+        var target = Expression.Parameter(typeof(object), "target");
+        invoker = Expression.Lambda<Action<object>>(Expression.Call(Expression.Convert(target, methodInfo.DeclaringType), methodInfo), target).Compile();
+      }
+
+      _batchInvokers[InMethodHandle] = invoker;
+
+      return invoker;
+    }
+
+    // A batch's handles were collected before it started; one an earlier invocation destroyed (Node.Destroy) is freed, and a new object may even reuse it, so it's skipped.
+    private static int _batchDepth;
+    private static readonly HashSet<IntPtr> _destroyedDuringBatch = new();
+
+    // Many parameterless invocations in one native call (e.g. every script's OnUpdate): InObjectHandles[i] gets InMethodHandles[i].
+    [UnmanagedCallersOnly]
+    internal static unsafe void InvokeMethodHandleBatch(IntPtr* InObjectHandles, int* InMethodHandles, int InCount)
+    {
+      ++_batchDepth;
+
+      try
+      {
+        for (var index = 0; index < InCount; ++index)
+        {
+          try
+          {
+            if (_destroyedDuringBatch.Contains(InObjectHandles[index]))
+            {
+              continue;
+            }
+
+            var target = GCHandle.FromIntPtr(InObjectHandles[index]).Target;
+
+            if (target == null)
+            {
+              continue;
+            }
+
+            BatchInvoker(InMethodHandles[index])?.Invoke(target);
+          }
+          catch (Exception ex)
+          {
+            HandleException(ex);
+          }
+        }
+      }
+      finally
+      {
+        if (--_batchDepth == 0)
+        {
+          _destroyedDuringBatch.Clear();
+        }
       }
     }
 

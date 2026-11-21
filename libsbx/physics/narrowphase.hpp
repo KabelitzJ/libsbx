@@ -19,6 +19,8 @@
 
 #include <libsbx/math/uuid.hpp>
 
+#include <libsbx/memory/observer_ptr.hpp>
+
 #include <libsbx/scenes/node.hpp>
 #include <libsbx/scenes/scene.hpp>
 
@@ -67,8 +69,20 @@ struct body_shape {
 /** @brief The node's own collider as one world-posed body_shape: a shape_collider or a convex mesh_collider's hull. nullopt for neither, a non-convex mesh collider, or an unresolvable one. */
 [[nodiscard]] auto resolve_convex(scenes::scene& scene, const scenes::node& node, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache) -> std::optional<body_shape>;
 
-/** @brief Every convex shape of a rigidbody: its own plus its descendants', stopping at descendants with their own rigidbody. @p resource lets callers keep the list on a stack arena. */
-[[nodiscard]] auto resolve_body_shapes(scenes::scene& scene, const scenes::node& rigidbody_node, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache, std::pmr::memory_resource* resource = std::pmr::get_default_resource()) -> std::pmr::vector<body_shape>;
+/**
+ * @brief Every convex shape of a rigidbody: its own plus its descendants', stopping at descendants with their own rigidbody.
+ *
+ * @param scene The scene.
+ * @param rigidbody_node The body's node.
+ * @param hull_cache Convex hulls of mesh colliders.
+ * @param assets_module The assets module, for meshes not yet in @p hull_cache.
+ * @param cache World poses composed so far this step.
+ * @param resource Lets callers keep the list on a stack arena.
+ * @param contributors If given, receives the node of every returned shape, in the same order.
+ *
+ * @return The shapes.
+ */
+[[nodiscard]] auto resolve_body_shapes(scenes::scene& scene, const scenes::node& rigidbody_node, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache, std::pmr::memory_resource* resource = std::pmr::get_default_resource(), memory::observer_ptr<std::vector<scenes::node>> contributors = nullptr) -> std::pmr::vector<body_shape>;
 
 /**
  * @brief The nearest ancestor (inclusive) with a rigidbody, telling compound children apart from implicit-static colliders.

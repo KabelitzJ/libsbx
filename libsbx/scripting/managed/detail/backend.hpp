@@ -66,6 +66,8 @@ struct backend_functions {
 	using get_method_handle_fn = std::int32_t(*)(void*, string, const managed_type*, std::int32_t);
 	using invoke_method_handle_fn = void(*)(void*, std::int32_t, const void**, std::int32_t);
 	using invoke_method_handle_return_fn = void(*)(void*, std::int32_t, const void**, std::int32_t, void*);
+	// One call for many parameterless invocations: object handles and their method handles, pairwise.
+	using invoke_method_handle_batch_fn = void(*)(void* const*, const std::int32_t*, std::int32_t);
 	using invoke_static_method_fn = void(*)(type_id, string, const void**, const managed_type*, std::int32_t);
 	using invoke_static_method_return_fn = void(*)(type_id, string, const void**, const managed_type*, std::int32_t, void*);
 	using set_field_value_fn = void(*)(void*, string, const void*);
@@ -131,6 +133,7 @@ struct backend_functions {
   get_method_handle_fn get_method_handle{nullptr};
   invoke_method_handle_fn invoke_method_handle{nullptr};
   invoke_method_handle_return_fn invoke_method_handle_return{nullptr};
+  invoke_method_handle_batch_fn invoke_method_handle_batch{nullptr};
   invoke_static_method_fn invoke_static_method{nullptr};
   invoke_static_method_return_fn invoke_static_method_return{nullptr};
   set_field_value_fn set_field_value{nullptr};

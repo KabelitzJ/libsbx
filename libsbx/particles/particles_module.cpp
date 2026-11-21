@@ -430,7 +430,9 @@ auto particles_module::_trigger_sub_emitters(scenes::scene& scene, scenes::parti
 
     // world_transform isn't recomputed until scenes_module::late_update(); write it directly here too,
     // so a freshly (re)positioned sub-emitter's particles spawn at the right place this same frame.
-    child.get_component<scenes::world_transform>().matrix = math::matrix4x4::translated(math::matrix4x4::identity, p.position);
+    auto& child_world = child.get_component<scenes::world_transform>();
+    child_world.matrix = math::matrix4x4::translated(math::matrix4x4::identity, p.position);
+    child_world.inverse = math::matrix4x4::translated(math::matrix4x4::identity, -p.position);
 
     auto& child_effect = child.get_or_add_component<scenes::particle_effect>();
     child_effect.effect = binding.effect;

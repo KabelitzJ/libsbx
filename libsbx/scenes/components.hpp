@@ -59,10 +59,42 @@ struct local_transform {
   math::vector3 scale{1.0f, 1.0f, 1.0f};
 
   [[nodiscard]] auto matrix() const -> math::matrix4x4 {
-    const auto translation_matrix = math::matrix4x4::translated(math::matrix4x4::identity, position);
-    const auto scale_matrix = math::matrix4x4::scaled(math::matrix4x4::identity, scale);
+    auto result = math::matrix_cast<math::matrix4x4>(rotation);
 
-    return translation_matrix * math::matrix_cast<math::matrix4x4>(rotation) * scale_matrix;
+    for (auto axis = std::size_t{0u}; axis < 3u; ++axis) {
+      result[axis] *= scale[axis];
+    }
+
+    result[3] = math::vector4{position, 1.0f};
+
+    return result;
+  }
+
+  /**
+   * @brief The inverse of matrix(), built from the parts (scale⁻¹ · rotationᵀ · translation⁻¹) instead of a general 4×4 inverse.
+   *
+   * A zero scale axis has no inverse; it maps to zero instead of infinity.
+   *
+   * @return The inverse matrix.
+   */
+  [[nodiscard]] auto inverse_matrix() const -> math::matrix4x4 {
+    const auto rotation_matrix = math::matrix_cast<math::matrix4x4>(rotation);
+
+    auto result = math::matrix4x4::identity;
+
+    for (auto row = std::size_t{0u}; row < 3u; ++row) {
+      const auto inverse_scale = scale[row] != 0.0f ? 1.0f / scale[row] : 0.0f;
+
+      for (auto column = std::size_t{0u}; column < 3u; ++column) {
+        result[column][row] = rotation_matrix[row][column] * inverse_scale;
+      }
+    }
+
+    for (auto row = std::size_t{0u}; row < 3u; ++row) {
+      result[3][row] = -(result[0][row] * position.x() + result[1][row] * position.y() + result[2][row] * position.z());
+    }
+
+    return result;
   }
 
   [[nodiscard]] auto right() const -> math::vector3 {
@@ -80,10 +112,28 @@ struct local_transform {
 }; // struct local_transform
 
 /**
- * @brief Cached world matrix, written each frame by scene::update().
+ * @brief Whether two local transforms are the same, within the math types' epsilon.
+ *
+ * Callers compare against the values a result was last built from, so changes below epsilon can't accumulate unnoticed.
+ *
+ * @param lhs One transform.
+ * @param rhs The other transform.
+ *
+ * @return Whether position, rotation and scale are equal.
+ */
+[[nodiscard]] inline auto is_same_local_transform(const local_transform& lhs, const local_transform& rhs) -> bool {
+  return lhs.position == rhs.position && lhs.rotation == rhs.rotation && lhs.scale == rhs.scale;
+}
+
+/**
+ * @brief Cached world matrix and its inverse, written by scene::update() only when the node's local transform, its parent or an ancestor changed.
  */
 struct world_transform {
   math::matrix4x4 matrix{math::matrix4x4::identity};
+  math::matrix4x4 inverse{math::matrix4x4::identity};
+  std::uint32_t version{0u}; // bumped on every recompute, so a consumer can tell whether the node moved since it last looked
+  local_transform local{}; // the local transform and parent this was last built from
+  ecs::entity parent{ecs::null_entity};
 }; // struct world_transform
 
 struct relationship {

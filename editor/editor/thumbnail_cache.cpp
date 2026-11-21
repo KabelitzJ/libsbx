@@ -181,8 +181,10 @@ auto thumbnail_cache::_prefab_parts(const sbx::math::uuid& id) -> std::vector<pa
   // The snapshot names assets by short keys; its assets table maps them to uuids.
   auto key_to_uuid = std::unordered_map<std::string, sbx::math::uuid>{};
 
+  const auto assets_table = snapshot["assets"];
+
   for (const auto category : {std::string{"static_meshes"}, std::string{"materials"}}) {
-    if (const auto table = snapshot["assets"][category]; table && table.IsSequence()) {
+    if (const auto table = assets_table ? assets_table[category] : YAML::Node{}; table && table.IsSequence()) {
       for (const auto asset : table) {
         key_to_uuid.emplace(asset["key"].as<std::string>(), sbx::math::uuid::from_value(asset["uuid"].as<std::uint64_t>()));
       }

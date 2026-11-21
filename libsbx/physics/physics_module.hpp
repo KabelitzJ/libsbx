@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -75,6 +76,36 @@ struct sweep_hit {
   std::float_t distance{0.0f}; // along the cast direction
   bool initially_overlapping{false}; // the shape started inside this collider; normal is then the push-out direction
 }; // struct sweep_hit
+
+/**
+ * @brief A node a broadphase leaf's shapes came from, as it was when the leaf was last resolved.
+ */
+struct broadphase_contributor {
+  scenes::node node{};
+  std::uint32_t world_version{0u};
+  std::optional<shape_collider> shape{}; // both empty (a character controller): never unchanged
+  std::optional<mesh_collider> mesh{};
+}; // struct broadphase_contributor
+
+/**
+ * @brief Records a node's pose and colliders for a broadphase leaf.
+ *
+ * @param node The node.
+ *
+ * @return The record.
+ */
+[[nodiscard]] auto snapshot_broadphase_contributor(const scenes::node& node) -> broadphase_contributor;
+
+/**
+ * @brief Whether a node still has the pose and the collider bounds a record was taken from, so its leaf needn't be resolved again.
+ *
+ * A move this frame shows up in the node's own local transform or parent at once; an ancestor's move shows up in the world version after the next transform update.
+ *
+ * @param record The record.
+ *
+ * @return Whether nothing that affects the leaf's bounds changed.
+ */
+[[nodiscard]] auto is_unchanged_broadphase_contributor(const broadphase_contributor& record) -> bool;
 
 class physics_module final : public utility::noncopyable {
 
@@ -203,6 +234,15 @@ public:
     return _on_controller_hit;
   }
 
+  /**
+   * @brief Fires at the start of every simulated fixed step, before anything moves — where scripts' FixedUpdate runs.
+   *
+   * @return The signal.
+   */
+  [[nodiscard]] auto on_before_step() noexcept -> signals::signal<>& {
+    return _on_before_step;
+  }
+
   auto on_contact_began() -> signals::signal<const collision_event&>& {
     return _on_contact_began;
   }
@@ -306,11 +346,25 @@ private:
   std::float_t _position_correction_percent{0.2f};
   std::float_t _position_correction_slop{0.005f};
 
-  // Dynamic and kinematic bodies are refit every step; static ones are inserted once.
+  // Whether nothing a leaf was built from changed since, so it can keep its place without resolving its shapes.
+  [[nodiscard]] auto _is_unchanged_leaf(const scenes::node& leaf) const -> bool;
+
+  auto _record_leaf(const scenes::node& leaf, std::span<const scenes::node> contributors) -> void;
+
+  auto _forget_leaf(const scenes::node& leaf) -> void;
+
+  // Leaves are refit whenever re-resolved; unchanged ones of bodies at rest (static, asleep) are kept as they are.
   broadphase_tree_type _dynamic_tree{};
   broadphase_tree_type _static_tree{};
   containers::dense_map<scenes::node, broadphase_tree_type::id> _dynamic_leaves{};
   containers::dense_map<scenes::node, broadphase_tree_type::id> _static_leaves{};
+
+  containers::dense_map<scenes::node, std::vector<broadphase_contributor>> _leaf_contributors{};
+  containers::dense_map<scenes::node, scenes::node> _contributor_leaf{}; // contributor node -> its leaf's node
+  containers::dense_map<scenes::node, bool> _dirty_leaves{}; // bodies with a collider no leaf knew yet, this step
+  containers::dense_map<scenes::node, bool> _touched_dynamic{};
+  containers::dense_map<scenes::node, bool> _touched_static{};
+  std::vector<scenes::node> _contributor_scratch{};
 
   // Heightfields stay out of _static_tree; see _sync_broadphase.
   std::vector<scenes::node> _heightfield_nodes{};
@@ -334,6 +388,7 @@ private:
   signals::signal<const collision_event&> _on_contact_began{};
   signals::signal<const collision_event&> _on_contact_ended{};
   signals::signal<const controller_hit&> _on_controller_hit{};
+  signals::signal<> _on_before_step{};
 
 }; // class physics_module
 

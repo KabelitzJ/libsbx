@@ -536,7 +536,7 @@ auto scene_renderer_module::_resolve_camera_data() -> camera_data {
     const auto& camera = camera_node.get_component<scenes::camera>();
     const auto& world = camera_node.world_matrix();
 
-    data.view = math::matrix4x4::inverted(world);
+    data.view = camera_node.get_component<scenes::world_transform>().inverse;
     data.position = math::vector3{world[3]};
     data.fov_degrees = camera.fov_degrees;
     data.near_plane = camera.near_plane;
@@ -641,7 +641,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
 
     const auto& submeshes = renderer.mesh->submeshes();
 
-    const auto instance = transform_data{world.matrix, math::matrix4x4::transposed(math::matrix4x4::inverted(world.matrix))};
+    const auto instance = transform_data{world.matrix, math::matrix4x4::transposed(world.inverse)};
     const auto selected = is_selected(entity);
 
     for (auto index = std::uint32_t{0u}; index < submeshes.size(); ++index) {
@@ -738,7 +738,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     const auto& submeshes = renderer.mesh->submeshes();
 
     const auto node_index = static_cast<std::uint32_t>(packet.transforms.size());
-    packet.transforms.push_back(transform_data{world.matrix, math::matrix4x4::transposed(math::matrix4x4::inverted(world.matrix))});
+    packet.transforms.push_back(transform_data{world.matrix, math::matrix4x4::transposed(world.inverse)});
 
     const auto resident = assets_module.is_resident(renderer.mesh) && assets_module.is_resident(renderer.material);
 
@@ -840,6 +840,10 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     const auto& submeshes = renderer.mesh->submeshes();
     const auto selected = is_selected(entity);
 
+    // Every submesh of the instance draws with the same transform.
+    const auto transform_offset = static_cast<std::uint32_t>(packet.transforms.size());
+    packet.transforms.push_back(transform_data{world.matrix, math::matrix4x4::transposed(world.inverse)});
+
     for (auto index = std::uint32_t{0u}; index < submeshes.size(); ++index) {
       if (index >= renderer.materials.size()) {
         continue;
@@ -856,14 +860,12 @@ auto scene_renderer_module::_build_packet() -> render_packet {
       command.submesh_index = index;
       command.material = material;
       command.instance_count = 1u;
-      command.transform_offset = static_cast<std::uint32_t>(packet.transforms.size());
+      command.transform_offset = transform_offset;
       command.pipeline_id = compute_pipeline_id(*material);
       command.vertex_address_override = output_vertex_address;
       command.resident = assets_module.is_resident(renderer.mesh) && assets_module.is_resident(material);
       command.local_bounds = submeshes[index].bounds.inflated(skinned_bounds_padding_factor);
       command.lod_bias = renderer.lod_bias;
-
-      packet.transforms.push_back(transform_data{world.matrix, math::matrix4x4::transposed(math::matrix4x4::inverted(world.matrix))});
 
       // Already single-instance with its own transform, so the outline can share it.
       if (selected) {

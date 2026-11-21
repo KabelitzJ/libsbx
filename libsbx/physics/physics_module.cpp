@@ -33,7 +33,8 @@
 
 namespace sbx::physics {
 
-auto prune_stale_leaves(containers::dynamic_tree<scenes::node>& tree, containers::dense_map<scenes::node, containers::dynamic_tree<scenes::node>::id>& leaves, const containers::dense_map<scenes::node, bool>& touched) -> void {
+// Removes the leaves nothing touched this step and returns their nodes.
+auto prune_stale_leaves(containers::dynamic_tree<scenes::node>& tree, containers::dense_map<scenes::node, containers::dynamic_tree<scenes::node>::id>& leaves, const containers::dense_map<scenes::node, bool>& touched) -> std::vector<scenes::node> {
   auto stale = std::vector<scenes::node>{};
 
   for (const auto& [node, id] : leaves) {
@@ -46,6 +47,8 @@ auto prune_stale_leaves(containers::dynamic_tree<scenes::node>& tree, containers
     tree.remove(leaves.at(node));
     leaves.erase(node);
   }
+
+  return stale;
 }
 
 [[nodiscard]] auto world_pose_matrix(const math::vector3& position, const math::quaternion& rotation) -> math::matrix4x4 {
@@ -97,36 +100,207 @@ physics_module::physics_module() {
 
 physics_module::~physics_module() { }
 
+// Only the authored shapes compare; the internal ones (triangle, convex_hull) never do, so a leaf holding one is re-resolved every step as before.
+auto is_same_shape(const convex_shape& lhs, const convex_shape& rhs) -> bool {
+  if (const auto* a = std::get_if<sphere>(&lhs), * b = std::get_if<sphere>(&rhs); a && b) {
+    return a->radius == b->radius;
+  }
+
+  if (const auto* a = std::get_if<cylinder>(&lhs), * b = std::get_if<cylinder>(&rhs); a && b) {
+    return a->radius == b->radius && a->half_height == b->half_height;
+  }
+
+  if (const auto* a = std::get_if<capsule>(&lhs), * b = std::get_if<capsule>(&rhs); a && b) {
+    return a->radius == b->radius && a->half_height == b->half_height;
+  }
+
+  if (const auto* a = std::get_if<box>(&lhs), * b = std::get_if<box>(&rhs); a && b) {
+    return a->half_extents == b->half_extents;
+  }
+
+  return false;
+}
+
+// What a collider contributes to its leaf's bounds; friction, restitution and is_trigger are read live by the narrowphase.
+auto is_same_bounds_source(const shape_collider& lhs, const shape_collider& rhs) -> bool {
+  return is_same_shape(lhs.shape, rhs.shape) && lhs.offset == rhs.offset && lhs.rotation == rhs.rotation;
+}
+
+auto is_same_bounds_source(const mesh_collider& lhs, const mesh_collider& rhs) -> bool {
+  return lhs.mesh.get() == rhs.mesh.get() && lhs.is_convex == rhs.is_convex && lhs.offset == rhs.offset && lhs.rotation == rhs.rotation;
+}
+
+auto snapshot_broadphase_contributor(const scenes::node& node) -> broadphase_contributor {
+  auto record = broadphase_contributor{node, node.get_component<scenes::world_transform>().version, std::nullopt, std::nullopt};
+
+  if (const auto shape = node.try_get_component<shape_collider>()) {
+    record.shape = *shape;
+  }
+
+  if (const auto mesh = node.try_get_component<mesh_collider>()) {
+    record.mesh = *mesh;
+  }
+
+  return record;
+}
+
+auto is_unchanged_broadphase_contributor(const broadphase_contributor& record) -> bool {
+  const auto& node = record.node;
+
+  if (!node.is_valid()) {
+    return false;
+  }
+
+  const auto& world = node.get_component<scenes::world_transform>();
+
+  if (world.version != record.world_version || world.parent != node.get_component<scenes::relationship>().parent || !scenes::is_same_local_transform(world.local, node.get_component<scenes::local_transform>())) {
+    return false;
+  }
+
+  // A character controller's capsule, or anything else without a collider: always re-resolved.
+  if (!record.shape && !record.mesh) {
+    return false;
+  }
+
+  const auto shape = node.try_get_component<shape_collider>();
+  const auto mesh = node.try_get_component<mesh_collider>();
+
+  if (static_cast<bool>(shape) != record.shape.has_value() || static_cast<bool>(mesh) != record.mesh.has_value()) {
+    return false;
+  }
+
+  return (!shape || is_same_bounds_source(*shape, *record.shape)) && (!mesh || is_same_bounds_source(*mesh, *record.mesh));
+}
+
+auto physics_module::_is_unchanged_leaf(const scenes::node& leaf) const -> bool {
+  if (_dirty_leaves.contains(leaf)) {
+    return false;
+  }
+
+  const auto entry = _leaf_contributors.find(leaf);
+
+  return entry != _leaf_contributors.end() && !entry->second.empty() && std::ranges::all_of(entry->second, is_unchanged_broadphase_contributor);
+}
+
+auto physics_module::_record_leaf(const scenes::node& leaf, std::span<const scenes::node> contributors) -> void {
+  // Reused in place: awake bodies are re-recorded every step.
+  auto& records = _leaf_contributors[leaf];
+
+  for (const auto& record : records) {
+    if (const auto owner = _contributor_leaf.find(record.node); owner != _contributor_leaf.end() && owner->second == leaf) {
+      _contributor_leaf.erase(record.node);
+    }
+  }
+
+  records.clear();
+
+  for (const auto& node : contributors) {
+    records.push_back(snapshot_broadphase_contributor(node));
+    _contributor_leaf[node] = leaf;
+  }
+}
+
+auto physics_module::_forget_leaf(const scenes::node& leaf) -> void {
+  const auto entry = _leaf_contributors.find(leaf);
+
+  if (entry == _leaf_contributors.end()) {
+    return;
+  }
+
+  for (const auto& record : entry->second) {
+    if (const auto owner = _contributor_leaf.find(record.node); owner != _contributor_leaf.end() && owner->second == leaf) {
+      _contributor_leaf.erase(record.node);
+    }
+  }
+
+  _leaf_contributors.erase(leaf);
+}
+
 auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-  auto touched_dynamic = containers::dense_map<scenes::node, bool>{};
-  auto touched_static = containers::dense_map<scenes::node, bool>{};
+  _touched_dynamic.clear();
+  _touched_static.clear();
+  _dirty_leaves.clear();
 
-  // Static bodies go into _static_tree once; dynamic and kinematic ones are refit in _dynamic_tree every step.
-  const auto route = [&](const scenes::node& node, body_type type, const math::volume& world_box) {
-    if (type == body_type::static_body) {
-      touched_static.emplace(node, true);
+  // A collider that no leaf knows yet, under an existing body, makes that body re-resolve so its compound picks it up this step.
+  const auto discover = [&](ecs::entity entity) {
+    const auto node = scene.node_of(entity);
 
-      if (!_static_leaves.contains(node)) {
-        _static_leaves.emplace(node, _static_tree.insert(node, world_box));
-      }
-    } else {
-      touched_dynamic.emplace(node, true);
-
-      if (const auto entry = _dynamic_leaves.find(node); entry != _dynamic_leaves.end()) {
-        [[maybe_unused]] auto exists = _dynamic_tree.update(entry->second, world_box);
-      } else {
-        _dynamic_leaves.emplace(node, _dynamic_tree.insert(node, world_box));
-      }
+    if (_contributor_leaf.contains(node)) {
+      return;
     }
+
+    if (const auto owner = find_owning_rigidbody(scene, node)) {
+      _dirty_leaves.emplace(*owner, true);
+    }
+  };
+
+  for ([[maybe_unused]] auto&& [entity, collider] : scene.query<shape_collider>(ecs::exclude<scenes::inactive>).each()) {
+    discover(entity);
+  }
+
+  // Only convex mesh colliders join a compound (resolve_convex); a non-convex child would otherwise mark its body every step.
+  for (auto&& [entity, collider] : scene.query<mesh_collider>(ecs::exclude<scenes::inactive>).each()) {
+    if (collider.is_convex && collider.mesh.is_valid()) {
+      discover(entity);
+    }
+  }
+
+  for ([[maybe_unused]] auto&& [entity, controller] : scene.query<character_controller>(ecs::exclude<scenes::inactive>).each()) {
+    discover(entity);
+  }
+
+  // Static leaves are refit only when re-resolved; dynamic and kinematic ones every step they're re-resolved.
+  const auto route = [&](const scenes::node& node, body_type type, const math::volume& world_box) {
+    auto& touched = (type == body_type::static_body) ? _touched_static : _touched_dynamic;
+    auto& leaves = (type == body_type::static_body) ? _static_leaves : _dynamic_leaves;
+    auto& tree = (type == body_type::static_body) ? _static_tree : _dynamic_tree;
+
+    touched.emplace(node, true);
+
+    if (const auto entry = leaves.find(node); entry != leaves.end()) {
+      [[maybe_unused]] auto refit = tree.update(entry->second, world_box);
+    } else {
+      leaves.emplace(node, tree.insert(node, world_box));
+    }
+  };
+
+  // An unchanged leaf of a body at rest (static or asleep) keeps its place without resolving anything.
+  const auto keep_if_unchanged = [&](const scenes::node& node, const rigidbody& body) -> bool {
+    const auto at_rest = body.type == body_type::static_body || (body.type == body_type::dynamic_body && body.is_sleeping);
+    const auto& leaves = (body.type == body_type::static_body) ? _static_leaves : _dynamic_leaves;
+
+    if (!at_rest || !leaves.contains(node) || !_is_unchanged_leaf(node)) {
+      return false;
+    }
+
+    ((body.type == body_type::static_body) ? _touched_static : _touched_dynamic).emplace(node, true);
+
+    return true;
+  };
+
+  const auto keep_if_unchanged_static = [&](const scenes::node& node) -> bool {
+    if (!_static_leaves.contains(node) || !_is_unchanged_leaf(node)) {
+      return false;
+    }
+
+    _touched_static.emplace(node, true);
+
+    return true;
   };
 
   // Rigidbodies: every shape in the subtree, unioned into one leaf. Bodies with their own mesh_collider are handled below; a body without colliders is skipped.
   for (auto&& [entity, body] : scene.query<rigidbody>(ecs::exclude<mesh_collider, scenes::inactive>).each()) {
     auto node = scene.node_of(entity);
 
-    const auto shapes = resolve_body_shapes(scene, node, _hull_cache, assets_module, _pose_cache);
+    if (keep_if_unchanged(node, body)) {
+      continue;
+    }
+
+    _contributor_scratch.clear();
+
+    const auto shapes = resolve_body_shapes(scene, node, _hull_cache, assets_module, _pose_cache, std::pmr::get_default_resource(), memory::make_observer(_contributor_scratch));
 
     if (shapes.empty()) {
       continue;
@@ -139,6 +313,7 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
     }
 
     route(node, body.type, world_box);
+    _record_leaf(node, _contributor_scratch);
   }
 
   // A non-convex mesh_collider has no support mapping, so dynamic bodies carrying one are excluded; convex ones are ordinary shapes.
@@ -153,6 +328,10 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
 
     auto node = scene.node_of(entity);
 
+    if (keep_if_unchanged(node, body)) {
+      continue;
+    }
+
     const auto pose = compose_pose(compose_world_pose(scene, node, _pose_cache), collider.offset, collider.rotation);
 
     const auto local_bounds = collider.is_convex
@@ -160,6 +339,7 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
       : _mesh_cache.get_or_build(assets_module, collider.mesh->id()).local_bounds;
 
     route(node, body.type, world_bounds_aabb(pose, local_bounds));
+    _record_leaf(node, std::span<const scenes::node>{&node, 1u});
   }
 
   // A collider without a rigidbody ancestor is its own static body, like Unity; compound children of an ancestor's body were collected above.
@@ -170,8 +350,13 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
       continue;
     }
 
+    if (keep_if_unchanged_static(node)) {
+      continue;
+    }
+
     if (auto resolved = resolve_convex(scene, node, _hull_cache, assets_module, _pose_cache)) {
       route(node, body_type::static_body, world_shape_aabb(*resolved));
+      _record_leaf(node, std::span<const scenes::node>{&node, 1u});
     }
   }
 
@@ -186,6 +371,10 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
       continue;
     }
 
+    if (keep_if_unchanged_static(node)) {
+      continue;
+    }
+
     const auto pose = compose_pose(compose_world_pose(scene, node, _pose_cache), collider.offset, collider.rotation);
 
     const auto local_bounds = collider.is_convex
@@ -193,6 +382,7 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
       : _mesh_cache.get_or_build(assets_module, collider.mesh->id()).local_bounds;
 
     route(node, body_type::static_body, world_bounds_aabb(pose, local_bounds));
+    _record_leaf(node, std::span<const scenes::node>{&node, 1u});
   }
 
   // Character controllers move themselves, so they're kinematic leaves: dynamic bodies collide with them, and they're never pushed back.
@@ -201,6 +391,11 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
 
     if (auto resolved = resolve_convex(scene, node, _hull_cache, assets_module, _pose_cache)) {
       route(node, body_type::kinematic, world_shape_aabb(*resolved));
+
+      // Never kept unchanged (they move themselves); recorded once so discovery knows them.
+      if (!_contributor_leaf.contains(node)) {
+        _record_leaf(node, std::span<const scenes::node>{&node, 1u});
+      }
     }
   }
 
@@ -213,8 +408,13 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
     }
   }
 
-  prune_stale_leaves(_dynamic_tree, _dynamic_leaves, touched_dynamic);
-  prune_stale_leaves(_static_tree, _static_leaves, touched_static);
+  for (const auto& node : prune_stale_leaves(_dynamic_tree, _dynamic_leaves, _touched_dynamic)) {
+    _forget_leaf(node);
+  }
+
+  for (const auto& node : prune_stale_leaves(_static_tree, _static_leaves, _touched_static)) {
+    _forget_leaf(node);
+  }
 }
 
 auto physics_module::_generate_candidate_pairs() -> void {
@@ -345,6 +545,9 @@ auto physics_module::_reset(scenes::scene& scene) -> void {
   _static_tree.clear();
   _dynamic_leaves.clear();
   _static_leaves.clear();
+  _leaf_contributors.clear();
+  _contributor_leaf.clear();
+  _dirty_leaves.clear();
   _heightfield_nodes.clear();
   _candidate_pairs.clear();
   _manifolds.clear();
@@ -484,6 +687,8 @@ auto physics_module::fixed_update() -> void {
   }
 
   _was_simulating = true;
+
+  _on_before_step();
 
   // Root motion the animator handed to controllers since the last step, so animated characters still collide, climb steps and slide along walls.
   {

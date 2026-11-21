@@ -157,8 +157,10 @@ auto scene::primary_light() -> node {
 auto scene::update() -> void {
   SBX_PROFILE_SCOPE("scene::update");
 
+  static const auto root_world = world_transform{};
+
   for (const auto child : _registry.get<relationship>(_root).children) {
-    _update_node(child, math::matrix4x4::identity);
+    _update_node(child, _root, root_world, false);
   }
 }
 
@@ -206,14 +208,22 @@ auto scene::_destroy_node_recursive(ecs::entity entity) -> void {
   _registry.destroy(entity);
 }
 
-auto scene::_update_node(ecs::entity entity, const math::matrix4x4& parent_world) -> void {
+auto scene::_update_node(ecs::entity entity, ecs::entity parent, const world_transform& parent_world, bool parent_changed) -> void {
   const auto& local = _registry.get<local_transform>(entity);
   auto& world = _registry.get<world_transform>(entity);
 
-  world.matrix = parent_world * local.matrix();
+  const auto changed = parent_changed || world.parent != parent || !is_same_local_transform(world.local, local);
+
+  if (changed) {
+    world.matrix = parent_world.matrix * local.matrix();
+    world.inverse = local.inverse_matrix() * parent_world.inverse;
+    world.local = local;
+    world.parent = parent;
+    ++world.version;
+  }
 
   for (const auto child : _registry.get<relationship>(entity).children) {
-    _update_node(child, world.matrix);
+    _update_node(child, entity, world, changed);
   }
 }
 

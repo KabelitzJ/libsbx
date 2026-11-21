@@ -447,6 +447,11 @@ scripting_module::scripting_module() {
   physics_module.on_contact_ended().connect([this](const physics::collision_event& event) { _dispatch_collision_event(event, false); });
   physics_module.on_controller_hit().connect([this](const physics::controller_hit& hit) { _dispatch_controller_hit(hit); });
 
+  // Like Unity, FixedUpdate runs before each simulation step.
+  physics_module.on_before_step().connect([this]() {
+    _invoke_active_scripts(core::engine::get_module<scenes::scenes_module>().active_scene(), "OnFixedUpdate");
+  });
+
   auto& animation_module = core::engine::get_module<animation::animation_module>();
 
   animation_module.on_event().connect([this](const animation::fired_animation_event& event) { _dispatch_animation_event(event); });
@@ -479,14 +484,21 @@ auto scripting_module::update() -> void {
 
   auto& scene = scenes_module.active_scene();
 
-  // Like Unity, inactive nodes don't receive OnUpdate; OnCreate/OnDestroy still fire.
-  auto scripts_query = scene.query<scripting::scripts>(ecs::exclude<scenes::inactive>);
+  _invoke_active_scripts(scene, "OnUpdate");
+}
 
-  for (auto&& [node, scripts] : scripts_query.each()) {
-    for (auto& instance : scripts.instances) {
-      instance.invoke("OnUpdate");
-    }
+auto scripting_module::_invoke_active_scripts(scenes::scene& scene, std::string_view method) -> void {
+  SBX_PROFILE_SCOPE("scripting_module::invoke_active_scripts");
+
+  // Like Unity, inactive nodes don't receive OnUpdate/OnFixedUpdate; OnCreate/OnDestroy still fire.
+  // Collected first, then one call into managed code: a script may create or destroy nodes, which would invalidate the view mid-iteration.
+  _batch.clear();
+
+  for (auto&& [node, scripts] : scene.query<scripting::scripts>(ecs::exclude<scenes::inactive>).each()) {
+    _batch.insert(_batch.end(), scripts.instances.begin(), scripts.instances.end());
   }
+
+  managed::object::invoke_batch(_batch, method);
 }
 
 auto scripting_module::load_assembly(const std::filesystem::path& assembly_path, std::initializer_list<internal_call> bindings) -> void {

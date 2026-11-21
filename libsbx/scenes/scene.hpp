@@ -143,7 +143,8 @@ private:
 
   auto _destroy_node_recursive(ecs::entity entity) -> void;
 
-  auto _update_node(ecs::entity entity, const math::matrix4x4& parent_world) -> void;
+  // Recomputes the node's world_transform when its parent was recomputed (@p parent_changed), its local transform or its parent differs from what it was last built from; otherwise only visits its children.
+  auto _update_node(ecs::entity entity, ecs::entity parent, const world_transform& parent_world, bool parent_changed) -> void;
 
   std::string _name{"Scene"};
   ecs::registry _registry{};

@@ -295,6 +295,9 @@ private:
     }
   }
 
+  // Invokes a parameterless method on the scripts of every active node with one call into managed code.
+  auto _invoke_active_scripts(scenes::scene& scene, std::string_view method) -> void;
+
   /** @brief Delivers OnControllerColliderHit to the scripts on the moving controller's node. */
   auto _dispatch_controller_hit(const physics::controller_hit& hit) -> void;
 
@@ -321,6 +324,7 @@ private:
   scripting::managed::assembly_load_context _game_context;
   scripting::managed::assembly _game_assembly;
   bool _has_game_assembly{false};
+  std::vector<managed::object> _batch{}; // reused by _invoke_active_scripts
 
   memory::observer_ptr<const animation::fired_animation_event> _current_animation_event{};
   memory::observer_ptr<animation::root_motion_event> _current_root_motion{};

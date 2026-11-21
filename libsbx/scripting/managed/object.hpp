@@ -6,6 +6,8 @@
 #include <cmath>
 
 #include <array>
+#include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -176,7 +178,20 @@ public:
 
   auto is_valid() const -> bool;
 
+  /**
+   * @brief Invokes a parameterless method on every object with one call into managed code instead of one per object.
+   *
+   * Objects whose type has no such method are skipped; an exception thrown by one invocation is reported and the rest still run.
+   *
+   * @param objects The objects to invoke the method on, in order.
+   * @param name The method's name.
+   */
+  static auto invoke_batch(std::span<const object> objects, std::string_view name) -> void;
+
 private:
+
+  // The handle of this object's type's method @p name with the given signature, resolved once per type; negative when the type has none.
+  auto _method_handle(std::string_view name, const managed_type* parameter_types, std::size_t length) const -> std::int32_t;
 
   auto _invoke_method_internal(std::string_view name, const void** parameters, const managed_type* parameter_types, std::size_t length) const -> void;
 

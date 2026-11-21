@@ -1160,6 +1160,11 @@ auto register_asset_keys(const YAML::Node& document) -> std::unordered_map<std::
 
   auto key_to_uuid = std::unordered_map<std::string, math::uuid>{};
 
+  // Indexing a missing key of a const node throws, so a document without the table has no keys instead.
+  if (!assets_node) {
+    return key_to_uuid;
+  }
+
   const auto register_category = [&](const char* category) {
     if (const auto sequence = assets_node[category]) {
       for (const auto entry : sequence) {
@@ -2101,6 +2106,10 @@ auto load_asset_key_table(const YAML::Node& document) -> asset_key_table {
   auto keys = asset_key_table{};
 
   const auto load_category = [&](const char* category, std::unordered_map<math::uuid, std::string>& uuid_to_key, YAML::Node& table) {
+    if (!assets_node) {
+      return;
+    }
+
     if (const auto sequence = assets_node[category]) {
       table = YAML::Clone(sequence);
 

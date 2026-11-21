@@ -89,6 +89,7 @@ private:
     memory::observer_ptr<scenes::skeleton_pose> pose{};
     memory::observer_ptr<scenes::animator> animator{};
     math::matrix4x4 world{math::matrix4x4::identity}; // last frame's, IK's bridge between world-space goals and the mesh
+    math::matrix4x4 world_inverse{math::matrix4x4::identity};
   }; // struct skinned_entry
 
   std::vector<skinned_entry> _entries{};

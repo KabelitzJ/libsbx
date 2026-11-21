@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/scripting/managed/object.hpp>
 
+#include <vector>
+
 #include <libsbx/utility/logger.hpp>
 #include <libsbx/utility/target.hpp>
 
@@ -123,24 +125,54 @@ auto object::is_valid() const -> bool {
   return _handle != nullptr && _type != nullptr; 
 }
 
+auto object::_method_handle(std::string_view name, const managed_type* parameter_types, std::size_t length) const -> std::int32_t {
+  const auto& owner_type = get_type();
+
+  if (const auto entry = owner_type._method_handles.find(name); entry != owner_type._method_handles.end()) {
+    return entry->second;
+  }
+
+  auto method_name = string::create(name);
+  const auto handle = std::invoke(detail::backend.get_method_handle, _handle, method_name, parameter_types, static_cast<std::int32_t>(length));
+  string::destroy(method_name);
+
+  owner_type._method_handles.emplace(std::string{name}, handle);
+
+  return handle;
+}
+
+auto object::invoke_batch(std::span<const object> objects, std::string_view name) -> void {
+  // Local, not reused: a script could start another batch from inside this one.
+  auto object_handles = std::vector<void*>{};
+  auto method_handles = std::vector<std::int32_t>{};
+
+  object_handles.reserve(objects.size());
+  method_handles.reserve(objects.size());
+
+  for (const auto& instance : objects) {
+    if (!instance._validate_handle("invoke method", name)) {
+      continue;
+    }
+
+    if (const auto handle = instance._method_handle(name, nullptr, 0u); handle >= 0) {
+      object_handles.push_back(instance._handle);
+      method_handles.push_back(handle);
+    }
+  }
+
+  if (object_handles.empty()) {
+    return;
+  }
+
+  std::invoke(detail::backend.invoke_method_handle_batch, object_handles.data(), method_handles.data(), static_cast<std::int32_t>(object_handles.size()));
+}
+
 void object::_invoke_method_internal(std::string_view name, const void** parameters, const managed_type* parameter_types, std::size_t length) const {
   if (!_validate_handle("invoke method", name)) {
     return;
   }
 
-  const auto& owner_type = get_type();
-
-  auto handle = std::int32_t{-1};
-
-  if (const auto entry = owner_type._method_handles.find(name); entry != owner_type._method_handles.end()) {
-    handle = entry->second;
-  } else {
-    auto method_name = string::create(name);
-    handle = std::invoke(detail::backend.get_method_handle, _handle, method_name, parameter_types, static_cast<std::int32_t>(length));
-    string::destroy(method_name);
-
-    owner_type._method_handles.emplace(std::string{name}, handle);
-  }
+  const auto handle = _method_handle(name, parameter_types, length);
 
   if (handle < 0) {
     return;
@@ -154,19 +186,7 @@ void object::_invoke_method_return_internal(std::string_view name, const void** 
     return;
   }
 
-  const auto& owner_type = get_type();
-
-  auto handle = std::int32_t{-1};
-
-  if (const auto entry = owner_type._method_handles.find(name); entry != owner_type._method_handles.end()) {
-    handle = entry->second;
-  } else {
-    auto method_name = string::create(name);
-    handle = std::invoke(detail::backend.get_method_handle, _handle, method_name, parameter_types, static_cast<std::int32_t>(length));
-    string::destroy(method_name);
-
-    owner_type._method_handles.emplace(std::string{name}, handle);
-  }
+  const auto handle = _method_handle(name, parameter_types, length);
 
   if (handle < 0) {
     return;

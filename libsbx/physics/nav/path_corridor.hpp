@@ -26,7 +26,7 @@ auto corridor_set_corridor(path_corridor& corridor, const math::vector3& target,
 
 [[nodiscard]] auto corridor_move_position(path_corridor& corridor, const navmesh& mesh, const math::vector3& new_pos) -> math::vector3;
 
-[[nodiscard]] auto corridor_find_corners(const path_corridor& corridor, const navmesh& mesh, std::size_t max_corners) -> std::vector<straight_path_point>;
+auto corridor_find_corners(const path_corridor& corridor, const navmesh& mesh, std::size_t max_corners, std::vector<straight_path_point>& corners) -> void;
 
 auto optimize_path_visibility(path_corridor& corridor, const navmesh& mesh, const math::vector3& next, std::float_t path_optimization_range) -> void;
 

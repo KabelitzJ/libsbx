@@ -261,6 +261,7 @@ auto asset_residency::create_storage_image(std::uint32_t width, std::uint32_t he
 
     // Fully written already, so resident immediately; otherwise materials using it are never drawn.
     _resident_frame.emplace(sampled_index, 0u);
+    ++_texture_epoch;
   }
 
   return texture2d_handle{record};
@@ -286,6 +287,7 @@ auto asset_residency::release_texture(const texture2d_handle& texture) -> void {
 
   // The sampled index is recycled, and emplace never overwrites, so a stale entry would mark the next texture resident too early.
   _resident_frame.erase(texture->index());
+  ++_texture_epoch;
 
   // A reimport still waiting to swap in owns an index and image of its own.
   std::erase_if(_texture_swaps, [&](const auto& swap) {
@@ -442,6 +444,7 @@ auto asset_residency::release_texture2d_array(const texture2d_array_handle& arra
   }
 
   _array_resident_frame.erase(array->index());
+  ++_texture_epoch;
   graphics_module.bindless_table().unregister_sampled_array(array->index());
   _texture_arrays.erase(array->id());
 }
@@ -941,6 +944,9 @@ auto asset_residency::update_material(material_handle& material, const material:
   material->_generic_textures = create_info.generic_textures;
   material->_generic_texture_arrays = create_info.generic_texture_arrays;
   material->_name = create_info.name;
+
+  // Its textures may have changed, so readiness is checked again.
+  material->_resident_epoch.store(0u, std::memory_order_relaxed);
 
   material->_bump_generation();
 
@@ -2698,6 +2704,7 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
 
       _images.insert_or_assign(current_index, handle);
       _resident_frame.insert_or_assign(current_index, frame_index);
+      ++_texture_epoch;
 
       continue;
     }
@@ -2718,6 +2725,7 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
 
     _images.insert_or_assign(new_index, handle);
     _resident_frame.insert_or_assign(new_index, frame_index);
+    ++_texture_epoch;
 
     _texture_swaps.push_back(pending_texture_swap{request.record, current_index, new_index, frame_index});
   }
@@ -2731,6 +2739,7 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
     auto lock = std::lock_guard{_mutex};
     _array_images.emplace(index, request.image);
     _array_resident_frame.emplace(index, frame_index);
+    ++_texture_epoch;
   }
 
   for (auto& request : pending_meshes) {
@@ -2832,6 +2841,7 @@ auto asset_residency::_discard_texture_index(std::uint32_t index, std::uint64_t 
   }
 
   _resident_frame.erase(index);
+  ++_texture_epoch;
   graphics_module.bindless_table().unregister_sampled_image(index);
 }
 
@@ -2870,11 +2880,25 @@ auto asset_residency::is_resident(const material_handle& material) const -> bool
     return false;
   }
 
+  // Read before checking: an upload during the check bumps the epoch again, so the next call rechecks.
+  const auto epoch = _texture_epoch.load(std::memory_order_acquire);
+
+  if (material->_resident_epoch.load(std::memory_order_relaxed) == epoch) {
+    return true;
+  }
+
   const auto is_ready = [this](const texture2d_handle& texture) -> bool {
     return !texture.is_valid() || is_resident(texture);
   };
 
-  return is_ready(material->albedo()) && is_ready(material->normal()) && is_ready(material->metallic_roughness()) && is_ready(material->occlusion()) && is_ready(material->emissive());
+  const auto resident = is_ready(material->albedo()) && is_ready(material->normal()) && is_ready(material->metallic_roughness()) && is_ready(material->occlusion()) && is_ready(material->emissive());
+
+  // Only "ready" is remembered: a texture becomes resident as GPU time passes, which bumps nothing.
+  if (resident) {
+    material->_resident_epoch.store(epoch, std::memory_order_relaxed);
+  }
+
+  return resident;
 }
 
 auto asset_residency::is_resident(const texture2d_array_handle& array) const -> bool {

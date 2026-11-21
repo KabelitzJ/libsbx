@@ -2374,6 +2374,9 @@ auto scene_serializer::sync_prefab_instances(scene& target) -> void {
     }
   }
 
+  // Many instances of one edited prefab share its asset-key table, built once per sync.
+  auto key_tables = std::unordered_map<const assets::prefab*, std::unordered_map<std::string, math::uuid>>{};
+
   for (const auto root_entity : stale_roots) {
     auto root = target.node_of(root_entity);
 
@@ -2383,10 +2386,17 @@ auto scene_serializer::sync_prefab_instances(scene& target) -> void {
 
     auto& instance = root.get_component<prefab_instance>();
     const auto& snapshot = instance.source->snapshot();
-    const auto key_to_uuid = register_asset_keys(snapshot);
+
+    auto key_table = key_tables.find(instance.source.get());
+
+    if (key_table == key_tables.end()) {
+      key_table = key_tables.emplace(instance.source.get(), register_asset_keys(snapshot)).first;
+    }
+
+    const auto& key_to_uuid = key_table->second;
     const auto nodes_node = snapshot["nodes"];
 
-  // The instance's nodes by member id.
+    // The instance's nodes by member id.
     auto by_member = std::unordered_map<math::uuid, ecs::entity>{};
 
     const auto collect = [&](this const auto& self, ecs::entity current) -> void {

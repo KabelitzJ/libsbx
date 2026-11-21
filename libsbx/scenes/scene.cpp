@@ -3,6 +3,9 @@
 #include <libsbx/scenes/scene.hpp>
 
 #include <algorithm>
+#include <cstddef>
+#include <ranges>
+#include <vector>
 
 #include <libsbx/utility/profiler.hpp>
 
@@ -188,24 +191,29 @@ auto scene::_set_parent(ecs::entity child, ecs::entity parent) -> void {
 }
 
 auto scene::_destroy_node_recursive(ecs::entity entity) -> void {
-  // Copy out first — destroying a child erases it from this same vector, so iterating it directly would invalidate the iteration.
-  const auto children = _registry.get<relationship>(entity).children;
+  // The whole subtree is collected before anything is destroyed, so no children list is read while destruction changes it.
+  // Local rather than a reused member: a component's destruction could destroy another node.
+  auto subtree = std::vector<ecs::entity>{entity};
 
-  for (const auto child : children) {
-    _destroy_node_recursive(child);
+  for (auto index = std::size_t{0u}; index < subtree.size(); ++index) {
+    const auto& children = _registry.get<relationship>(subtree[index]).children;
+    subtree.insert(subtree.end(), children.begin(), children.end());
   }
 
-  _entities_by_id.erase(_registry.get<id>(entity));
+  // Parents come before their children in subtree, so in reverse every child goes first, as before.
+  for (const auto current : std::views::reverse(subtree)) {
+    _entities_by_id.erase(_registry.get<id>(current));
 
-  if (_active_camera == entity) {
-    _active_camera = ecs::null_entity;
+    if (_active_camera == current) {
+      _active_camera = ecs::null_entity;
+    }
+
+    if (_primary_light == current) {
+      _primary_light = ecs::null_entity;
+    }
+
+    _registry.destroy(current);
   }
-
-  if (_primary_light == entity) {
-    _primary_light = ecs::null_entity;
-  }
-
-  _registry.destroy(entity);
 }
 
 auto scene::_update_node(ecs::entity entity, ecs::entity parent, const world_transform& parent_world, bool parent_changed) -> void {

@@ -4,6 +4,7 @@
 #define LIBSBX_ASSETS_ASSET_RESIDENCY_HPP_
 
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <deque>
@@ -616,6 +617,9 @@ private:
   std::deque<pending_array_upload> _pending_arrays{};
   std::unordered_map<std::uint32_t, graphics::image_handle> _array_images{};
   std::unordered_map<std::uint32_t, std::uint64_t> _array_resident_frame{};
+
+  // Bumped whenever a resident frame above is written or erased; a material that was fully resident at the current epoch still is (see material::_resident_epoch).
+  std::atomic<std::uint64_t> _texture_epoch{1u};
 
   std::unordered_map<math::uuid, std::shared_ptr<font>> _fonts{};
 

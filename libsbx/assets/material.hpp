@@ -4,6 +4,7 @@
 #define LIBSBX_ASSETS_MATERIAL_HPP_
 
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <limits>
 #include <span>
@@ -299,6 +300,9 @@ private:
   std::uint32_t _index{invalid_index};
   math::uuid _id{math::uuid::nil()};
   std::string _name{"material"};
+
+  // The residency texture epoch at which every texture was last found resident; 0 is never an epoch, so a new or edited material is checked.
+  mutable std::atomic<std::uint64_t> _resident_epoch{0u};
 
 }; // class material
 

@@ -25,7 +25,7 @@ struct straight_path_point {
   poly_reference reference{null_poly_reference};
 }; // struct straight_path_point
 
-[[nodiscard]] auto find_straight_path(const navmesh& mesh, const math::vector3& start_pos, const math::vector3& end_pos, std::span<const poly_reference> poly_path, std::size_t max_points) -> std::vector<straight_path_point>;
+auto find_straight_path(const navmesh& mesh, const math::vector3& start_pos, const math::vector3& end_pos, std::span<const poly_reference> poly_path, std::size_t max_points, std::vector<straight_path_point>& result) -> void;
 
 struct surface_move_result {
   math::vector3 position{};

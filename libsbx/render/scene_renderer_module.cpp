@@ -192,51 +192,6 @@ struct cluster_range {
   std::uint32_t probe_count;
 }; // struct cluster_range
 
-struct billboard_key_hash {
-  auto operator()(const std::pair<std::uint32_t, assets::emitter_blend_mode>& key) const noexcept -> std::size_t {
-    auto seed = std::hash<std::uint32_t>{}(key.first);
-    utility::hash_combine(seed, key.second);
-    return seed;
-  }
-}; // struct billboard_key_hash
-
-struct particle_mesh_key {
-  mesh_key key;
-  assets::emitter_blend_mode blend_mode;
-
-  auto operator==(const particle_mesh_key& other) const -> bool {
-    return key == other.key && blend_mode == other.blend_mode;
-  }
-
-  auto operator<(const particle_mesh_key& other) const -> bool {
-    if (key < other.key) {
-      return true;
-    }
-
-    if (other.key < key) {
-      return false;
-    }
-
-    return blend_mode < other.blend_mode;
-  }
-}; // struct particle_mesh_key
-
-struct particle_mesh_key_hash {
-  auto operator()(const particle_mesh_key& value) const noexcept -> std::size_t {
-    auto seed = mesh_key_hash{}(value.key);
-    utility::hash_combine(seed, value.blend_mode);
-    return seed;
-  }
-}; // struct particle_mesh_key_hash
-
-struct particle_mesh_bucket {
-  assets::mesh_handle mesh;
-  std::uint32_t submesh_index{0u};
-  assets::material_handle material;
-  assets::emitter_blend_mode blend_mode{};
-  std::vector<particle_mesh_instance> instances;
-}; // struct particle_mesh_bucket
-
 // A fresh packet that takes over the previous one's cleared vector storage, so a steady scene stops reallocating.
 auto recycle_packet_storage(render_packet& previous) -> render_packet {
   auto packet = render_packet{};
@@ -960,10 +915,22 @@ auto scene_renderer_module::_build_packet() -> render_packet {
   packet.delta_time = delta_time;
   packet.time = time;
 
-  auto billboard_buckets = std::unordered_map<std::pair<std::uint32_t, assets::emitter_blend_mode>, std::vector<particle_billboard_instance>, billboard_key_hash>{};
+  // Members reused across frames like _opaque_buckets: buckets left empty by the previous build are pruned, the rest keep their storage.
+  std::erase_if(_billboard_buckets, [](const auto& entry) { return entry.second.empty(); });
+  std::erase_if(_particle_mesh_buckets, [](const auto& entry) { return entry.second.instances.empty(); });
+  std::erase_if(_trail_buckets, [](const auto& entry) { return entry.second.empty(); });
 
-  auto mesh_buckets = std::unordered_map<particle_mesh_key, particle_mesh_bucket, particle_mesh_key_hash>{};
-  auto trail_buckets = std::unordered_map<assets::emitter_blend_mode, std::vector<trail_vertex>>{};
+  for (auto& [key, instances] : _billboard_buckets) {
+    instances.clear();
+  }
+
+  for (auto& [key, bucket] : _particle_mesh_buckets) {
+    bucket.instances.clear();
+  }
+
+  for (auto& [blend_mode, vertices] : _trail_buckets) {
+    vertices.clear();
+  }
 
   for (auto&& [entity, world, instance] : scene.query<scenes::world_transform, scenes::particle_effect>(ecs::exclude<scenes::inactive>).each()) {
     if (!instance.effect.is_valid()) {
@@ -984,7 +951,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
       const auto& runtime = instance.emitters[index];
 
       if (config.trail.enabled && !runtime.trails.empty()) {
-        auto& bucket = trail_buckets[config.blend_mode];
+        auto& bucket = _trail_buckets[config.blend_mode];
 
         for (const auto& trail : runtime.trails) {
           const auto point_count = trail.points.size();
@@ -1045,7 +1012,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
             continue;
           }
 
-          auto& bucket = mesh_buckets[particle_mesh_key{mesh_key{config.render_mesh->id(), submesh_index, material->id()}, config.blend_mode}];
+          auto& bucket = _particle_mesh_buckets[particle_mesh_key{mesh_key{config.render_mesh->id(), submesh_index, material->id()}, config.blend_mode}];
           bucket.mesh = config.render_mesh;
           bucket.submesh_index = submesh_index;
           bucket.material = material;
@@ -1070,7 +1037,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
 
       const auto texture_index = config.texture.is_valid() ? config.texture->index() : 0xFFFFFFFFu;
 
-      auto& bucket = billboard_buckets[{texture_index, config.blend_mode}];
+      auto& bucket = _billboard_buckets[{texture_index, config.blend_mode}];
 
       for (const auto& particle : runtime.particles) {
         bucket.push_back(particle_billboard_instance{
@@ -1084,7 +1051,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     }
   }
 
-  for (auto& [key, instances] : billboard_buckets) {
+  for (const auto& [key, instances] : _billboard_buckets) {
     if (instances.empty()) {
       continue;
     }
@@ -1098,13 +1065,18 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     packet.particle_billboard_instances.insert(packet.particle_billboard_instances.end(), instances.begin(), instances.end());
   }
 
-  auto ordered_mesh_buckets = std::vector<std::pair<particle_mesh_key, particle_mesh_bucket>>{std::make_move_iterator(mesh_buckets.begin()), std::make_move_iterator(mesh_buckets.end())};
-  std::ranges::sort(ordered_mesh_buckets, [](const particle_mesh_key& lhs, const particle_mesh_key& rhs) { return lhs < rhs; }, &std::pair<particle_mesh_key, particle_mesh_bucket>::first);
+  _ordered_particle_mesh_buckets.clear();
 
-  for (auto& [key, bucket] : ordered_mesh_buckets) {
-    if (bucket.instances.empty()) {
-      continue;
+  for (const auto& [key, bucket] : _particle_mesh_buckets) {
+    if (!bucket.instances.empty()) {
+      _ordered_particle_mesh_buckets.emplace_back(key, &bucket);
     }
+  }
+
+  std::ranges::sort(_ordered_particle_mesh_buckets, [](const particle_mesh_key& lhs, const particle_mesh_key& rhs) { return lhs < rhs; }, &std::pair<particle_mesh_key, const particle_mesh_bucket*>::first);
+
+  for (const auto& [key, bucket_pointer] : _ordered_particle_mesh_buckets) {
+    const auto& bucket = *bucket_pointer;
 
     packet.particle_mesh_commands.push_back(particle_mesh_command{
       .blend_mode = bucket.blend_mode,
@@ -1118,7 +1090,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     packet.particle_mesh_instances.insert(packet.particle_mesh_instances.end(), bucket.instances.begin(), bucket.instances.end());
   }
 
-  for (auto& [blend_mode, vertices] : trail_buckets) {
+  for (const auto& [blend_mode, vertices] : _trail_buckets) {
     if (vertices.empty()) {
       continue;
     }

@@ -394,6 +394,51 @@ private:
     std::vector<transform_data> transforms{};
   }; // struct draw_bucket
 
+  struct billboard_key_hash {
+    auto operator()(const std::pair<std::uint32_t, assets::emitter_blend_mode>& key) const noexcept -> std::size_t {
+      auto seed = std::hash<std::uint32_t>{}(key.first);
+      utility::hash_combine(seed, key.second);
+      return seed;
+    }
+  }; // struct billboard_key_hash
+
+  struct particle_mesh_key {
+    mesh_key key;
+    assets::emitter_blend_mode blend_mode;
+
+    auto operator==(const particle_mesh_key& other) const -> bool {
+      return key == other.key && blend_mode == other.blend_mode;
+    }
+
+    auto operator<(const particle_mesh_key& other) const -> bool {
+      if (key < other.key) {
+        return true;
+      }
+
+      if (other.key < key) {
+        return false;
+      }
+
+      return blend_mode < other.blend_mode;
+    }
+  }; // struct particle_mesh_key
+
+  struct particle_mesh_key_hash {
+    auto operator()(const particle_mesh_key& value) const noexcept -> std::size_t {
+      auto seed = mesh_key_hash{}(value.key);
+      utility::hash_combine(seed, value.blend_mode);
+      return seed;
+    }
+  }; // struct particle_mesh_key_hash
+
+  struct particle_mesh_bucket {
+    assets::mesh_handle mesh;
+    std::uint32_t submesh_index{0u};
+    assets::material_handle material;
+    assets::emitter_blend_mode blend_mode{};
+    std::vector<particle_mesh_instance> instances;
+  }; // struct particle_mesh_bucket
+
   struct transparent_entry {
     assets::mesh_handle mesh{};
     std::uint32_t submesh_index{0u};
@@ -428,6 +473,12 @@ private:
   std::vector<std::pair<mesh_key, const draw_bucket*>> _ordered_opaque_buckets{};
   std::vector<transparent_entry> _transparent_entries{};
   std::vector<transparent_entry> _selected_entries{};
+
+  // CPU particle buckets, reused the same way.
+  std::unordered_map<std::pair<std::uint32_t, assets::emitter_blend_mode>, std::vector<particle_billboard_instance>, billboard_key_hash> _billboard_buckets{};
+  std::unordered_map<particle_mesh_key, particle_mesh_bucket, particle_mesh_key_hash> _particle_mesh_buckets{};
+  std::vector<std::pair<particle_mesh_key, const particle_mesh_bucket*>> _ordered_particle_mesh_buckets{};
+  std::unordered_map<assets::emitter_blend_mode, std::vector<trail_vertex>> _trail_buckets{};
 
   std::unordered_set<math::uuid> _selected_nodes{};
 

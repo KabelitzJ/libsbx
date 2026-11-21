@@ -3,6 +3,7 @@
 #ifndef EDITOR_CONSOLE_SINK_HPP_
 #define EDITOR_CONSOLE_SINK_HPP_
 
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -37,10 +38,18 @@ public:
     return {_lines.begin(), _lines.end()};
   }
 
+  /** @brief Changes whenever a line is added or the lines are cleared, so a reader copies lines() only when there's something new. */
+  [[nodiscard]] auto revision() -> std::uint64_t {
+    auto lock = std::lock_guard{mutex_};
+
+    return _revision;
+  }
+
   auto clear() -> void {
     auto lock = std::lock_guard{mutex_};
 
     _lines.clear();
+    ++_revision;
   }
 
 protected:
@@ -51,6 +60,7 @@ protected:
     formatter_->format(msg, formatted);
 
     _lines.push(log_line{fmt::to_string(formatted), msg.level});
+    ++_revision;
   }
 
   auto flush_() -> void override { }
@@ -58,6 +68,7 @@ protected:
 private:
 
   sbx::containers::ring_buffer<log_line> _lines;
+  std::uint64_t _revision{0u};
 
 }; // class console_sink
 

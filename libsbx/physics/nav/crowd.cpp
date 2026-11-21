@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -49,30 +50,32 @@ auto crowd::request_move_target(nav_agent& agent, const navmesh& mesh, const mat
   return true;
 }
 
-struct agent_frame_state {
-  scenes::node node{};
-  nav_agent* agent{nullptr};
-  scenes::local_transform* transform{nullptr};
-
-  bool active{false};
-  math::vector3 steering_velocity{};
-  math::vector3 target_velocity{};
-  std::vector<scenes::node> neighbor_nodes{};
-  std::vector<avoidance_circle_obstacle> neighbor_obstacles{};
-}; // struct agent_frame_state
-
 auto crowd::update(scenes::scene& scene, const navmesh& mesh, std::float_t dt) -> void {
   _grid.clear();
 
-  auto agents = std::vector<agent_frame_state>{};
+  auto count = std::size_t{0};
 
   for (auto&& [entity, agent, transform] : scene.query<nav_agent, scenes::local_transform>(ecs::exclude<scenes::inactive>).each()) {
     auto node = scene.node_of(entity);
 
     _grid.insert(node, transform.position);
 
-    agents.push_back(agent_frame_state{node, &agent, &transform});
+    if (count == _agents.size()) {
+      _agents.emplace_back();
+    }
+
+    auto& state = _agents[count++];
+    state.node = node;
+    state.agent = memory::make_observer(agent);
+    state.transform = memory::make_observer(transform);
+    state.active = false;
+    state.steering_velocity = math::vector3{};
+    state.target_velocity = math::vector3{};
+    state.neighbor_nodes.clear();
+    state.neighbor_obstacles.clear();
   }
+
+  const auto agents = std::span<agent_frame_state>{_agents.data(), count};
 
   for (auto& state : agents) {
     auto& agent = *state.agent;
@@ -95,7 +98,8 @@ auto crowd::update(scenes::scene& scene, const navmesh& mesh, std::float_t dt) -
       continue;
     }
 
-    const auto corners = corridor_find_corners(agent.corridor, mesh, 4);
+    corridor_find_corners(agent.corridor, mesh, 4, _corners);
+    const auto& corners = _corners;
 
     if (corners.empty()) {
       agent.state = nav_agent_state::idle;
@@ -251,7 +255,8 @@ auto crowd::update(scenes::scene& scene, const navmesh& mesh, std::float_t dt) -
     transform.position = transform.position + agent.velocity * dt;
   }
 
-  auto displacement = std::vector<math::vector3>(agents.size());
+  auto& displacement = _displacement;
+  displacement.resize(agents.size());
 
   for (auto iteration = 0; iteration < 4; ++iteration) {
     std::fill(displacement.begin(), displacement.end(), math::vector3::zero);

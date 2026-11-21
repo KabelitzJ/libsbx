@@ -91,18 +91,18 @@ auto corridor_set_corridor(path_corridor& corridor, const math::vector3& target,
   return corridor.position;
 }
 
-[[nodiscard]] auto corridor_find_corners(const path_corridor& corridor, const navmesh& mesh, std::size_t max_corners) -> std::vector<straight_path_point> {
+auto corridor_find_corners(const path_corridor& corridor, const navmesh& mesh, std::size_t max_corners, std::vector<straight_path_point>& corners) -> void {
+  corners.clear();
+
   if (corridor.path.empty()) {
-    return {};
+    return;
   }
 
-  auto corners = find_straight_path(mesh, corridor.position, corridor.target, std::span<const poly_reference>{corridor.path}, max_corners);
+  find_straight_path(mesh, corridor.position, corridor.target, std::span<const poly_reference>{corridor.path}, max_corners, corners);
 
   while (!corners.empty() && math::vector3::distance_squared(corners.front().position, corridor.position) < 0.0001f) {
     corners.erase(corners.begin());
   }
-
-  return corners;
 }
 
 auto merge_corridor_start_shortcut(std::vector<poly_reference>& path, const std::vector<poly_reference>& visited) -> void {

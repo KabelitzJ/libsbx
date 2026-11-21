@@ -46,6 +46,41 @@ auto trim_eol(const std::string& text) -> std::string_view {
   return view;
 }
 
+auto logger_panel::_rebuild_rows() -> void {
+  _rows.clear();
+
+  for (const auto& line : _lines) {
+    const auto level_index = static_cast<std::size_t>(line.level);
+
+    if (level_index < level_count && !_level_enabled[level_index]) {
+      continue;
+    }
+
+    if (!_text_filter.PassFilter(line.text.c_str())) {
+      continue;
+    }
+
+    auto remaining = trim_eol(line.text);
+
+    while (true) {
+      const auto end = remaining.find('\n');
+      auto text = remaining.substr(0u, end);
+
+      if (!text.empty() && text.back() == '\r') {
+        text.remove_suffix(1u);
+      }
+
+      _rows.push_back(row{line.level, text});
+
+      if (end == std::string_view::npos) {
+        break;
+      }
+
+      remaining.remove_prefix(end + 1u);
+    }
+  }
+}
+
 
 auto logger_panel::draw(editor_state&) -> void {
   SBX_PROFILE_SCOPE("logger_panel::draw");
@@ -61,15 +96,27 @@ auto logger_panel::draw(editor_state&) -> void {
 
   ImGui::SameLine();
   ImGui::SetNextItemWidth(200.0f);
-  _text_filter.Draw(ICON_MDI_MAGNIFY " Filter");
+  auto rows_stale = _text_filter.Draw(ICON_MDI_MAGNIFY " Filter");
 
   for (auto index = std::size_t{0u}; index < level_count; ++index) {
     const auto level = static_cast<spdlog::level::level_enum>(index);
 
     ImGui::SameLine();
     ImGui::PushStyleColor(ImGuiCol_Text, level_color(level));
-    ImGui::Checkbox(level_label(level), &_level_enabled[index]);
+    rows_stale |= ImGui::Checkbox(level_label(level), &_level_enabled[index]);
     ImGui::PopStyleColor();
+  }
+
+  // The sink is only copied when it changed.
+  if (const auto revision = console_sink_instance()->revision(); revision != _seen_revision || _is_first_draw) {
+    _lines = console_sink_instance()->lines();
+    _seen_revision = revision;
+    _is_first_draw = false;
+    rows_stale = true;
+  }
+
+  if (rows_stale) {
+    _rebuild_rows();
   }
 
   ImGui::Separator();
@@ -78,23 +125,21 @@ auto logger_panel::draw(editor_state&) -> void {
 
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0.0f, 0.0f});
 
-  for (const auto& line : console_sink_instance()->lines()) {
-    const auto level_index = static_cast<std::size_t>(line.level);
+  // Only the visible rows are submitted.
+  auto clipper = ImGuiListClipper{};
+  clipper.Begin(static_cast<int>(_rows.size()));
 
-    if (level_index < level_count && !_level_enabled[level_index]) {
-      continue;
+  while (clipper.Step()) {
+    for (auto index = clipper.DisplayStart; index < clipper.DisplayEnd; ++index) {
+      const auto& current = _rows[static_cast<std::size_t>(index)];
+
+      ImGui::PushStyleColor(ImGuiCol_Text, level_color(current.level));
+      ImGui::TextUnformatted(current.text.data(), current.text.data() + current.text.size());
+      ImGui::PopStyleColor();
     }
-
-    if (!_text_filter.PassFilter(line.text.c_str())) {
-      continue;
-    }
-
-    const auto trimmed = trim_eol(line.text);
-
-    ImGui::PushStyleColor(ImGuiCol_Text, level_color(line.level));
-    ImGui::TextUnformatted(trimmed.data(), trimmed.data() + trimmed.size());
-    ImGui::PopStyleColor();
   }
+
+  clipper.End();
 
   ImGui::PopStyleVar();
 

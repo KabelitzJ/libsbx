@@ -132,24 +132,24 @@ namespace sbx::physics {
   return result.size() < max_points;
 }
 
-[[nodiscard]] auto find_straight_path(const navmesh& mesh, const math::vector3& start_pos, const math::vector3& end_pos, std::span<const poly_reference> poly_path, std::size_t max_points) -> std::vector<straight_path_point> {
-  auto result = std::vector<straight_path_point>{};
+auto find_straight_path(const navmesh& mesh, const math::vector3& start_pos, const math::vector3& end_pos, std::span<const poly_reference> poly_path, std::size_t max_points, std::vector<straight_path_point>& result) -> void {
+  result.clear();
 
   if (poly_path.empty() || max_points == 0) {
-    return result;
+    return;
   }
 
   const auto closest_start = closest_point_on_poly(mesh, poly_path[0], start_pos);
   const auto closest_end = closest_point_on_poly(mesh, poly_path.back(), end_pos);
 
   if (!append_straight_vertex(result, closest_start, poly_path[0], max_points)) {
-    return result;
+    return;
   }
 
   if (poly_path.size() == 1) {
     append_straight_vertex(result, closest_end, null_poly_reference, max_points);
 
-    return result;
+    return;
   }
 
   auto portal_apex = closest_start;
@@ -188,7 +188,7 @@ namespace sbx::physics {
         apex_index = left_index;
 
         if (!append_straight_vertex(result, portal_apex, left_poly_ref, max_points)) {
-          return result;
+          return;
         }
 
         portal_left = portal_apex;
@@ -212,7 +212,7 @@ namespace sbx::physics {
         apex_index = right_index;
 
         if (!append_straight_vertex(result, portal_apex, right_poly_ref, max_points)) {
-          return result;
+          return;
         }
 
         portal_left = portal_apex;
@@ -228,8 +228,6 @@ namespace sbx::physics {
   }
 
   append_straight_vertex(result, closest_end, null_poly_reference, max_points);
-
-  return result;
 }
 
 [[nodiscard]] auto point_in_poly_xz(const navmesh& mesh, poly_reference reference, const math::vector3& point) -> bool {

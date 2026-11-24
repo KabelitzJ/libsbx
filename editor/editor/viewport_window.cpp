@@ -39,6 +39,7 @@
 #include <editor/commands/scene_commands.hpp>
 
 #include <editor/panels/hierarchy_prefab_menu.hpp>
+#include <editor/viewport_placement.hpp>
 
 namespace editor {
 
@@ -54,7 +55,8 @@ auto accept_viewport_asset_drop(editor_state& state, const sbx::math::vector2& p
   // A nil id means the file was never imported (it's still waiting in the import window); nothing to place yet.
   if (const auto* payload = ImGui::AcceptDragDropPayload(sbx::render::drag_drop_payload_mesh); payload != nullptr && sbx::render::resolve_drag_id(drag_of(payload)) != sbx::math::uuid::nil()) {
     const auto& drag = drag_of(payload);
-    auto command = std::make_unique<create_mesh_node_command>(sbx::render::resolve_drag_id(drag), std::filesystem::path{drag.path}.stem().string(), std::nullopt, viewport_drop_position(position, viewport_size));
+    const auto placement = viewport_drop_placement(state, position, viewport_size);
+    auto command = std::make_unique<create_mesh_node_command>(sbx::render::resolve_drag_id(drag), std::filesystem::path{drag.path}.stem().string(), std::nullopt, placement.position, placement.rotation);
     auto* created = command.get();
 
     state.push_command(scene, std::move(command));
@@ -62,7 +64,8 @@ auto accept_viewport_asset_drop(editor_state& state, const sbx::math::vector2& p
   }
 
   if (ImGui::GetDragDropPayload() != nullptr && ImGui::GetDragDropPayload()->IsDataType(sbx::render::drag_drop_payload_prefab)) {
-    try_instantiate_prefab_drop(state, scene, std::nullopt, viewport_drop_position(position, viewport_size));
+    const auto placement = viewport_drop_placement(state, position, viewport_size);
+    try_instantiate_prefab_drop(state, scene, std::nullopt, placement.position, placement.rotation);
   }
 
   if (const auto* payload = ImGui::AcceptDragDropPayload(sbx::render::drag_drop_payload_material); payload != nullptr && sbx::render::resolve_drag_id(drag_of(payload)) != sbx::math::uuid::nil()) {
@@ -146,7 +149,13 @@ auto draw_viewport_window(editor_state& state, const sbx::graphics::sampler& sam
       draw_animator_ik_gizmo(state);
     }
 
-    if (is_editing && image_clicked && !gizmo_active && !toolbar_active && !view_gizmo_active && !icons_active) {
+    // A click on the scene itself (not a toolbar, gizmo or icon): vertex snap with V held, the ruler while active, otherwise selection.
+    const auto scene_clicked = is_editing && image_clicked && !gizmo_active && !toolbar_active && !view_gizmo_active && !icons_active;
+
+    const auto is_snapping = is_editing && update_vertex_snap(state, image_origin, sbx::math::vector2u{width, height}, scene_clicked);
+    const auto is_measuring = is_editing && update_ruler(state, image_origin, sbx::math::vector2u{width, height}, scene_clicked && !is_snapping);
+
+    if (scene_clicked && !is_snapping && !is_measuring) {
       const auto mouse_position = ImGui::GetMousePos();
 
       pick_node_at_viewport_position(state, sbx::math::vector2{mouse_position.x - image_origin.x, mouse_position.y - image_origin.y}, sbx::math::vector2u{width, height});

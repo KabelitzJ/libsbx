@@ -62,4 +62,22 @@ auto command_stack::clear() -> void {
   ++_revision;
 }
 
+auto command_stack::history(std::size_t& applied_count) const -> std::vector<std::string> {
+  auto labels = std::vector<std::string>{};
+  labels.reserve(_undo_stack.size() + _redo_stack.size());
+
+  for (const auto& entry : _undo_stack) {
+    labels.push_back(entry->label());
+  }
+
+  // The redo stack's back is the next redo.
+  for (auto entry = _redo_stack.rbegin(); entry != _redo_stack.rend(); ++entry) {
+    labels.push_back((*entry)->label());
+  }
+
+  applied_count = _undo_stack.size();
+
+  return labels;
+}
+
 } // namespace editor

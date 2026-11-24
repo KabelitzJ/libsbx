@@ -3,6 +3,7 @@
 #include <editor/panels/asset_browser_panel.hpp>
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <system_error>
 
@@ -14,6 +15,8 @@
 #include <libsbx/core/project.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
+
+#include <editor/widgets/dialog.hpp>
 
 namespace editor {
 
@@ -104,26 +107,21 @@ auto asset_browser_panel::_draw_import_and_delete_dialogs(editor_state& state) -
     _show_import_conflict_dialog = false;
   }
 
-  if (ImGui::BeginPopupModal("Import Conflict", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+  if (begin_dialog("Import Conflict")) {
+    ImGui::TextColored(ImVec4{1.0f, 0.72f, 0.25f, 1.0f}, ICON_MDI_ALERT_OUTLINE);
+    ImGui::SameLine();
     ImGui::Text("'%s' already exists in this folder.", _import_conflict_destination.filename().string().c_str());
+    ImGui::TextDisabled("Overwriting replaces the file; Skip keeps it and moves on.");
 
-    if (ImGui::Button("Overwrite")) {
-      _import_asset_file(state, _import_conflict_source, _import_conflict_destination);
-      _import_conflict_unresolved = false;
-      ImGui::CloseCurrentPopup();
-    }
+    static constexpr auto buttons = std::array{dialog_button{"Cancel Remaining"}, dialog_button{"Skip"}, dialog_button{"Overwrite", true, true}};
 
-    ImGui::SameLine();
+    if (const auto pressed = draw_dialog_buttons(buttons, 0u)) {
+      if (*pressed == 0u) {
+        _pending_asset_imports.clear();
+      } else if (*pressed == 2u) {
+        _import_asset_file(state, _import_conflict_source, _import_conflict_destination);
+      }
 
-    if (ImGui::Button("Skip")) {
-      _import_conflict_unresolved = false;
-      ImGui::CloseCurrentPopup();
-    }
-
-    ImGui::SameLine();
-
-    if (ImGui::Button("Cancel Remaining")) {
-      _pending_asset_imports.clear();
       _import_conflict_unresolved = false;
       ImGui::CloseCurrentPopup();
     }
@@ -136,7 +134,10 @@ auto asset_browser_panel::_draw_import_and_delete_dialogs(editor_state& state) -
     _show_delete_confirm_dialog = false;
   }
 
-  if (ImGui::BeginPopupModal("Delete Asset", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+  if (begin_dialog("Delete Asset")) {
+    ImGui::TextColored(ImVec4{1.0f, 0.72f, 0.25f, 1.0f}, ICON_MDI_ALERT_OUTLINE);
+    ImGui::SameLine();
+
     if (_pending_delete_is_directory) {
       ImGui::Text("Delete folder '%s' and everything inside it?", _pending_delete_path.filename().string().c_str());
     } else {
@@ -145,7 +146,10 @@ auto asset_browser_panel::_draw_import_and_delete_dialogs(editor_state& state) -
 
     ImGui::TextDisabled("This cannot be undone.");
 
-    if (ImGui::Button(ICON_MDI_DELETE " Delete")) {
+    static constexpr auto buttons = std::array{dialog_button{"Cancel"}, dialog_button{ICON_MDI_DELETE " Delete", true, true}};
+    const auto pressed = draw_dialog_buttons(buttons, 0u);
+
+    if (pressed == 1u) {
       assets_module.delete_asset(project.assets_directory() / _pending_delete_path);
 
       if (const auto* selected = std::get_if<asset_selection>(&state.current_selection); selected != nullptr && is_ancestor_or_self(_pending_delete_path, selected->path)) {
@@ -154,11 +158,7 @@ auto asset_browser_panel::_draw_import_and_delete_dialogs(editor_state& state) -
 
       _needs_refresh = true;
       ImGui::CloseCurrentPopup();
-    }
-
-    ImGui::SameLine();
-
-    if (ImGui::Button("Cancel")) {
+    } else if (pressed == 0u) {
       ImGui::CloseCurrentPopup();
     }
 

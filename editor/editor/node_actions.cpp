@@ -15,11 +15,14 @@
 
 #include <fmt/format.h>
 
+#include <imgui.h>
+
 #include <yaml-cpp/yaml.h>
 
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/math/angle.hpp>
+#include <libsbx/math/matrix_cast.hpp>
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/vector4.hpp>
 #include <libsbx/math/volume.hpp>
@@ -29,6 +32,7 @@
 
 #include <editor/editor_module.hpp>
 
+#include <editor/commands/component_commands.hpp>
 #include <editor/commands/composite_command.hpp>
 #include <editor/commands/scene_commands.hpp>
 
@@ -226,7 +230,11 @@ auto delete_selection(editor_state& state, sbx::scenes::scene& scene) -> void {
   state.clear_selection();
 }
 
-auto focus_selection(editor_state& state, sbx::scenes::scene& scene) -> void {
+auto selection_bounds(editor_state& state, sbx::scenes::scene& scene) -> sbx::math::volume {
+  return subtree_bounds(scene, selection_roots(scene, state.selected_node_ids()));
+}
+
+auto subtree_bounds(sbx::scenes::scene& scene, std::span<const sbx::math::uuid> roots) -> sbx::math::volume {
   auto bounds = sbx::math::volume{};
 
   const auto include = [&](this const auto& self, sbx::scenes::node node) -> void {
@@ -245,9 +253,17 @@ auto focus_selection(editor_state& state, sbx::scenes::scene& scene) -> void {
     }
   };
 
-  for (const auto id : selection_roots(scene, state.selected_node_ids())) {
-    include(scene.find(id));
+  for (const auto id : roots) {
+    if (auto node = scene.find(id); node.is_valid()) {
+      include(node);
+    }
   }
+
+  return bounds;
+}
+
+auto focus_selection(editor_state& state, sbx::scenes::scene& scene) -> void {
+  const auto bounds = selection_bounds(state, scene);
 
   if (bounds.is_empty()) {
     return;
@@ -260,6 +276,88 @@ auto focus_selection(editor_state& state, sbx::scenes::scene& scene) -> void {
   const auto forward = camera.transform().rotation * sbx::math::vector3{0.0f, 0.0f, -1.0f};
 
   camera.transform().position = bounds.center() - forward * (radius / std::sin(half_fov));
+}
+
+auto focus_or_follow_selection(editor_state& state, sbx::scenes::scene& scene) -> void {
+  // Godot: Focus Selection pressed twice follows the selection until the camera is moved by hand.
+  constexpr auto double_press_seconds = 0.5;
+
+  const auto now = ImGui::GetTime();
+  const auto is_second_press = now - state.last_focus_time <= double_press_seconds;
+
+  state.last_focus_time = now;
+
+  if (!is_second_press) {
+    state.is_following_selection = false;
+    focus_selection(state, scene);
+    return;
+  }
+
+  const auto bounds = selection_bounds(state, scene);
+
+  if (bounds.is_empty()) {
+    return;
+  }
+
+  const auto& camera = sbx::core::engine::get_module<editor_module>().editor_camera();
+
+  state.is_following_selection = true;
+  state.follow_offset = camera.transform().position - bounds.center();
+  state.follow_camera_position = camera.transform().position;
+}
+
+auto update_selection_follow(editor_state& state, sbx::scenes::scene& scene) -> void {
+  if (!state.is_following_selection) {
+    return;
+  }
+
+  auto& camera = sbx::core::engine::get_module<editor_module>().editor_camera();
+  const auto bounds = selection_bounds(state, scene);
+
+  // Moving the camera by hand, or losing the selection, ends the follow.
+  if (bounds.is_empty() || camera.transform().position != state.follow_camera_position) {
+    state.is_following_selection = false;
+    return;
+  }
+
+  camera.transform().position = bounds.center() + state.follow_offset;
+  state.follow_camera_position = camera.transform().position;
+}
+
+auto align_selection_with_view(editor_state& state, sbx::scenes::scene& scene, bool include_position) -> void {
+  const auto& camera = sbx::core::engine::get_module<editor_module>().editor_camera();
+  const auto& camera_transform = camera.transform();
+
+  auto commands = std::vector<std::unique_ptr<command>>{};
+
+  for (const auto id : selection_roots(scene, state.selected_node_ids())) {
+    auto node = scene.find(id);
+
+    if (!node.is_valid()) {
+      continue;
+    }
+
+    // The node keeps its own world scale (and position, unless aligning the whole transform).
+    const auto world = sbx::math::decompose(node.world_matrix());
+    const auto target_world = sbx::scenes::local_transform{
+      .position = include_position ? camera_transform.position : world.position,
+      .rotation = camera_transform.rotation,
+      .scale = world.scale
+    }.matrix();
+
+    const auto parent = scene.node_of(node.get_component<sbx::scenes::relationship>().parent);
+    const auto& parent_inverse = parent.has_component<sbx::scenes::world_transform>() ? parent.get_component<sbx::scenes::world_transform>().inverse : sbx::math::matrix4x4::identity;
+    const auto local = sbx::math::decompose(parent_inverse * target_world);
+
+    const auto before = node.get_component<sbx::scenes::local_transform>();
+    const auto after = sbx::scenes::local_transform{.position = local.position, .rotation = local.rotation, .scale = local.scale};
+
+    commands.push_back(std::make_unique<modify_component_command<sbx::scenes::local_transform>>(node.id(), before, after, "Align with View"));
+  }
+
+  if (!commands.empty()) {
+    state.push_command(scene, std::make_unique<composite_command>(std::move(commands), include_position ? "Align Transform with View" : "Align Rotation with View"));
+  }
 }
 
 } // namespace editor

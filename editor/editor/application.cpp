@@ -82,7 +82,17 @@ auto application::update() -> void {
 
   auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
 
-  if (sbx::platform::input::is_mouse_button_pressed(sbx::platform::mouse_button::right) && editor_module.is_viewport_hovered() && editor_module.play_state() == editor::play_state::edit) {
+  auto& scene = sbx::core::engine::get_module<sbx::scenes::scenes_module>().active_scene();
+
+  // Flying is off while previewing a camera: the view belongs to that camera.
+  const auto is_previewing = editor_module.preview_camera_node(scene).is_valid();
+
+  // A previewed camera that was deleted (or lost its camera) ends the preview.
+  if (!is_previewing && editor_module.preview_camera() != sbx::math::uuid::nil()) {
+    editor_module.set_preview_camera(sbx::math::uuid::nil());
+  }
+
+  if (sbx::platform::input::is_mouse_button_pressed(sbx::platform::mouse_button::right) && editor_module.is_viewport_hovered() && editor_module.play_state() == editor::play_state::edit && !is_previewing) {
     _camera_is_engaged = true;
   }
 
@@ -98,7 +108,7 @@ auto application::update() -> void {
   auto& scene_renderer_module = sbx::core::engine::get_module<sbx::render::scene_renderer_module>();
 
   if (editor_module.play_state() == editor::play_state::edit) {
-    scene_renderer_module.set_camera_override(editor_module.editor_camera().to_camera_data());
+    scene_renderer_module.set_camera_override(editor_module.edit_camera_data(scene));
   } else {
     scene_renderer_module.set_camera_override(std::nullopt);
   }

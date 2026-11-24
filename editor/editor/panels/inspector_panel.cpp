@@ -638,6 +638,9 @@ auto inspector_panel::draw(editor_state& state) -> void {
     }
   } else {
     ImGui::TextDisabled("Nothing selected.");
+    ImGui::PushTextWrapPos(0.0f);
+    ImGui::TextDisabled("Select a node in the Hierarchy or Viewport, or an asset in the Asset Browser, to edit it here.");
+    ImGui::PopTextWrapPos();
   }
 
   ImGui::PopItemWidth();

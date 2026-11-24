@@ -36,6 +36,9 @@ auto asset_browser_panel::_draw_asset_grid(editor_state& state) -> void {
 
   if (visible.empty()) {
     ImGui::TextDisabled("Nothing here.");
+    ImGui::PushTextWrapPos(0.0f);
+    ImGui::TextDisabled("Drop files from your file manager here to import them, or right-click to create an asset.");
+    ImGui::PopTextWrapPos();
   }
 
   const auto avail_width = ImGui::GetContentRegionAvail().x;

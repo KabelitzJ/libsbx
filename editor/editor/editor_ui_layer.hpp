@@ -3,8 +3,11 @@
 #ifndef EDITOR_EDITOR_UI_LAYER_HPP_
 #define EDITOR_EDITOR_UI_LAYER_HPP_
 
+#include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <string>
 #include <memory>
 #include <string_view>
 #include <utility>
@@ -25,6 +28,7 @@
 #include <editor/panels/editor_panel.hpp>
 #include <libsbx/memory/observer_ptr.hpp>
 
+#include <editor/panels/history_panel.hpp>
 #include <editor/panels/navigation_panel.hpp>
 #include <editor/panels/preferences_panel.hpp>
 #include <editor/panels/project_settings_panel.hpp>
@@ -86,8 +90,14 @@ private:
 
   auto _draw_dockspace() -> void;
 
-  /** @brief Editor-wide shortcuts (Ctrl+Z/Y/C/V/D/S/N/O, Delete, Escape, F), skipped while a text field has focus. */
+  /** @brief Works out which parts of the editor have focus and lets the action registry run the shortcut pressed this frame. */
   auto _handle_shortcuts() -> void;
+
+  /** @brief Registers every editor action and applies the user's shortcut overrides. */
+  auto _register_actions() -> void;
+
+  /** @brief The Ctrl+Shift+P command palette: fuzzy search over every enabled action. */
+  auto _draw_command_palette() -> void;
 
   /** @brief Saves the active scene, or Save As if it was never saved. */
   auto _save() -> void;
@@ -156,6 +166,11 @@ private:
 
   auto _open_open_scene_dialog(bool additive = false) -> void;
 
+  // Puts a scene first in Scene > Open Recent.
+  auto _remember_recent_scene(const std::filesystem::path& path) -> void;
+
+  inline static constexpr auto max_recent_scenes = std::size_t{10u};
+
   auto _draw_open_scene_dialog() -> void;
 
   // How the Viewport samples final_image.
@@ -180,6 +195,7 @@ private:
 
   sbx::memory::observer_ptr<project_settings_panel> _project_settings_panel{};
   sbx::memory::observer_ptr<preferences_panel> _preferences_panel{};
+  sbx::memory::observer_ptr<history_panel> _history_panel{};
 
   std::uint32_t _pending_scene_handle{0u}; // the scene a pending unload targets
   std::vector<std::uint32_t> _guarded_scenes{}; // the scenes the unsaved-changes dialog is about
@@ -195,6 +211,12 @@ private:
   sbx::render::file_dialog _open_dialog{};
 
   bool _show_unsaved_changes_dialog{false};
+
+  bool _open_command_palette{false};
+  bool _reset_layout{false};
+  std::float_t _applied_interface_scale{1.0f};
+  std::string _palette_query{};
+  std::size_t _palette_index{0u};
 
   // The action the unsaved-changes guard is holding, run by _run_pending_scene_action().
   pending_scene_action _pending_scene_action{pending_scene_action::none};

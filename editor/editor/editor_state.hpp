@@ -20,6 +20,7 @@
 
 #include <libsbx/math/matrix4x4.hpp>
 #include <libsbx/math/uuid.hpp>
+#include <libsbx/math/vector3.hpp>
 
 #include <libsbx/memory/observer_ptr.hpp>
 
@@ -37,6 +38,7 @@
 #include <editor/widgets/drag_session.hpp>
 
 #include <editor/thumbnail_cache.hpp>
+#include <editor/editor_actions.hpp>
 
 namespace editor {
 
@@ -67,6 +69,7 @@ using selection = std::variant<empty_selection, node_selection, asset_selection>
 
 /** @brief Which handles the viewport gizmo shows for the current selection. */
 enum class gizmo_operation {
+  select, // no gizmo: clicks only select, like Godot's Q
   translate,
   rotate,
   scale,
@@ -96,11 +99,40 @@ struct editor_state {
 
   selection current_selection{empty_selection{}};
 
+  // Every editor action: menus, toolbar, command palette and shortcuts go through it.
+  action_registry actions{};
+
   // Ctrl+C'd subtrees (serialize_subtree snapshots with original ids).
   std::vector<YAML::Node> node_clipboard{};
 
   gizmo_operation current_gizmo_operation{gizmo_operation::translate};
   gizmo_mode current_gizmo_mode{gizmo_mode::world};
+
+  // Gizmo drags snap by the Preferences steps while on; holding Ctrl inverts it for a drag, like Godot.
+  bool is_snap_enabled{false};
+
+  // Dropped meshes and prefabs stand on the surface under the cursor, rotated to its normal.
+  bool align_drops_to_surface{false};
+
+  // The Ruler tool and the up to two surface points it measures between.
+  bool is_ruler_active{false};
+  std::vector<sbx::math::vector3> ruler_points{};
+
+  // A V-held vertex-snap drag: the anchor vertex and every moved root's world position and local transform at its start.
+  struct vertex_snap_drag {
+    bool is_active{false};
+    sbx::math::vector3 anchor{};
+    std::unordered_map<sbx::math::uuid, sbx::math::vector3> start_positions{};
+    std::unordered_map<sbx::math::uuid, sbx::scenes::local_transform> before{};
+  }; // struct vertex_snap_drag
+
+  vertex_snap_drag vertex_snap{};
+
+  // Focus Selection pressed twice: the camera keeps its offset to the selection until moved by hand.
+  double last_focus_time{-1.0};
+  bool is_following_selection{false};
+  sbx::math::vector3 follow_offset{};
+  sbx::math::vector3 follow_camera_position{};
 
   // Cross-frame viewport gizmo drags, each bracketed into one undo entry (see viewport_transform_gizmo.cpp).
   drag_session<gizmo_node_drag_before> gizmo_node_drag{};

@@ -107,6 +107,37 @@ public:
    */
   [[nodiscard]] auto viewport_camera(sbx::scenes::scene& scene) const -> std::optional<editor::viewport_camera_pose>;
 
+  /**
+   * @brief Looks through a camera node while editing, like Godot's camera Preview; nil goes back to the editor camera.
+   *
+   * @param id The camera node's id, or nil.
+   */
+  auto set_preview_camera(const sbx::math::uuid& id) noexcept -> void {
+    _preview_camera = id;
+  }
+
+  [[nodiscard]] auto preview_camera() const noexcept -> sbx::math::uuid {
+    return _preview_camera;
+  }
+
+  /**
+   * @brief The previewed camera node.
+   *
+   * @param scene The active scene.
+   *
+   * @return The node, or an invalid node without a preview or if it no longer has a camera.
+   */
+  [[nodiscard]] auto preview_camera_node(sbx::scenes::scene& scene) const -> sbx::scenes::node;
+
+  /**
+   * @brief What the renderer draws through while editing: the previewed camera if there is one, otherwise the editor camera.
+   *
+   * @param scene The active scene.
+   *
+   * @return The camera data.
+   */
+  [[nodiscard]] auto edit_camera_data(sbx::scenes::scene& scene) const -> sbx::render::camera_data;
+
 private:
 
   [[nodiscard]] auto _camera_state_path() const -> std::filesystem::path;
@@ -118,6 +149,7 @@ private:
   editor_preferences _preferences;
   editor_ui_layer _ui_layer{};
   play_mode_controller _play_mode{};
+  sbx::math::uuid _preview_camera{sbx::math::uuid::nil()};
 
 }; // class editor_module
 

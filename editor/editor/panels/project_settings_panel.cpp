@@ -463,6 +463,10 @@ auto project_settings_panel::_draw_scenes_tab() -> void {
         remove_index = index;
       }
 
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Remove from the scene list");
+      }
+
       ImGui::PopID();
     }
 
@@ -574,6 +578,10 @@ auto project_settings_panel::_draw_layers_tab() -> void {
 
       if (ImGui::Button(ICON_MDI_CLOSE)) {
         pending_remove = index;
+      }
+
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Remove layer");
       }
 
       ImGui::PopID();

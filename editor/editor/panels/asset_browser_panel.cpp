@@ -429,13 +429,14 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
     ImGui::EndTable();
   }
 
-  if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::IsKeyPressed(ImGuiKey_F2, false)) {
+  // The Asset Browser's Rename and Delete actions (F2 and Delete by default, while it has focus).
+  if (state.actions.consume("assets.rename")) {
     if (const auto* selected = std::get_if<asset_selection>(&state.current_selection); selected != nullptr) {
       _begin_rename(selected->path, false);
     }
   }
 
-  if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
+  if (state.actions.consume("assets.delete")) {
     if (const auto* selected = std::get_if<asset_selection>(&state.current_selection); selected != nullptr) {
       _request_delete(selected->path, false);
     }

@@ -345,6 +345,10 @@ auto animation_graph_panel::_draw_motion(sbx::assets::animation_motion& motion) 
       removed = index;
     }
 
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Remove this child from the blend");
+    }
+
     if (open) {
       switch (motion.blend_type) {
         case sbx::assets::animation_blend_type::linear_1d: {
@@ -562,6 +566,10 @@ auto animation_graph_panel::_draw_parameters() -> void {
       removed_index = index;
     }
 
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Delete parameter");
+    }
+
     ImGui::PopID();
   }
 
@@ -610,6 +618,10 @@ auto animation_graph_panel::_draw_mask_editor(sbx::assets::animation_layer& laye
 
       if (ImGui::SmallButton(ICON_MDI_TRASH_CAN)) {
         removed = index;
+      }
+
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Remove joint from the mask");
       }
 
       ImGui::PopID();

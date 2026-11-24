@@ -189,8 +189,18 @@ auto draw_audio_clip_picker(editor_state& state, const char* popup_id, sbx::asse
         if (ImGui::Button(ICON_MDI_STOP)) {
           audio_module.stop_preview();
         }
-      } else if (ImGui::Button(ICON_MDI_PLAY)) {
-        audio_module.preview(slot);
+
+        if (ImGui::IsItemHovered()) {
+          ImGui::SetTooltip("Stop preview");
+        }
+      } else {
+        if (ImGui::Button(ICON_MDI_PLAY)) {
+          audio_module.preview(slot);
+        }
+
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+          ImGui::SetTooltip("Preview clip");
+        }
       }
 
       ImGui::EndDisabled();
@@ -215,8 +225,10 @@ auto draw_audio_clip_picker(editor_state& state, const char* popup_id, sbx::asse
 auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::mesh_handle& slot, sbx::assets::assets_module& assets_module, std::float_t preview_size) -> bool {
   const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::asset_picker_item{};
 
+  // "(None)" like every other optional asset field: a mesh renderer without a mesh draws nothing.
   const auto options = sbx::render::asset_picker_options{
     .kind = sbx::assets::asset_type::mesh,
+    .allow_none = true,
     .show_edit_button = true,
     .show_reveal_button = true,
     .show_builtin_primitives = true,
@@ -227,7 +239,9 @@ auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::me
 
   const auto result = sbx::render::draw_asset_picker(popup_id, current, {}, options);
 
-  if (result.changed) {
+  if (result.cleared) {
+    slot = sbx::assets::mesh_handle{};
+  } else if (result.changed) {
     slot = result.picked.id != sbx::math::uuid::nil() ? assets_module.load_mesh(result.picked.id) : assets_module.load_mesh(result.picked.path);
   }
 

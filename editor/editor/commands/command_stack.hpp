@@ -3,6 +3,7 @@
 #ifndef EDITOR_COMMANDS_COMMAND_STACK_HPP_
 #define EDITOR_COMMANDS_COMMAND_STACK_HPP_
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -65,6 +66,15 @@ public:
 
   /** @brief Drops all history, whenever commands can no longer be replayed (e.g. leaving play mode). */
   auto clear() -> void;
+
+  /**
+   * @brief Every entry's label, oldest first; the first applied_count are applied, the rest can be redone.
+   *
+   * @param applied_count Receives how many entries are applied.
+   *
+   * @return The labels.
+   */
+  [[nodiscard]] auto history(std::size_t& applied_count) const -> std::vector<std::string>;
 
   /** @brief Changes with every push, undo, redo and clear, so caches of "has the scene changed" know when to recheck. */
   [[nodiscard]] auto revision() const noexcept -> std::uint64_t {

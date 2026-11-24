@@ -4,6 +4,7 @@
 
 #include <array>
 #include <memory>
+#include <string_view>
 #include <vector>
 
 #include <fmt/format.h>
@@ -38,6 +39,7 @@ auto to_imguizmo_operation(gizmo_operation operation) -> ImGuizmo::OPERATION {
     case gizmo_operation::translate: return ImGuizmo::TRANSLATE;
     case gizmo_operation::rotate: return ImGuizmo::ROTATE;
     case gizmo_operation::scale: return ImGuizmo::SCALE;
+    case gizmo_operation::select: break;
   }
 
   return ImGuizmo::TRANSLATE;
@@ -49,20 +51,6 @@ auto to_imguizmo_mode(gizmo_operation operation, gizmo_mode mode) -> ImGuizmo::M
   }
 
   return mode == gizmo_mode::local ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
-}
-
-auto handle_operation_shortcuts(editor_state& state) -> void {
-  if (!ImGui::IsWindowHovered()) {
-    return;
-  }
-
-  if (ImGui::IsKeyPressed(ImGuiKey_1, false)) {
-    state.current_gizmo_operation = gizmo_operation::translate;
-  } else if (ImGui::IsKeyPressed(ImGuiKey_2, false)) {
-    state.current_gizmo_operation = gizmo_operation::rotate;
-  } else if (ImGui::IsKeyPressed(ImGuiKey_3, false)) {
-    state.current_gizmo_operation = gizmo_operation::scale;
-  }
 }
 
 // Writes a manipulated world matrix back as the node's parent-relative local transform; the live preview during a drag.
@@ -179,13 +167,13 @@ auto draw_group_pivot_gizmo(editor_state& state, sbx::scenes::scene& scene, cons
 }
 
 auto draw_viewport_gizmo(editor_state& state, const ImVec2& viewport_origin, const ImVec2& viewport_size) -> bool {
-  handle_operation_shortcuts(state);
 
   if (viewport_size.x <= 0.0f || viewport_size.y <= 0.0f) {
     return false;
   }
 
-  if (state.selected_node_count() == 0u) {
+  // The select tool shows no gizmo, so clicks always pick.
+  if (state.selected_node_count() == 0u || state.current_gizmo_operation == gizmo_operation::select) {
     return false;
   }
 
@@ -220,7 +208,7 @@ auto draw_viewport_gizmo(editor_state& state, const ImVec2& viewport_origin, con
   const auto operation = to_imguizmo_operation(state.current_gizmo_operation);
   const auto mode = to_imguizmo_mode(state.current_gizmo_operation, state.current_gizmo_mode);
 
-  // Ctrl snaps by the Preferences steps; ImGuizmo reads three per-axis values, or snap[0] in degrees for rotation.
+  // Snapping uses the Preferences steps while on, and Ctrl inverts it for this drag; ImGuizmo reads three per-axis values, or snap[0] in degrees for rotation.
   const auto& preferences = editor_module.preferences();
   const auto translate_snap = std::array<std::float_t, 3u>{preferences.translate_snap, preferences.translate_snap, preferences.translate_snap};
   const auto rotate_snap = std::array<std::float_t, 3u>{preferences.rotate_snap, preferences.rotate_snap, preferences.rotate_snap};
@@ -228,11 +216,12 @@ auto draw_viewport_gizmo(editor_state& state, const ImVec2& viewport_origin, con
 
   const std::float_t* snap = nullptr;
 
-  if (ImGui::GetIO().KeyCtrl) {
+  if (state.is_snap_enabled != ImGui::GetIO().KeyCtrl) {
     switch (state.current_gizmo_operation) {
       case gizmo_operation::translate: snap = translate_snap.data(); break;
       case gizmo_operation::rotate: snap = rotate_snap.data(); break;
       case gizmo_operation::scale: snap = scale_snap.data(); break;
+      case gizmo_operation::select: break;
     }
   }
 
@@ -268,49 +257,141 @@ auto draw_viewport_gizmo(editor_state& state, const ImVec2& viewport_origin, con
 }
 
 auto draw_gizmo_toolbar(editor_state& state, const ImVec2& viewport_origin) -> bool {
-  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-  auto& scene = scenes_module.active_scene();
-
-  if (state.selected_node_count() == 0u) {
-    return false;
-  }
+  auto& actions = state.actions;
+  auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
+  auto& preferences = editor_module.preferences();
 
   constexpr auto padding = 8.0f;
   const auto button_size = ImVec2{28.0f, 28.0f};
 
   ImGui::SetCursorScreenPos(ImVec2{viewport_origin.x + padding, viewport_origin.y + padding});
 
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{4.0f, 4.0f});
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{2.0f, 4.0f});
   ImGui::BeginGroup();
 
-  const auto tool_button = [&](const char* icon, gizmo_operation operation, const char* tooltip) {
-    const auto is_active = state.current_gizmo_operation == operation;
+  auto is_over_toolbar = false;
 
-    if (is_active) {
+  // One button per action: highlighted while its toggle is on, tooltip with the action's name and shortcut.
+  const auto action_button = [&](std::string_view id) {
+    const auto action = actions.find(id);
+
+    if (!action) {
+      return;
+    }
+
+    const auto is_on = action->is_checked && action->is_checked();
+
+    if (is_on) {
       ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
     }
 
-    if (ImGui::Button(icon, button_size)) {
-      state.current_gizmo_operation = operation;
+    ImGui::BeginDisabled(!actions.is_enabled(*action));
+
+    if (ImGui::Button(action->icon, button_size)) {
+      actions.run(id);
     }
 
-    if (is_active) {
+    ImGui::EndDisabled();
+
+    if (is_on) {
       ImGui::PopStyleColor();
     }
 
-    if (ImGui::IsItemHovered()) {
-      ImGui::SetTooltip("%s", tooltip);
-    }
+    actions.item_tooltip(id);
+    is_over_toolbar |= ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled);
+
+    ImGui::SameLine();
   };
 
-  tool_button(ICON_MDI_ARROW_ALL, gizmo_operation::translate, "Translate (1)");
-  tool_button(ICON_MDI_ROTATE_3D_VARIANT, gizmo_operation::rotate, "Rotate (2)");
-  tool_button(ICON_MDI_ARROW_EXPAND_ALL, gizmo_operation::scale, "Scale (3)");
+  const auto separator = [&] {
+    ImGui::SameLine(0.0f, 8.0f);
+  };
+
+  action_button("gizmo.select");
+  action_button("gizmo.move");
+  action_button("gizmo.rotate");
+  action_button("gizmo.scale");
+
+  separator();
+
+  action_button("gizmo.local_space");
+  action_button("gizmo.snap");
+
+  // The snap steps, next to the toggle, like Godot's Configure Snap.
+  if (ImGui::Button(ICON_MDI_CHEVRON_DOWN, ImVec2{16.0f, button_size.y})) {
+    ImGui::OpenPopup("##snap_steps");
+  }
+
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Snap steps");
+  }
+
+  is_over_toolbar |= ImGui::IsItemHovered();
+
+  if (ImGui::BeginPopup("##snap_steps")) {
+    auto changed = false;
+
+    ImGui::SetNextItemWidth(120.0f);
+    ImGui::DragFloat("Move Step", &preferences.translate_snap, 0.01f, 0.001f, 100.0f, "%.3f");
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::SetNextItemWidth(120.0f);
+    ImGui::DragFloat("Rotate Step", &preferences.rotate_snap, 0.5f, 0.1f, 180.0f, "%.1f deg");
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::SetNextItemWidth(120.0f);
+    ImGui::DragFloat("Scale Step", &preferences.scale_snap, 0.005f, 0.001f, 10.0f, "%.3f");
+    changed |= ImGui::IsItemDeactivatedAfterEdit();
+
+    if (changed) {
+      editor_module.save_preferences();
+    }
+
+    ImGui::TextDisabled("Hold Ctrl while dragging to invert snapping.");
+
+    ImGui::EndPopup();
+  }
+
+  ImGui::SameLine();
+  separator();
+
+  action_button("view.align_drops");
+  action_button("view.ruler");
+
+  separator();
+
+  // The Viewport's display options.
+  if (ImGui::Button(ICON_MDI_EYE_OUTLINE " View", ImVec2{0.0f, button_size.y})) {
+    ImGui::OpenPopup("##viewport_view_menu");
+  }
+
+  is_over_toolbar |= ImGui::IsItemHovered();
+
+  if (ImGui::BeginPopup("##viewport_view_menu")) {
+    actions.menu_item("view.front");
+    actions.menu_item("view.rear");
+    actions.menu_item("view.right");
+    actions.menu_item("view.left");
+    actions.menu_item("view.top");
+    actions.menu_item("view.bottom");
+
+    ImGui::Separator();
+
+    actions.menu_item("view.focus_origin");
+    actions.menu_item("edit.focus_selection");
+    actions.menu_item("view.preview_camera");
+
+    ImGui::Separator();
+
+    actions.menu_item("view.grid");
+    actions.menu_item("view.wireframe");
+
+    ImGui::EndPopup();
+  }
 
   ImGui::EndGroup();
   ImGui::PopStyleVar();
 
-  return ImGui::IsItemHovered();
+  // A popup open from the toolbar also keeps clicks from picking through it.
+  return is_over_toolbar || ImGui::IsPopupOpen("##snap_steps") || ImGui::IsPopupOpen("##viewport_view_menu");
 }
 
 } // namespace editor

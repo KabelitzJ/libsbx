@@ -36,8 +36,8 @@ auto create_node_command::undo(sbx::scenes::scene& target) -> void {
   target.destroy_node(target.find(_id));
 }
 
-create_mesh_node_command::create_mesh_node_command(sbx::math::uuid mesh_id, std::string name, std::optional<sbx::math::uuid> parent_id, sbx::math::vector3 position)
-: _mesh_id{mesh_id}, _name{std::move(name)}, _parent_id{parent_id}, _position{position} { }
+create_mesh_node_command::create_mesh_node_command(sbx::math::uuid mesh_id, std::string name, std::optional<sbx::math::uuid> parent_id, sbx::math::vector3 position, std::optional<sbx::math::quaternion> rotation)
+: _mesh_id{mesh_id}, _name{std::move(name)}, _parent_id{parent_id}, _position{position}, _rotation{rotation} { }
 
 auto create_mesh_node_command::execute(sbx::scenes::scene& target) -> void {
   if (_id == sbx::math::uuid::nil()) {
@@ -46,6 +46,10 @@ auto create_mesh_node_command::execute(sbx::scenes::scene& target) -> void {
 
   auto node = target.create_node(_name, {}, _id);
   node.transform().position = _position;
+
+  if (_rotation) {
+    node.transform().rotation = *_rotation;
+  }
 
   if (_parent_id) {
     if (auto parent = target.find(*_parent_id); parent.is_valid()) {
@@ -66,8 +70,8 @@ auto create_mesh_node_command::undo(sbx::scenes::scene& target) -> void {
   target.destroy_node(target.find(_id));
 }
 
-instantiate_prefab_command::instantiate_prefab_command(sbx::assets::prefab_handle prefab, std::optional<sbx::math::uuid> parent_id, std::optional<sbx::math::vector3> position)
-: _prefab{std::move(prefab)}, _parent_id{parent_id}, _position{position} { }
+instantiate_prefab_command::instantiate_prefab_command(sbx::assets::prefab_handle prefab, std::optional<sbx::math::uuid> parent_id, std::optional<sbx::math::vector3> position, std::optional<sbx::math::quaternion> rotation)
+: _prefab{std::move(prefab)}, _parent_id{parent_id}, _position{position}, _rotation{rotation} { }
 
 auto instantiate_prefab_command::execute(sbx::scenes::scene& target) -> void {
   auto& prototypes = sbx::core::engine::get_module<sbx::scenes::scenes_module>().prefab_prototypes();
@@ -81,6 +85,10 @@ auto instantiate_prefab_command::execute(sbx::scenes::scene& target) -> void {
 
   if (_position) {
     instance.transform().position = *_position;
+  }
+
+  if (_rotation) {
+    instance.transform().rotation = *_rotation;
   }
 
   if (_parent_id) {

@@ -307,7 +307,9 @@ auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::scene& target,
   }
 
   if (!renderer.mesh.is_valid()) {
-    ImGui::TextDisabled("No mesh assigned.");
+    ImGui::PushTextWrapPos(0.0f);
+    ImGui::TextDisabled("No mesh assigned. Pick one above, or drag one in from the Asset Browser.");
+    ImGui::PopTextWrapPos();
   } else if (!renderer.materials.empty()) {
     ImGui::SeparatorText(fmt::format("Materials ({})", renderer.materials.size()).c_str());
   }
@@ -469,6 +471,10 @@ auto draw_populate_window(editor_state& state, sbx::scenes::scene& target, sbx::
       window.target_node = sbx::math::uuid::nil();
     }
 
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Clear target");
+    }
+
     return false;
   });
 
@@ -558,7 +564,9 @@ auto draw_instanced_mesh_renderer_section(editor_state& state, sbx::scenes::scen
   }
 
   if (!renderer.mesh.is_valid()) {
-    ImGui::TextDisabled("No mesh assigned.");
+    ImGui::PushTextWrapPos(0.0f);
+    ImGui::TextDisabled("No mesh assigned. Pick one above, or drag one in from the Asset Browser.");
+    ImGui::PopTextWrapPos();
   } else {
     static auto pending = std::optional<sbx::scenes::instanced_mesh_renderer>{};
 

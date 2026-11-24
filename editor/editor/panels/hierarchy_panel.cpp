@@ -507,6 +507,9 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
 
   if (top_level.empty()) {
     ImGui::TextDisabled("No nodes in the active scene.");
+    ImGui::PushTextWrapPos(0.0f);
+    ImGui::TextDisabled("Right-click to add one, or drag a mesh or prefab in from the Asset Browser.");
+    ImGui::PopTextWrapPos();
   } else if (_search_buffer[0] != '\0' && _search_visible_ids.empty()) {
     ImGui::TextDisabled("No matching nodes.");
   }
@@ -548,7 +551,8 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
     ImGui::EndPopup();
   }
 
-  if (ImGui::IsWindowHovered() && ImGui::IsKeyPressed(ImGuiKey_F2, false) && state.selected_node_count() == 1u) {
+  // Edit > Rename (F2 by default) with the Hierarchy or Viewport focused.
+  if (state.actions.consume("edit.rename") && state.selected_node_count() == 1u) {
     if (auto selected = state.selected_node(scene); selected.is_valid()) {
       _begin_rename(selected);
     }

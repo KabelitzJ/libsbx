@@ -7,6 +7,9 @@
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <map>
+#include <string>
+#include <vector>
 
 #include <imgui.h>
 
@@ -34,6 +37,15 @@ struct editor_preferences {
   std::float_t rotate_snap{15.0f}; // degrees
   std::float_t scale_snap{0.1f};
 
+  // The editor UI's size: 0 follows the monitor's content scale (high-DPI screens), otherwise this factor.
+  std::float_t interface_scale{0.0f};
+
+  // Most recently opened or saved scenes, newest first, relative to the project's assets directory.
+  std::vector<std::string> recent_scenes{};
+
+  // Action id to its shortcuts by name (chord_name), only for actions the user remapped; an empty list means "no shortcut".
+  std::map<std::string, std::vector<std::string>> shortcut_overrides{};
+
   /**
    * @brief Loads the preferences; a missing file or keys mean defaults.
    *
@@ -52,6 +64,13 @@ struct editor_preferences {
  * @return The palette.
  */
 [[nodiscard]] auto axis_colors() -> const axis_palette&;
+
+/**
+ * @brief The scale the editor UI should use now: the preference, or the main viewport's DPI scale when it's 0 (never below 1 then).
+ *
+ * @return The scale factor.
+ */
+[[nodiscard]] auto effective_interface_scale() -> std::float_t;
 
 } // namespace editor
 

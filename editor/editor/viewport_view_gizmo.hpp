@@ -5,6 +5,8 @@
 
 #include <imgui.h>
 
+#include <libsbx/math/vector3.hpp>
+
 namespace editor {
 
 /**
@@ -16,6 +18,16 @@ namespace editor {
  * @return True if the cursor is over the widget, so viewport picking should be skipped.
  */
 auto draw_view_gizmo(const ImVec2& viewport_origin, const ImVec2& viewport_size) -> bool;
+
+/**
+ * @brief Animates the editor camera to look at the origin from @p look_from_direction, as clicking a view gizmo handle does; used by the numpad view actions.
+ *
+ * @param look_from_direction The direction from the origin to the camera, e.g. +Z for the front view.
+ */
+auto request_view_snap(const sbx::math::vector3& look_from_direction) -> void;
+
+/** @brief Points the editor camera at the world origin from its current direction and distance (Godot's Focus Origin). */
+auto focus_origin() -> void;
 
 } // namespace editor
 

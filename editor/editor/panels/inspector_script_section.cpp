@@ -355,6 +355,10 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
           picked = 0u;
         }
 
+        if (ImGui::IsItemHovered()) {
+          ImGui::SetTooltip("Clear (drop a node from the Hierarchy to assign one)");
+        }
+
         return picked;
       });
 

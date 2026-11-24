@@ -2,7 +2,11 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/editor_ui_layer.hpp>
 
+#include <editor/editor_module.hpp>
+#include <editor/widgets/dialog.hpp>
+
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -67,6 +71,24 @@ auto editor_ui_layer::open_scene_additive(const std::filesystem::path& path) -> 
   scenes_module.apply_pending_operations();
 
   _dirty_scenes_stale = true;
+
+  _remember_recent_scene(path);
+}
+
+auto editor_ui_layer::_remember_recent_scene(const std::filesystem::path& path) -> void {
+  auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
+  auto& recent = editor_module.preferences().recent_scenes;
+
+  const auto entry = path.generic_string();
+
+  std::erase(recent, entry);
+  recent.insert(recent.begin(), entry);
+
+  if (recent.size() > max_recent_scenes) {
+    recent.resize(max_recent_scenes);
+  }
+
+  editor_module.save_preferences();
 }
 
 auto editor_ui_layer::_request_discard_confirmation(pending_scene_action action, std::filesystem::path path, std::uint32_t handle) -> void {
@@ -148,6 +170,8 @@ auto editor_ui_layer::_save_scene(std::uint32_t handle, const std::filesystem::p
   assets_module.save_scene(asset, path);
 
   scenes_module.set_scene_path(handle, path);
+
+  _remember_recent_scene(path);
 
   _dirty_scenes_stale = true;
 }
@@ -354,7 +378,6 @@ auto editor_ui_layer::_draw_save_as_dialog() -> void {
 
 auto editor_ui_layer::_draw_unsaved_changes_dialog() -> void {
   static constexpr auto popup_id = ICON_MDI_CONTENT_SAVE_ALERT " Unsaved Changes###unsaved_changes";
-  static constexpr auto button_width = 120.0f;
   static constexpr auto max_listed_rows = 5u;
 
   if (_show_unsaved_changes_dialog) {
@@ -362,18 +385,7 @@ auto editor_ui_layer::_draw_unsaved_changes_dialog() -> void {
     _show_unsaved_changes_dialog = false;
   }
 
-  ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2{0.5f, 0.5f});
-  ImGui::SetNextWindowSize(ImVec2{480.0f, 0.0f}, ImGuiCond_Appearing);
-
-  // Pushed around Begin only: padding and spacing are read when the window opens.
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{20.0f, 18.0f});
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{8.0f, 8.0f});
-
-  const auto is_open = ImGui::BeginPopupModal(popup_id, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
-
-  ImGui::PopStyleVar(2);
-
-  if (!is_open) {
+  if (!begin_dialog(popup_id, 480.0f)) {
     return;
   }
 
@@ -423,37 +435,17 @@ auto editor_ui_layer::_draw_unsaved_changes_dialog() -> void {
 
   ImGui::EndChild();
 
-  ImGui::Spacing();
-  ImGui::Separator();
-  ImGui::Spacing();
+  // Save is the primary action (Enter); Escape cancels.
+  static constexpr auto buttons = std::array{dialog_button{"Cancel"}, dialog_button{"Don't Save"}, dialog_button{ICON_MDI_CONTENT_SAVE " Save", true}};
+  const auto pressed = draw_dialog_buttons(buttons, 0u);
 
-  // Right-aligned like a native dialog, with Save as the primary action.
-  const auto buttons_width = button_width * 3.0f + ImGui::GetStyle().ItemSpacing.x * 2.0f;
-  ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, ImGui::GetContentRegionAvail().x - buttons_width));
-
-  if (ImGui::Button("Cancel", ImVec2{button_width, 0.0f}) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+  if (pressed == 0u) {
     ImGui::CloseCurrentPopup();
     _pending_scene_action = pending_scene_action::none;
-  }
-
-  ImGui::SameLine();
-
-  if (ImGui::Button("Don't Save", ImVec2{button_width, 0.0f})) {
+  } else if (pressed == 1u) {
     ImGui::CloseCurrentPopup();
     _run_pending_scene_action();
-  }
-
-  ImGui::SameLine();
-
-  ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
-
-  const auto save_clicked = ImGui::Button(ICON_MDI_CONTENT_SAVE " Save", ImVec2{button_width, 0.0f});
-
-  ImGui::PopStyleColor();
-
-  ImGui::SetItemDefaultFocus();
-
-  if (save_clicked || ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) {
+  } else if (pressed == 2u) {
     auto all_saved = true;
 
     for (const auto handle : _guarded_scenes) {
@@ -510,6 +502,8 @@ auto editor_ui_layer::_open_scene(const std::filesystem::path& path) -> void {
   _state.clear_command_stack();
 
   _dirty_scenes_stale = true;
+
+  _remember_recent_scene(path);
 }
 
 auto editor_ui_layer::_open_open_scene_dialog(bool additive) -> void {

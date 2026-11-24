@@ -11,6 +11,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include <libsbx/math/uuid.hpp>
+#include <libsbx/math/quaternion.hpp>
 #include <libsbx/math/vector3.hpp>
 
 #include <libsbx/scenes/node.hpp>
@@ -60,7 +61,7 @@ class create_mesh_node_command final : public command {
 
 public:
 
-  create_mesh_node_command(sbx::math::uuid mesh_id, std::string name, std::optional<sbx::math::uuid> parent_id = std::nullopt, sbx::math::vector3 position = sbx::math::vector3{0.0f, 0.0f, 0.0f});
+  create_mesh_node_command(sbx::math::uuid mesh_id, std::string name, std::optional<sbx::math::uuid> parent_id = std::nullopt, sbx::math::vector3 position = sbx::math::vector3{0.0f, 0.0f, 0.0f}, std::optional<sbx::math::quaternion> rotation = std::nullopt);
 
   auto execute(sbx::scenes::scene& target) -> void override;
 
@@ -85,6 +86,7 @@ private:
   std::string _name;
   std::optional<sbx::math::uuid> _parent_id;
   sbx::math::vector3 _position;
+  std::optional<sbx::math::quaternion> _rotation;
   sbx::math::uuid _id{sbx::math::uuid::nil()};
 
 }; // class create_mesh_node_command
@@ -94,7 +96,7 @@ class instantiate_prefab_command final : public command {
 
 public:
 
-  explicit instantiate_prefab_command(sbx::assets::prefab_handle prefab, std::optional<sbx::math::uuid> parent_id = std::nullopt, std::optional<sbx::math::vector3> position = std::nullopt);
+  explicit instantiate_prefab_command(sbx::assets::prefab_handle prefab, std::optional<sbx::math::uuid> parent_id = std::nullopt, std::optional<sbx::math::vector3> position = std::nullopt, std::optional<sbx::math::quaternion> rotation = std::nullopt);
 
   auto execute(sbx::scenes::scene& target) -> void override;
 
@@ -118,6 +120,7 @@ private:
   sbx::assets::prefab_handle _prefab;
   std::optional<sbx::math::uuid> _parent_id;
   std::optional<sbx::math::vector3> _position;
+  std::optional<sbx::math::quaternion> _rotation;
   sbx::math::uuid _id{sbx::math::uuid::nil()};
 
 }; // class instantiate_prefab_command

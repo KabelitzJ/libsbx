@@ -45,6 +45,27 @@ struct camera_snap_animation {
 
 constexpr auto camera_snap_duration = 0.25f; // seconds
 
+// A snap asked for from outside the gizmo (the numpad view actions), taken by the next draw_view_gizmo.
+auto pending_view_snap() -> std::optional<sbx::math::vector3>& {
+  static auto pending = std::optional<sbx::math::vector3>{};
+
+  return pending;
+}
+
+auto request_view_snap(const sbx::math::vector3& look_from_direction) -> void {
+  pending_view_snap() = look_from_direction;
+}
+
+auto focus_origin() -> void {
+  auto& camera = sbx::core::engine::get_module<editor::editor_module>().editor_camera();
+  auto& transform = camera.transform();
+
+  const auto forward = transform.rotation * sbx::math::vector3{0.0f, 0.0f, -1.0f};
+  const auto distance = std::max(transform.position.length(), 1.0f);
+
+  transform.position = forward * -distance;
+}
+
 // The editor camera's pose looking at the origin from `direction * length`; it has no parent, so this is world space.
 auto compute_camera_snap_target(const sbx::math::vector3& direction, std::float_t length) -> std::pair<sbx::math::vector3, sbx::math::quaternion> {
   const auto up = std::fabs(direction.y()) > 0.99f ? sbx::math::vector3{0.0f, 0.0f, 1.0f} : sbx::math::vector3{0.0f, 1.0f, 0.0f};
@@ -182,6 +203,10 @@ auto draw_view_gizmo(const ImVec2& viewport_origin, const ImVec2& viewport_size)
   }
 
   static auto animation = camera_snap_animation{};
+
+  if (!snapped_direction) {
+    snapped_direction = std::exchange(pending_view_snap(), std::nullopt);
+  }
 
   if (snapped_direction.has_value()) {
     const auto& transform = camera.transform();
